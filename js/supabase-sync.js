@@ -24,6 +24,128 @@ function dbSave(key, value) {
     });
 }
 
+var realtimeChannel = null;
+
+function mergeTemplate(local, remote) {
+    if (!local) return remote;
+    if (!remote) return local;
+    var result = {
+        habits: Array.from(new Set((local.habits || []).concat(remote.habits || []))),
+        rd: Array.from(new Set((local.rd || []).concat(remote.rd || []))),
+        wt: Math.max(local.wt || 8, remote.wt || 8)
+    };
+    var exMap = {};
+    (local.ex || []).forEach(function(item) { exMap[item.n] = item; });
+    (remote.ex || []).forEach(function(item) {
+        if (exMap[item.n]) { exMap[item.n].s = exMap[item.n].s || item.s; }
+        else { exMap[item.n] = item; }
+    });
+    result.ex = Object.values(exMap);
+    var hlMap = {};
+    (local.hl || []).forEach(function(item) { hlMap[item.n] = item; });
+    (remote.hl || []).forEach(function(item) {
+        if (hlMap[item.n]) { hlMap[item.n].s = hlMap[item.n].s || item.s; }
+        else { hlMap[item.n] = item; }
+    });
+    result.hl = Object.values(hlMap);
+    return result;
+}
+
+function mergeData(local, remote) {
+    if (!local) return remote;
+    if (!remote) return local;
+    var result = JSON.parse(JSON.stringify(local));
+    if (remote.habits) {
+        if (!result.habits) result.habits = {};
+        Object.keys(remote.habits).forEach(function(k) {
+            result.habits[k] = !!(result.habits[k] || remote.habits[k]);
+        });
+    }
+    if (remote.prayers) {
+        if (!result.prayers) result.prayers = {};
+        Object.keys(remote.prayers).forEach(function(k) {
+            result.prayers[k] = !!(result.prayers[k] || remote.prayers[k]);
+        });
+    }
+    if (remote.extra) {
+        if (!result.extra) result.extra = {};
+        Object.keys(remote.extra).forEach(function(k) {
+            result.extra[k] = !!(result.extra[k] || remote.extra[k]);
+        });
+    }
+    if (remote.health) {
+        if (!result.health) result.health = {};
+        Object.keys(remote.health).forEach(function(k) {
+            result.health[k] = !!(result.health[k] || remote.health[k]);
+        });
+    }
+    if (remote.water) {
+        if (!result.water) result.water = [];
+        var maxLen = Math.max(result.water.length, remote.water.length);
+        var mergedWater = [];
+        for (var i = 0; i < maxLen; i++) {
+            mergedWater.push(!!(result.water[i] || remote.water[i]));
+        }
+        result.water = mergedWater;
+    }
+    if (remote.reading) {
+        if (!result.reading) result.reading = [];
+        remote.reading.forEach(function(remoteBook) {
+            var localBook = result.reading.find(function(b) { return b.n === remoteBook.n; });
+            if (localBook) {
+                localBook.t = Math.max(localBook.t || 0, remoteBook.t || 0);
+            } else {
+                result.reading.push(remoteBook);
+            }
+        });
+    }
+    if (remote.weight && !result.weight) {
+        result.weight = remote.weight;
+    }
+    if (remote.goalRef) {
+        if (!result.goalRef) result.goalRef = [];
+        remote.goalRef.forEach(function(remoteGoal) {
+            var localGoal = result.goalRef.find(function(g) { return g.name === remoteGoal.name; });
+            if (localGoal) {
+                if (!localGoal.text && remoteGoal.text) localGoal.text = remoteGoal.text;
+            } else {
+                result.goalRef.push(remoteGoal);
+            }
+        });
+    }
+    return result;
+}
+
+function subscribeRealtime() {
+    if (!sbClient || !currentUser) return;
+    if (realtimeChannel) {
+        sbClient.removeChannel(realtimeChannel);
+    }
+    realtimeChannel = sbClient.channel('public:user_data')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'user_data',
+            filter: 'user_id=eq.' + currentUser.id
+        }, function(payload) {
+            if (payload.new && payload.new.key) {
+                var key = payload.new.key;
+                var remoteVal = payload.new.value;
+                var localVal = null;
+                try { localVal = JSON.parse(localStorage.getItem(key)); } catch(e) {}
+                
+                var mergedVal = key === "ht_d" ? mergeTemplate(localVal, remoteVal) : mergeData(localVal, remoteVal);
+                localStorage.setItem(key, JSON.stringify(mergedVal));
+                
+                if (typeof dk === "function" && typeof cDate !== "undefined" && key === "ht_" + dk(cDate)) {
+                    cData = mergedVal;
+                }
+                if (typeof render === "function") render();
+            }
+        })
+        .subscribe();
+}
+
 function syncDown() {
     if (!sbClient || !currentUser) return Promise.resolve();
     isSyncing = true;
@@ -36,15 +158,43 @@ function syncDown() {
             return;
         }
         if (res.data && res.data.length > 0) {
-            res.data.forEach(function(row) {
-                try {
-                    localStorage.setItem(row.key, JSON.stringify(row.value));
-                } catch(e) {}
+            var promises = res.data.map(function(row) {
+                var localVal = null;
+                try { localVal = JSON.parse(localStorage.getItem(row.key)); } catch(e) {}
+                
+                var mergedVal = null;
+                if (localVal) {
+                    if (row.key === "ht_d") {
+                        mergedVal = mergeTemplate(localVal, row.value);
+                    } else if (row.key.indexOf("ht_") === 0 && row.key !== "ht_migrated_v3") {
+                        mergedVal = mergeData(localVal, row.value);
+                    } else {
+                        mergedVal = row.value;
+                    }
+                    if (JSON.stringify(mergedVal) !== JSON.stringify(row.value)) {
+                        return sbClient.from('user_data').upsert({
+                            user_id: currentUser.id,
+                            key: row.key,
+                            value: mergedVal,
+                            updated_at: new Date().toISOString()
+                        }).then(function() {
+                            try { localStorage.setItem(row.key, JSON.stringify(mergedVal)); } catch(e) {}
+                        });
+                    }
+                } else {
+                    mergedVal = row.value;
+                }
+                try { localStorage.setItem(row.key, JSON.stringify(mergedVal)); } catch(e) {}
+                return Promise.resolve();
             });
-            if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
-                cData = gDay(dk(cDate));
-            }
-            if (typeof toast === "function") toast("Cloud data synced!");
+            
+            return Promise.all(promises).then(function() {
+                if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
+                    cData = gDay(dk(cDate));
+                }
+                if (typeof toast === "function") toast("Cloud data synced!");
+                if (typeof render === "function") render();
+            });
         }
         if (typeof render === "function") render();
     });
@@ -70,20 +220,35 @@ function syncUpAll() {
             keys.push(k);
         }
     }
-    if (keys.length === 0) return Promise.resolve();
-    var promises = keys.map(function(k) {
-        var val = null;
-        try { val = JSON.parse(localStorage.getItem(k)); } catch(e) {}
-        if (val === null) return Promise.resolve();
-        return sbClient.from('user_data').upsert({
-            user_id: currentUser.id,
-            key: k,
-            value: val,
-            updated_at: new Date().toISOString()
+    return sbClient.from('user_data').select('key, value').then(function(res) {
+        var remoteData = {};
+        if (res.data) {
+            res.data.forEach(function(row) { remoteData[row.key] = row.value; });
+        }
+        
+        var promises = keys.map(function(k) {
+            var localVal = null;
+            try { localVal = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+            if (localVal === null) return Promise.resolve();
+            
+            var remoteVal = remoteData[k];
+            var mergedVal = localVal;
+            if (remoteVal) {
+                if (k === "ht_d") {
+                    mergedVal = mergeTemplate(localVal, remoteVal);
+                } else if (k.indexOf("ht_") === 0 && k !== "ht_migrated_v3") {
+                    mergedVal = mergeData(localVal, remoteVal);
+                }
+            }
+            try { localStorage.setItem(k, JSON.stringify(mergedVal)); } catch(e) {}
+            return sbClient.from('user_data').upsert({
+                user_id: currentUser.id,
+                key: k,
+                value: mergedVal,
+                updated_at: new Date().toISOString()
+            });
         });
-    });
-    return Promise.all(promises).catch(function(err) {
-        console.error("Error syncing up local data:", err);
+        return Promise.all(promises);
     });
 }
 
@@ -92,6 +257,7 @@ if (sbClient) {
         if (session) {
             var oldUser = currentUser;
             currentUser = session.user;
+            subscribeRealtime();
             if (oldUser && oldUser.id !== currentUser.id) {
                 clearLocalHabitData();
                 syncDown();
@@ -105,6 +271,10 @@ if (sbClient) {
             }
         } else {
             currentUser = null;
+            if (realtimeChannel) {
+                sbClient.removeChannel(realtimeChannel);
+                realtimeChannel = null;
+            }
             clearLocalHabitData();
             localStorage.removeItem("ht_migrated_v3");
             if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {

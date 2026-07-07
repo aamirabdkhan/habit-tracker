@@ -127,19 +127,32 @@ function mkDay() {
 function gDay(key) {
     try {
         var d = JSON.parse(localStorage.getItem("ht_" + key));
+        var df = gDef();
+        var tg = df.wt || 8;
         if (d) {
             if (!Array.isArray(d.goalRef)) d.goalRef = [];
             if (!d.reflections) d.reflections = {};
             REFK.forEach(function(k){ if (!(k in d.reflections)) d.reflections[k] = ""; });
-            if (!d.health) d.health = {};
+            
+            // Habits: ensure template habits exist, keep custom ones
+            if (!d.habits) d.habits = {};
+            df.habits.forEach(function(h) {
+                if (!(h in d.habits)) d.habits[h] = false;
+            });
+            
+            // Extra deeds: ensure template extra deeds exist, keep custom ones
             if (!d.extra) d.extra = {};
-            var df = gDef(), tg = df.wt || 8;
-            var newExtra = {};
-            df.ex.forEach(function(e){ newExtra[e.n] = d.extra[e.n] || false; });
-            d.extra = newExtra;
-            var newHealth = {};
-            df.hl.forEach(function(h){ newHealth[h.n] = d.health[h.n] || false; });
-            d.health = newHealth;
+            df.ex.forEach(function(e) {
+                if (!(e.n in d.extra)) d.extra[e.n] = false;
+            });
+            
+            // Health: ensure template health goals exist, keep custom ones
+            if (!d.health) d.health = {};
+            df.hl.forEach(function(h) {
+                if (!(h.n in d.health)) d.health[h.n] = false;
+            });
+            
+            // Reading: ensure template books exist, keep custom ones
             if (d.quran && !Array.isArray(d.reading)) {
                 d.reading = [];
                 if (d.quran.arabic) d.reading.push({n:"Quran (Arabic)",t:d.quran.arabic});
@@ -147,11 +160,17 @@ function gDay(key) {
                 delete d.quran;
             }
             if (!Array.isArray(d.reading)) d.reading = [];
-            df.rd.forEach(function(n){ if (!d.reading.find(function(r){return r.n===n})) d.reading.push({n:n,t:0}); });
-            d.reading = d.reading.filter(function(r){ return df.rd.indexOf(r.n) !== -1; });
+            df.rd.forEach(function(n) {
+                if (!d.reading.find(function(r){ return r.n === n; })) {
+                    d.reading.push({n: n, t: 0});
+                }
+            });
+            
+            // Water: preserve customized daily water target length, initialize with template if empty
             if (!Array.isArray(d.water)) d.water = [];
-            while (d.water.length < tg) d.water.push(false);
-            d.water = d.water.slice(0, tg);
+            if (d.water.length === 0) {
+                while (d.water.length < tg) d.water.push(false);
+            }
             return d;
         }
     } catch(e) {}
@@ -413,7 +432,7 @@ function rReading() {
 }
 
 function rWater() {
-    var df = gDef(), tg = df.wt||8, gm = tg*WML;
+    var tg = cData.water.length, gm = tg*WML;
     var fi = cData.water.filter(Boolean).length, ml = fi*WML;
     var p = Math.min(100, Math.round(ml/gm*100));
     var drops = "";
@@ -542,7 +561,7 @@ function uEP() {
     var cards=document.querySelectorAll(".cd"); for(var i=0;i<cards.length;i++){if(cards[i].querySelector('[data-a="ae"]')){var ct=cards[i].querySelector(".shd .ml-auto");if(ct)ct.textContent=c+"/"+keys.length;break}}
 }
 function uWP() {
-    var df=gDef(),tg=df.wt||8,gm=tg*WML,fi=cData.water.filter(Boolean).length,ml=fi*WML,p=Math.min(100,Math.round(ml/gm*100));
+    var tg=cData.water.length,gm=tg*WML,fi=cData.water.filter(Boolean).length,ml=fi*WML,p=Math.min(100,Math.round(ml/gm*100));
     var f=document.getElementById("wfl"),t=document.getElementById("wtx");
     if(f) f.style.width=p+"%"; if(t) t.textContent=ml+" / "+gm+" ml";
 }
@@ -569,7 +588,7 @@ function reRL() {
     e.innerHTML=rows;
 }
 function reWT() {
-    var df=gDef(),tg=df.wt||8,gm=tg*WML,fi=cData.water.filter(Boolean).length,ml=fi*WML,p=Math.min(100,Math.round(ml/gm*100));
+    var tg=cData.water.length,gm=tg*WML,fi=cData.water.filter(Boolean).length,ml=fi*WML,p=Math.min(100,Math.round(ml/gm*100));
     var cards=document.querySelectorAll(".cd");
     for(var i=0;i<cards.length;i++){
         if(cards[i].querySelector(".wgr")){
@@ -865,19 +884,19 @@ ct.addEventListener("click",function(e){
 
     if(a==="tog"){var f=t.dataset.f,k=t.dataset.k;cData[f][k]=!cData[f][k];sDay();t.classList.toggle("on");t.setAttribute("aria-checked",cData[f][k]);uAll();return}
 
-    if(a==="rm-habits"){e.stopPropagation();var n=t.dataset.n;delete cData.habits[n];sDay();var d=gDef();d.habits=d.habits.filter(function(x){return x!==n});sDef(d);t.closest(".ci").remove();uHP();toast("Removed");return}
-    if(a==="rm-health"){e.stopPropagation();var n2=t.dataset.n;delete cData.health[n2];sDay();var dh=gDef();dh.hl=dh.hl.filter(function(x){return x.n!==n2});sDef(dh);t.closest(".ci").remove();uHL();toast("Removed");return}
-    if(a==="rm-extra"){e.stopPropagation();var n3=t.dataset.n;delete cData.extra[n3];sDay();var de=gDef();de.ex=de.ex.filter(function(x){return x.n!==n3});sDef(de);t.closest(".ci").remove();reEX();toast("Removed");return}
-    if(a==="rmr"){e.stopPropagation();var idx=+t.dataset.i;var nm=cData.reading[idx].n;cData.reading.splice(idx,1);sDay();var d2=gDef();d2.rd=d2.rd.filter(function(x){return x!==nm});sDef(d2);reRL();toast("Removed");return}
+    if(a==="rm-habits"){e.stopPropagation();var n=t.dataset.n;delete cData.habits[n];sDay();t.closest(".ci").remove();uHP();toast("Removed");return}
+    if(a==="rm-health"){e.stopPropagation();var n2=t.dataset.n;delete cData.health[n2];sDay();t.closest(".ci").remove();uHL();toast("Removed");return}
+    if(a==="rm-extra"){e.stopPropagation();var n3=t.dataset.n;delete cData.extra[n3];sDay();t.closest(".ci").remove();reEX();toast("Removed");return}
+    if(a==="rmr"){e.stopPropagation();var idx=+t.dataset.i;cData.reading.splice(idx,1);sDay();reRL();toast("Removed");return}
     if(a==="rg"){e.stopPropagation();var idx2=+t.dataset.i;cData.goalRef.splice(idx2,1);sDay();reGL();toast("Goal removed");return}
 
-    if(a==="ah"){var inp=document.getElementById("nh"),nm=inp.value.trim();if(!nm){toast("Enter a name");return}if(cData.habits.hasOwnProperty(nm)){toast("Already exists");return}cData.habits[nm]=false;sDay();var d3=gDef();if(d3.habits.indexOf(nm)===-1){d3.habits.push(nm);sDef(d3)}inp.value="";reHL();toast("Added");return}
-    if(a==="ahl"){var inp2=document.getElementById("nhl"),nm2=inp2.value.trim();if(!nm2){toast("Enter a name");return}if(cData.health.hasOwnProperty(nm2)){toast("Already exists");return}cData.health[nm2]=false;sDay();var d4=gDef();if(!d4.hl.find(function(x){return x.n===nm2})){d4.hl.push({n:nm2,s:false});sDef(d4)}inp2.value="";reHLL();toast("Added");return}
-    if(a==="ae"){var inp3=document.getElementById("ne"),nm3=inp3.value.trim();if(!nm3){toast("Enter a name");return}if(cData.extra.hasOwnProperty(nm3)){toast("Already exists");return}cData.extra[nm3]=false;sDay();var d5=gDef();if(!d5.ex.find(function(x){return x.n===nm3})){d5.ex.push({n:nm3,s:false});sDef(d5)}inp3.value="";reEX();toast("Added");return}
-    if(a==="ar"){var inp4=document.getElementById("nr"),nm4=inp4.value.trim();if(!nm4){toast("Enter a name");return}if(cData.reading.find(function(x){return x.n===nm4})){toast("Already exists");return}cData.reading.push({n:nm4,t:0});sDay();var d6=gDef();if(d6.rd.indexOf(nm4)===-1){d6.rd.push(nm4);sDef(d6)}inp4.value="";reRL();toast("Book added");return}
+    if(a==="ah"){var inp=document.getElementById("nh"),nm=inp.value.trim();if(!nm){toast("Enter a name");return}if(cData.habits.hasOwnProperty(nm)){toast("Already exists");return}cData.habits[nm]=false;sDay();inp.value="";reHL();toast("Added");return}
+    if(a==="ahl"){var inp2=document.getElementById("nhl"),nm2=inp2.value.trim();if(!nm2){toast("Enter a name");return}if(cData.health.hasOwnProperty(nm2)){toast("Already exists");return}cData.health[nm2]=false;sDay();inp2.value="";reHLL();toast("Added");return}
+    if(a==="ae"){var inp3=document.getElementById("ne"),nm3=inp3.value.trim();if(!nm3){toast("Enter a name");return}if(cData.extra.hasOwnProperty(nm3)){toast("Already exists");return}cData.extra[nm3]=false;sDay();inp3.value="";reEX();toast("Added");return}
+    if(a==="ar"){var inp4=document.getElementById("nr"),nm4=inp4.value.trim();if(!nm4){toast("Enter a name");return}if(cData.reading.find(function(x){return x.n===nm4})){toast("Already exists");return}cData.reading.push({n:nm4,t:0});sDay();inp4.value="";reRL();toast("Book added");return}
 
     if(a==="wt"){var wi=+t.dataset.i;cData.water[wi]=!cData.water[wi];sDay();t.classList.toggle("f");t.setAttribute("aria-checked",cData.water[wi]);uWP();uWD();return}
-    if(a==="wta"){var delta=+t.dataset.d;var d7=gDef();var tg=(d7.wt||8)+delta;if(tg<1)tg=1;if(tg>30)tg=30;d7.wt=tg;sDef(d7);while(cData.water.length<tg)cData.water.push(false);cData.water=cData.water.slice(0,tg);sDay();reWT();uWD();return}
+    if(a==="wta"){var delta=+t.dataset.d;var tg=cData.water.length+delta;if(tg<1)tg=1;if(tg>30)tg=30;while(cData.water.length<tg)cData.water.push(false);cData.water=cData.water.slice(0,tg);sDay();reWT();uWD();return}
 
     if(a==="ra"){var ri2=+t.dataset.i;var inp5=document.getElementById("ri"+ri2);if(!inp5)return;var v=parseInt(inp5.value);if(!v||v<=0)return;cData.reading[ri2].t+=v;inp5.value="0";var sp=document.getElementById("rt"+ri2);if(sp)sp.textContent=cData.reading[ri2].t+" pg";sDay();toast("Added "+v+" page"+(v>1?"s":""));return}
 

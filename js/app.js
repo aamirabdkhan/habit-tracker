@@ -973,7 +973,7 @@ render();
 // ===== SERVICE WORKER (offline support) =====
 if ('serviceWorker' in navigator) {
   var swCode = `
-const CACHE = 'habit-tracker-v1';
+const CACHE = 'habit-tracker-v2';
 const URLS = [
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
@@ -994,6 +994,20 @@ self.addEventListener('activate', function(e) {
   );
 });
 self.addEventListener('fetch', function(e) {
+  if (e.request.url.startsWith(self.location.origin)) {
+    e.respondWith(
+      fetch(e.request).then(function(res) {
+        if (res && res.status === 200) {
+          var clone = res.clone();
+          caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
+        }
+        return res;
+      }).catch(function() {
+        return caches.match(e.request);
+      })
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then(function(cached) {
       if (cached) return cached;

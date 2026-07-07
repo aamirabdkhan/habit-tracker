@@ -27,12 +27,33 @@ function fLong(d) {
 function fMon(d) {
     return d.toLocaleDateString("en-US", {month:"long",year:"numeric"});
 }
+var NICKNAMES = ["Champion", "Legend", "Striver", "Habit Hero", "Achiever", "Pioneer", "Trailblazer", "Superstar", "Warrior", "Believer", "Overcomer", "Conqueror", "Pathfinder"];
+var anonNickname = "";
+function getAnonNickname() {
+    if (!anonNickname) {
+        anonNickname = NICKNAMES[Math.floor(Math.random() * NICKNAMES.length)];
+    }
+    return anonNickname;
+}
 function greet() {
     var h = new Date().getHours();
-    if (h < 12) return "Good Morning";
-    if (h < 17) return "Good Afternoon";
-    if (h < 21) return "Good Evening";
-    return "Good Night";
+    var greetingWord = "Good Night";
+    if (h < 12) greetingWord = "Good Morning";
+    else if (h < 17) greetingWord = "Good Afternoon";
+    else if (h < 21) greetingWord = "Good Evening";
+    
+    var name = "";
+    if (typeof currentUser !== "undefined" && currentUser) {
+        if (currentUser.user_metadata && currentUser.user_metadata.full_name) {
+            name = currentUser.user_metadata.full_name;
+        } else if (currentUser.email) {
+            name = currentUser.email.split("@")[0];
+            name = name.charAt(0).toUpperCase() + name.slice(1);
+        }
+    } else {
+        name = getAnonNickname();
+    }
+    return greetingWord + ", " + name;
 }
 function isT(d) {
     var n = new Date();

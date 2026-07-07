@@ -215,9 +215,9 @@ input[type=number],input[type=text],textarea{font-size:16px!important}/* prevent
 <script>
 var WML = 250;
 var PRAYERS = ["Fajr","Dhuhr","Asr","Maghrib","Isha"];
-var SEED_H = ["Python","SOC Course"];
+var SEED_H = [];
 var SEED_EX = [{n:"Surah Mulk",s:false},{n:"Ruqyah",s:false},{n:"Night Duas",s:false},{n:"Tahajjud",s:true}];
-var SEED_HL = [{n:"Physiotherapy",s:true},{n:"No Fap",s:true},{n:"No Porn",s:true},{n:"No Sugar",s:false},{n:"No Junk Food",s:false}];
+var SEED_HL = [{n:"Exercise",s:true}];
 var SEED_RD = ["Quran (Arabic)","Quran (Translation)"];
 var RCOLS = ["#C9943E","#5A8FA8","#7B9E6B","#B87333","#B84C4C","#8B7BB8","#5A9E8F","#C97B4C","#6B8EC9","#C96B8E"];
 var REFK = ["good","bad","learn","gratitude","next"];
@@ -265,6 +265,45 @@ function gDef() {
     try {
         var d = JSON.parse(localStorage.getItem("ht_d"));
         if (d && Array.isArray(d.habits)) {
+            // Apply migration to clean up defaults for existing users
+            if (!localStorage.getItem("ht_migrated_v3")) {
+                // Remove Python and SOC Course
+                d.habits = d.habits.filter(function(h) { return h !== "Python" && h !== "SOC Course"; });
+                
+                // Replace Physiotherapy with Exercise, remove others
+                var hasPhysio = false;
+                d.hl = d.hl.filter(function(item) {
+                    if (item.n === "Physiotherapy") { hasPhysio = item.s; return false; }
+                    if (item.n === "No Fap" || item.n === "No Porn" || item.n === "No Sugar" || item.n === "No Junk Food") { return false; }
+                    return true;
+                });
+                
+                if (!d.hl.find(function(item){ return item.n === "Exercise"; })) {
+                    d.hl.unshift({n: "Exercise", s: hasPhysio});
+                }
+                
+                // Clean up today's daily checklist as well
+                var todayKey = dk(new Date());
+                try {
+                    var todayData = JSON.parse(localStorage.getItem("ht_" + todayKey));
+                    if (todayData) {
+                        delete todayData.habits["Python"];
+                        delete todayData.habits["SOC Course"];
+                        delete todayData.health["Physiotherapy"];
+                        delete todayData.health["No Fap"];
+                        delete todayData.health["No Porn"];
+                        delete todayData.health["No Sugar"];
+                        delete todayData.health["No Junk Food"];
+                        if (todayData.health["Exercise"] === undefined) {
+                            todayData.health["Exercise"] = false;
+                        }
+                        localStorage.setItem("ht_" + todayKey, JSON.stringify(todayData));
+                    }
+                } catch(err){}
+                
+                sDef(d);
+                localStorage.setItem("ht_migrated_v3", "true");
+            }
             if (!d.ex) d.ex = SEED_EX.map(function(x){return {n:x.n,s:x.s}});
             if (!d.hl) d.hl = SEED_HL.map(function(x){return {n:x.n,s:x.s}});
             if (!d.rd) d.rd = SEED_RD.slice();
@@ -497,7 +536,7 @@ function rChk(obj, field, cls, rem) {
 }
 
 function rNav(act) {
-    return '<div class="flex items-center justify-center gap-2 mt-4 flex-wrap"><button class="bto'+(act==="daily"?' act':'')+'" data-a="vday"><i class="fas fa-calendar-day mr-1.5"></i>Daily</button><button class="bto'+(act==="overview"?' act':'')+'" data-a="vov"><i class="fas fa-chart-pie mr-1.5"></i>Overview</button><button class="bto'+(act==="settings"?' act':'')+'" data-a="vset"><i class="fas fa-gear mr-1.5"></i>Settings</button></div>';
+    return '<div class="flex items-center justify-center gap-2 mt-4 flex-wrap"><button class="bto'+(act==="daily"?' act':'')+'" data-a="vday"><i class="fas fa-calendar-day mr-1.5"></i>Daily</button><button class="bto'+(act==="overview"?' act':'')+'" data-a="vov"><i class="fas fa-chart-pie mr-1.5"></i>Overview</button><button class="bto'+(act==="settings"?' act':'')+'" data-a="vset"><i class="fas fa-gear mr-1.5"></i>Template</button></div>';
 }
 
 function rHead() {
@@ -645,7 +684,7 @@ function rFoot() {
 // ===== SETTINGS =====
 function rSettings() {
     var df = gDef();
-    var h = '<header class="text-center mb-6"><p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Configuration</p><h1 class="text-2xl md:text-3xl mt-1.5">Settings</h1><p class="text-xs mt-2" style="color:var(--mt)">Manage what appears on your daily page and monthly overview.</p>';
+    var h = '<header class="text-center mb-6"><p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Configuration</p><h1 class="text-2xl md:text-3xl mt-1.5">Template</h1><p class="text-xs mt-2" style="color:var(--mt)">Manage what appears on your daily page and monthly overview.</p>';
     h += rNav("settings");
     h += '<div class="al"></div></header>';
 

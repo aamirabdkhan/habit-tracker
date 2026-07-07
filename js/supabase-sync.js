@@ -61,17 +61,55 @@ function clearLocalHabitData() {
     keys.forEach(function(k) { localStorage.removeItem(k); });
 }
 
+function syncUpAll() {
+    if (!sbClient || !currentUser) return Promise.resolve();
+    var keys = [];
+    for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf("ht_") === 0) {
+            keys.push(k);
+        }
+    }
+    if (keys.length === 0) return Promise.resolve();
+    var promises = keys.map(function(k) {
+        var val = null;
+        try { val = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+        if (val === null) return Promise.resolve();
+        return sbClient.from('user_data').upsert({
+            user_id: currentUser.id,
+            key: k,
+            value: val,
+            updated_at: new Date().toISOString()
+        });
+    });
+    return Promise.all(promises).catch(function(err) {
+        console.error("Error syncing up local data:", err);
+    });
+}
+
 if (sbClient) {
     sbClient.auth.onAuthStateChange(function(event, session) {
         if (session) {
             var oldUser = currentUser;
             currentUser = session.user;
-            if (!oldUser || oldUser.id !== currentUser.id) {
+            if (oldUser && oldUser.id !== currentUser.id) {
                 clearLocalHabitData();
+                syncDown();
+            } else if (!oldUser) {
+                // Upload local anonymous data to new account first, then sync down
+                syncUpAll().then(function() {
+                    syncDown();
+                });
+            } else {
+                syncDown();
             }
-            syncDown();
         } else {
             currentUser = null;
+            clearLocalHabitData();
+            localStorage.removeItem("ht_migrated_v3");
+            if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
+                cData = gDay(dk(cDate));
+            }
             if (typeof render === "function") render();
         }
     });
@@ -191,12 +229,6 @@ function submitAuth(mode) {
 function handleSignOut() {
     if (!sbClient) return;
     sbClient.auth.signOut().then(function() {
-        clearLocalHabitData();
-        localStorage.removeItem("ht_migrated_v3");
-        if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
-            cData = gDay(dk(cDate));
-        }
         if (typeof toast === "function") toast("Signed out. Local data reset.");
-        if (typeof render === "function") render();
     });
 }

@@ -13,6 +13,7 @@ var cData = null;
 var svT = null;
 var view = "daily";
 var oMonth = new Date();
+var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
 
 // ===== REFLECTION MODAL STATE =====
 var rflStep = 0;
@@ -110,19 +111,33 @@ function gDef() {
                 sDef(d);
                 localStorage.setItem("ht_migrated_v3", "true");
             }
-            if (!d.ex) d.ex = SEED_EX.map(function(x){return {n:x.n,s:x.s}});
-            if (!d.hl) d.hl = SEED_HL.map(function(x){return {n:x.n,s:x.s}});
+            d.habits = d.habits.map(function(x){
+                if (typeof x === "string") return {n: x, s: true, c: "rings"};
+                if (x.s === undefined) x.s = true;
+                if (!x.c) x.c = "rings";
+                return x;
+            });
+            d.ex = d.ex.map(function(x){
+                if (typeof x === "string") return {n: x, s: false, c: "rings"};
+                if (x.s === undefined) x.s = false;
+                if (!x.c) x.c = "rings";
+                return x;
+            });
+            d.hl = d.hl.map(function(x){
+                if (typeof x === "string") return {n: x, s: false, c: "rings"};
+                if (x.s === undefined) x.s = false;
+                if (!x.c) x.c = "rings";
+                return x;
+            });
             if (!d.rd) d.rd = SEED_RD.slice();
             if (d.wt === undefined) d.wt = 8;
-            d.ex = d.ex.map(function(x){ return typeof x === "string" ? {n:x,s:false} : x; });
-            d.hl = d.hl.map(function(x){ return typeof x === "string" ? {n:x,s:false} : x; });
             return d;
         }
     } catch(e) {}
     return {
-        habits: SEED_H.slice(),
-        ex: SEED_EX.map(function(x){return {n:x.n,s:x.s}}),
-        hl: SEED_HL.map(function(x){return {n:x.n,s:x.s}}),
+        habits: SEED_H.map(function(x){return {n:x,s:true,c:"rings"}}),
+        ex: SEED_EX.map(function(x){return {n:x.n,s:x.s,c:"rings"}}),
+        hl: SEED_HL.map(function(x){return {n:x.n,s:x.s,c:"rings"}}),
         rd: SEED_RD.slice(),
         wt: 8
     };
@@ -135,7 +150,7 @@ function sDef(d) {
 function mkDay() {
     var df = gDef(), tg = df.wt || 8;
     var habits = {}, prayers = {}, extra = {}, health = {};
-    df.habits.forEach(function(h){ habits[h] = false; });
+    df.habits.forEach(function(h){ habits[typeof h === "string" ? h : h.n] = false; });
     PRAYERS.forEach(function(p){ prayers[p] = false; });
     df.ex.forEach(function(e){ extra[e.n] = false; });
     df.hl.forEach(function(h){ health[h.n] = false; });
@@ -158,7 +173,8 @@ function gDay(key) {
             // Habits: ensure template habits exist, keep custom ones
             if (!d.habits) d.habits = {};
             df.habits.forEach(function(h) {
-                if (!(h in d.habits)) d.habits[h] = false;
+                var name = typeof h === "string" ? h : h.n;
+                if (!(name in d.habits)) d.habits[name] = false;
             });
             
             // Extra deeds: ensure template extra deeds exist, keep custom ones
@@ -538,21 +554,29 @@ function rSettings() {
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-bottle-water mr-1.5" style="color:var(--wa)"></i>Water Target</div>';
     h += '<div class="flex items-center gap-3"><button class="wtb" data-a="swta" data-d="-1">&minus;</button><span class="text-sm" id="swtv">'+(df.wt||8)+' glasses ('+((df.wt||8)*WML)+' ml)</span><button class="wtb" data-a="swta" data-d="1">+</button></div></div>';
 
-    h += '<div class="cd"><div class="sec-t"><i class="fas fa-bullseye mr-1.5" style="color:var(--ac)"></i>Daily Goals</div>';
-    df.habits.forEach(function(name,i){
-        h += '<div class="sr"><span class="sr-nm">'+esc(name)+'</span><button class="rm" data-a="srh" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-bullseye mr-1.5" style="color:var(--ac)"></i>Daily Goals</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that habit in the monthly overview.</p>';
+    df.habits.forEach(function(hObj,i){
+        var hName = typeof hObj === "string" ? hObj : hObj.n;
+        var hStreak = typeof hObj === "string" ? true : (hObj.s !== false);
+        h += '<div class="sr"><span class="sr-nm">'+esc(hName)+'</span>';
+        h += '<button class="tog'+(hStreak?' on':'')+'" data-a="tghs-toggle" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
+        h += '<button class="rm" data-a="srh" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
     h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snh" class="inp flex-1 text-sm" placeholder="Add goal..." maxlength="60"><button class="bt bta text-sm" data-a="sah"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-star-and-crescent mr-1.5" style="color:var(--pr)"></i>Extra Deeds</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that deed in the monthly overview.</p>';
     df.ex.forEach(function(e,i){
-        h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span><button class="tog'+(e.s?' on':'')+'" data-a="tges" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button><button class="rm" data-a="sre" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
+        h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
+        h += '<button class="tog'+(e.s?' on':'')+'" data-a="tges" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
+        h += '<button class="rm" data-a="sre" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
     h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="sne" class="inp flex-1 text-sm" placeholder="Add deed..." maxlength="60"><button class="bt bta text-sm" data-a="sae"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-shield-heart mr-1.5" style="color:var(--hl)"></i>Healthy Lifestyle</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that item in the monthly overview.</p>';
     df.hl.forEach(function(e,i){
-        h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span><button class="tog'+(e.s?' on':'')+'" data-a="tghs" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button><button class="rm" data-a="srhl" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
+        h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
+        h += '<button class="tog'+(e.s?' on':'')+'" data-a="tghs" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
+        h += '<button class="rm" data-a="srhl" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
     h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snhl" class="inp flex-1 text-sm" placeholder="Add health goal..." maxlength="60"><button class="bt bta text-sm" data-a="sahl"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
@@ -561,6 +585,135 @@ function rSettings() {
         h += '<div class="sr"><span class="sr-nm">'+esc(name)+'</span><button class="rm" data-a="srr" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
     h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snr" class="inp flex-1 text-sm" placeholder="Add book..." maxlength="60"><button class="bt bta text-sm" data-a="sar"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
+
+    var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
+    h += '<div class="cd">';
+    h += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
+    h += '<div class="sec-t" style="margin:0"><i class="fas fa-chart-line mr-1.5" style="color:var(--ac)"></i>Streak Tracker</div>';
+    h += '<div class="demo-selector" style="margin:0">';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='rings'?' act':'')+'" data-a="st-preview" data-mode="rings"><i class="fas fa-circle-notch mr-1"></i>Activity Rings</button>';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Seinfeld Chain</button>';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='bars'?' act':'')+'" data-a="st-preview" data-mode="bars"><i class="fas fa-chart-bar mr-1"></i>Weekly Bars</button>';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Roadmap</button>';
+    h += '</div></div>';
+    h += '<p class="text-xs mb-4" style="color:var(--mt)">Select a visualization style for all active streak trackers in your monthly overview.</p>';
+    h += '<div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">';
+
+    if (streakConceptMode === 'rings') {
+        var mockItems = [
+            {name: "Tahajjud", rate: 85, current: 5, best: 12},
+            {name: "Exercise", rate: 45, current: 0, best: 4}
+        ];
+        mockItems.forEach(function(s){
+            var radius = 30;
+            var circ = 2 * Math.PI * radius;
+            var offset = circ - (s.rate / 100) * circ;
+            h+='<div class="ring-card" style="margin:0">';
+            h+='<svg class="ring-svg">';
+            h+='<circle class="ring-bg" cx="40" cy="40" r="'+radius+'" fill="none"></circle>';
+            h+='<circle class="ring-fg" cx="40" cy="40" r="'+radius+'" fill="none" stroke="var(--ac)" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>';
+            h+='</svg>';
+            h+='<div class="ring-info">';
+            h+='<span class="ring-val" style="color:#FF7A00"><i class="fas fa-fire" style="font-size:11px"></i> '+s.current+'</span>';
+            h+='</div>';
+            h+='<span class="text-xs font-semibold mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+            h+='<span class="text-[9px]" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
+            h+='</div>';
+        });
+    }
+    else if (streakConceptMode === 'calendar') {
+        var mockItems = [
+            {name: "Tahajjud", days: [false, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
+            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
+        ];
+        var daysCount = 30;
+        mockItems.forEach(function(s){
+            h+='<div class="calendar-card" style="margin:0">';
+            h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+            h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
+            h+='<div class="cal-grid">';
+            var daysInitials = ["S","M","T","W","T","F","S"];
+            daysInitials.forEach(function(dayInit){h+='<div class="cal-hdr">'+dayInit+'</div>'});
+            var firstDayOfWeek = 4;
+            for(var i=0; i<firstDayOfWeek; i++){h+='<div class="cal-day empty"></div>'}
+            for(var d=0; d<daysCount; d++){
+                var on = s.days[d];
+                var prev = d > 0 && s.days[d-1];
+                var next = d < daysCount - 1 && s.days[d+1];
+                var chainCls = '';
+                if(on){
+                    if(prev && next) chainCls = ' chain-mid';
+                    else if(prev) chainCls = ' chain-end';
+                    else if(next) chainCls = ' chain-start';
+                }
+                h+='<div class="cal-day'+(on?' on'+chainCls:'')+'" title="Day '+(d+1)+'">'+(d+1)+'</div>';
+            }
+            h+='</div></div>';
+        });
+    }
+    else if (streakConceptMode === 'bars') {
+        var mockItems = [
+            {name: "Tahajjud", days: [false, true, true, true, true, true, false, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
+            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
+        ];
+        var daysCount = 30;
+        mockItems.forEach(function(s){
+            h+='<div class="bar-card" style="margin:0">';
+            h+='<div style="flex:1;min-width:0"><span class="text-xs font-semibold block mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+            h+='<div class="flex flex-col gap-0.5">';
+            h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong></span>';
+            h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span>';
+            h+='</div></div>';
+            h+='<div class="bar-chart">';
+            var weeklyCounts = [0, 0, 0, 0, 0];
+            var weeklyTotals = [7, 7, 7, 7, 2];
+            for(var d=0; d<daysCount; d++){
+                var weekIdx = Math.floor(d / 7);
+                if(s.days[d]) weeklyCounts[weekIdx]++;
+            }
+            for(var w=0; w<5; w++){
+                var pct = Math.round((weeklyCounts[w] / weeklyTotals[w]) * 100);
+                h+='<div class="bar-col">';
+                h+='<div class="bar-track" title="Week '+(w+1)+': '+weeklyCounts[w]+'/'+weeklyTotals[w]+' days ('+pct+'%)">';
+                h+='<div class="bar-fill" style="height:'+pct+'%"></div>';
+                h+='</div>';
+                h+='<span style="font-size:7px;color:var(--mt)">W'+(w+1)+'</span>';
+                h+='</div>';
+            }
+            h+='</div></div>';
+        });
+    }
+    else if (streakConceptMode === 'roadmap') {
+        var mockItems = [
+            {name: "Tahajjud", days: [false, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
+            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
+        ];
+        var daysCount = 30;
+        mockItems.forEach(function(s){
+            h+='<div class="roadmap-card" style="flex:1 1 100%;width:100%;margin:0">';
+            h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold">'+esc(s.name)+'</span>';
+            h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
+            h+='<div class="road-path">';
+            for(var d=0; d<daysCount; d++){
+                var on = s.days[d];
+                var isCurrentStreakAv = (s.current > 0 && d === (daysCount - 1));
+                var cls = on ? ' on' : '';
+                if (isCurrentStreakAv) cls = ' active-streak';
+                h+='<div class="road-node'+cls+'" title="Day '+(d+1)+'">';
+                if(isCurrentStreakAv) h+='🔥';
+                else if(on) h+='✓';
+                else h+=(d+1);
+                h+='</div>';
+                if(d < daysCount - 1){
+                    var nextOn = s.days[d+1];
+                    var lineOn = on && nextOn;
+                    h+='<div class="road-line'+(lineOn?' on':'')+'"></div>';
+                }
+            }
+            h+='</div></div>';
+        });
+    }
+    h += '</div></div>';
 
     h += '<div class="cd" style="border-color:rgba(184,76,76,.2)"><div class="sec-t" style="color:var(--dn)"><i class="fas fa-triangle-exclamation mr-1.5"></i>Danger Zone</div><button class="bt text-sm" data-a="clr" style="border-color:var(--dn);color:var(--dn)"><i class="fas fa-trash mr-1.5"></i>Clear All Data</button></div>';
 
@@ -750,19 +903,34 @@ function rOverview() {
     var totalPages=Object.values(readingTotals).reduce(function(a,b){return a+b},0);
 
     var streakItems=[];
+    var allHabits = [];
+    df.habits.forEach(function(h) {
+        var hObj = typeof h === "string" ? {n: h, s: true, c: "rings"} : h;
+        allHabits.push(hObj);
+    });
+    allHabits.forEach(function(e){
+        var hStreak = (e.s !== false);
+        if(hStreak){
+            var daysArr=md.map(function(d){return d.data.habits[e.n]||false});
+            var cur=0,best=0,tmp=0;
+            for(var i=0;i<daysArr.length;i++){if(daysArr[i]){tmp++;if(tmp>best)best=tmp}else tmp=0}
+            for(var j=daysArr.length-1;j>=0;j--){if(daysArr[j])cur++;else break}
+            streakItems.push({name:e.n,concept:e.c||"rings",days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
+        }
+    });
     allExtra.forEach(function(e){if(e.s){
         var daysArr=md.map(function(d){return d.data.extra[e.n]||false});
         var cur=0,best=0,tmp=0;
         for(var i=0;i<daysArr.length;i++){if(daysArr[i]){tmp++;if(tmp>best)best=tmp}else tmp=0}
         for(var j=daysArr.length-1;j>=0;j--){if(daysArr[j])cur++;else break}
-        streakItems.push({name:e.n,days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
+        streakItems.push({name:e.n,concept:e.c||"rings",days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
     }});
     allHealth.forEach(function(e){if(e.s){
         var daysArr=md.map(function(d){return d.data.health[e.n]||false});
         var cur=0,best=0,tmp=0;
         for(var i=0;i<daysArr.length;i++){if(daysArr[i]){tmp++;if(tmp>best)best=tmp}else tmp=0}
         for(var j=daysArr.length-1;j>=0;j--){if(daysArr[j])cur++;else break}
-        streakItems.push({name:e.n,days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
+        streakItems.push({name:e.n,concept:e.c||"rings",days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
     }});
 
     var h='<header class="text-center mb-5"><p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Monthly Overview</p><h1 class="text-2xl md:text-3xl mt-1.5">'+fMon(oMonth)+'</h1><div class="flex items-center justify-center gap-3 mt-4"><button class="dnb" data-a="omp"><i class="fas fa-chevron-left text-xs"></i></button><button class="bt text-xs" data-a="back">Back to Daily</button><button class="dnb" data-a="omn"><i class="fas fa-chevron-right text-xs"></i></button></div>'+rNav("overview")+'<div class="al"></div></header>';
@@ -807,20 +975,102 @@ function rOverview() {
     h+='</div></div>';
 
     if(streakItems.length>0){
-        h+='<div class="cd"><h3 class="text-sm font-semibold mb-3" style="color:var(--mt)">Streak Tracker</h3><div class="stg">';
+        h+='<div class="cd" style="margin-bottom:1.5rem">';
+        h+='<h3 class="text-sm font-semibold mb-4" style="color:var(--mt);margin:0">Streak Tracker</h3>';
+        h+='<div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">';
+
         streakItems.forEach(function(s){
-            var clr=s.current===0?"var(--mt)":s.current<7?"var(--ac)":s.current<14?"var(--ok)":"#5ECC6F";
-            var glow=s.current>=14?"text-shadow:0 0 20px rgba(94,204,111,0.4)":"";
-            var pulse=s.current>0?"stc-act":"";
-            h+='<div class="stc">';
-            h+='<div class="stc-top"><span class="stc-nm">'+esc(s.name)+'</span></div>';
-            h+='<div class="flex items-baseline gap-1.5 mb-1"><span class="stc-num '+pulse+'" style="color:'+clr+';'+glow+'">'+s.current+'</span><span class="stc-lbl">day streak</span></div>';
-            h+='<div class="stc-dots">';
-            s.days.forEach(function(d){h+='<div class="stc-dot'+(d?' on':'')+'"></div>'});
-            h+='</div>';
-            h+='<div class="stc-bot"><span>Best: '+s.best+' days</span><span>Rate: '+s.rate+'%</span></div>';
-            h+='</div>';
+            var concept = streakConceptMode;
+            if(concept==='rings'){
+                var radius = 30;
+                var circ = 2 * Math.PI * radius;
+                var offset = circ - (s.rate / 100) * circ;
+                h+='<div class="ring-card" style="margin:0">';
+                h+='<svg class="ring-svg">';
+                h+='<circle class="ring-bg" cx="40" cy="40" r="'+radius+'" fill="none"></circle>';
+                h+='<circle class="ring-fg" cx="40" cy="40" r="'+radius+'" fill="none" stroke="var(--ac)" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>';
+                h+='</svg>';
+                h+='<div class="ring-info">';
+                h+='<span class="ring-val" style="color:#FF7A00"><i class="fas fa-fire" style="font-size:11px"></i> '+s.current+'</span>';
+                h+='</div>';
+                h+='<span class="text-xs font-semibold mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<span class="text-[9px]" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
+                h+='</div>';
+            }
+            else if(concept==='calendar'){
+                h+='<div class="calendar-card" style="margin:0">';
+                h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
+                h+='<div class="cal-grid">';
+                var daysInitials = ["S","M","T","W","T","F","S"];
+                daysInitials.forEach(function(dayInit){h+='<div class="cal-hdr">'+dayInit+'</div>'});
+                var firstDayOfWeek = new Date(oMonth.getFullYear(), oMonth.getMonth(), 1).getDay();
+                for(var i=0; i<firstDayOfWeek; i++){h+='<div class="cal-day empty"></div>'}
+                for(var d=0; d<days; d++){
+                    var on = s.days[d];
+                    var prev = d > 0 && s.days[d-1];
+                    var next = d < days - 1 && s.days[d+1];
+                    var chainCls = '';
+                    if(on){
+                        if(prev && next) chainCls = ' chain-mid';
+                        else if(prev) chainCls = ' chain-end';
+                        else if(next) chainCls = ' chain-start';
+                    }
+                    h+='<div class="cal-day'+(on?' on'+chainCls:'')+'" title="Day '+(d+1)+'">'+(d+1)+'</div>';
+                }
+                h+='</div></div>';
+            }
+            else if(concept==='bars'){
+                h+='<div class="bar-card" style="margin:0">';
+                h+='<div style="flex:1;min-width:0"><span class="text-xs font-semibold block mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<div class="flex flex-col gap-0.5">';
+                h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong></span>';
+                h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span>';
+                h+='</div></div>';
+                h+='<div class="bar-chart">';
+                var weeklyCounts = [0, 0, 0, 0, 0];
+                var weeklyTotals = [7, 7, 7, 7, (days - 28)];
+                for(var d=0; d<days; d++){
+                    var weekIdx = Math.floor(d / 7);
+                    if(s.days[d]) weeklyCounts[weekIdx]++;
+                }
+                for(var w=0; w<5; w++){
+                    if(w===4 && weeklyTotals[4]<=0) continue;
+                    var pct = Math.round((weeklyCounts[w] / weeklyTotals[w]) * 100);
+                    h+='<div class="bar-col">';
+                    h+='<div class="bar-track" title="Week '+(w+1)+': '+weeklyCounts[w]+'/'+weeklyTotals[w]+' days ('+pct+'%)">';
+                    h+='<div class="bar-fill" style="height:'+pct+'%"></div>';
+                    h+='</div>';
+                    h+='<span style="font-size:7px;color:var(--mt)">W'+(w+1)+'</span>';
+                    h+='</div>';
+                }
+                h+='</div></div>';
+            }
+            else if(concept==='roadmap'){
+                h+='<div class="roadmap-card" style="flex:1 1 100%;width:100%;margin:0">';
+                h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold">'+esc(s.name)+'</span>';
+                h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
+                h+='<div class="road-path">';
+                for(var d=0; d<days; d++){
+                    var on = s.days[d];
+                    var isCurrentStreakAv = (s.current > 0 && d === (days - 1));
+                    var cls = on ? ' on' : '';
+                    if (isCurrentStreakAv) cls = ' active-streak';
+                    h+='<div class="road-node'+cls+'" title="Day '+(d+1)+'">';
+                    if(isCurrentStreakAv) h+='🔥';
+                    else if(on) h+='✓';
+                    else h+=(d+1);
+                    h+='</div>';
+                    if(d < days - 1){
+                        var nextOn = s.days[d+1];
+                        var lineOn = on && nextOn;
+                        h+='<div class="road-line'+(lineOn?' on':'')+'"></div>';
+                    }
+                }
+                h+='</div></div>';
+            }
         });
+
         h+='</div></div>';
     }
 
@@ -901,6 +1151,7 @@ ct.addEventListener("click",function(e){
     if(a==="back"){view="daily";render();return}
     if(a==="omp"){oMonth.setMonth(oMonth.getMonth()-1);rOverview();return}
     if(a==="omn"){oMonth.setMonth(oMonth.getMonth()+1);rOverview();return}
+    if(a==="st-preview"){var mode=t.dataset.mode;localStorage.setItem("ht_streak_concept",mode);streakConceptMode=mode;render();return}
     if(a==="openrefl"){openReflModal();return}
 
     if(a==="tog"){var f=t.dataset.f,k=t.dataset.k;cData[f][k]=!cData[f][k];sDay();t.classList.toggle("on");t.setAttribute("aria-checked",cData[f][k]);uAll();return}
@@ -926,14 +1177,15 @@ ct.addEventListener("click",function(e){
     if(a==="eref"){var id=t.dataset.rid;var ph=id.indexOf("g-")===0?"Write your reflection for this goal...":(REFP[id.replace("r-","")]||"Write...");toEdit(id,ph);return}
 
     if(a==="swta"){var delta2=+t.dataset.d;var d8=gDef();var tg2=(d8.wt||8)+delta2;if(tg2<1)tg2=1;if(tg2>30)tg2=30;d8.wt=tg2;sDef(d8);var el=document.getElementById("swtv");if(el)el.textContent=tg2+" glasses ("+(tg2*WML)+" ml)";return}
-    if(a==="sah"){var inp7=document.getElementById("snh"),nm6=inp7.value.trim();if(!nm6){toast("Enter a name");return}var d9=gDef();if(d9.habits.indexOf(nm6)!==-1){toast("Already exists");return}d9.habits.push(nm6);sDef(d9);inp7.value="";render();toast("Added");return}
+    if(a==="sah"){var inp7=document.getElementById("snh"),nm6=inp7.value.trim();if(!nm6){toast("Enter a name");return}var d9=gDef();var exists=d9.habits.find(function(x){return (typeof x === "string" ? x : x.n) === nm6});if(exists){toast("Already exists");return}d9.habits.push({n:nm6,s:true,c:"rings"});sDef(d9);inp7.value="";render();toast("Added");return}
     if(a==="srh"){e.stopPropagation();var i2=+t.dataset.i;var d10=gDef();d10.habits.splice(i2,1);sDef(d10);render();toast("Removed");return}
-    if(a==="sae"){var inp8=document.getElementById("sne"),nm7=inp8.value.trim();if(!nm7){toast("Enter a name");return}var d11=gDef();if(d11.ex.find(function(x){return x.n===nm7})){toast("Already exists");return}d11.ex.push({n:nm7,s:false});sDef(d11);inp8.value="";render();toast("Added");return}
+    if(a==="sae"){var inp8=document.getElementById("sne"),nm7=inp8.value.trim();if(!nm7){toast("Enter a name");return}var d11=gDef();if(d11.ex.find(function(x){return x.n===nm7})){toast("Already exists");return}d11.ex.push({n:nm7,s:false,c:"rings"});sDef(d11);inp8.value="";render();toast("Added");return}
     if(a==="sre"){e.stopPropagation();var i3=+t.dataset.i;var d12=gDef();d12.ex.splice(i3,1);sDef(d12);render();toast("Removed");return}
     if(a==="tges"){e.stopPropagation();var i4=+t.dataset.i;var d13=gDef();d13.ex[i4].s=!d13.ex[i4].s;sDef(d13);t.classList.toggle("on");return}
-    if(a==="sahl"){var inp9=document.getElementById("snhl"),nm8=inp9.value.trim();if(!nm8){toast("Enter a name");return}var d14=gDef();if(d14.hl.find(function(x){return x.n===nm8})){toast("Already exists");return}d14.hl.push({n:nm8,s:false});sDef(d14);inp9.value="";render();toast("Added");return}
+    if(a==="sahl"){var inp9=document.getElementById("snhl"),nm8=inp9.value.trim();if(!nm8){toast("Enter a name");return}var d14=gDef();if(d14.hl.find(function(x){return x.n===nm8})){toast("Already exists");return}d14.hl.push({n:nm8,s:false,c:"rings"});sDef(d14);inp9.value="";render();toast("Added");return}
     if(a==="srhl"){e.stopPropagation();var i5=+t.dataset.i;var d15=gDef();d15.hl.splice(i5,1);sDef(d15);render();toast("Removed");return}
     if(a==="tghs"){e.stopPropagation();var i6=+t.dataset.i;var d16=gDef();d16.hl[i6].s=!d16.hl[i6].s;sDef(d16);t.classList.toggle("on");return}
+    if(a==="tghs-toggle"){e.stopPropagation();var i8=+t.dataset.i;var d19=gDef();if(typeof d19.habits[i8]==="string"){d19.habits[i8]={n:d19.habits[i8],s:false}}else{d19.habits[i8].s=!d19.habits[i8].s}sDef(d19);t.classList.toggle("on");return}
     if(a==="sar"){var inp10=document.getElementById("snr"),nm9=inp10.value.trim();if(!nm9){toast("Enter a name");return}var d17=gDef();if(d17.rd.indexOf(nm9)!==-1){toast("Already exists");return}d17.rd.push(nm9);sDef(d17);inp10.value="";render();toast("Added");return}
     if(a==="srr"){e.stopPropagation();var i7=+t.dataset.i;var d18=gDef();d18.rd.splice(i7,1);sDef(d18);render();toast("Removed");return}
     if(a==="clr"){if(confirm("This will delete ALL your habit tracking data. Are you sure?")){var keys2=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k && k.indexOf("ht_")===0)keys2.push(k)}keys2.forEach(function(k){localStorage.removeItem(k)});render();toast("All data cleared")}return}
@@ -994,7 +1246,7 @@ render();
 // ===== SERVICE WORKER (offline support) =====
 if ('serviceWorker' in navigator) {
   var swCode = `
-const CACHE = 'habit-tracker-v2';
+const CACHE = 'habit-tracker-v7';
 const URLS = [
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',

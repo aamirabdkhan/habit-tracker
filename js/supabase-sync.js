@@ -135,12 +135,15 @@ function subscribeRealtime() {
                 try { localVal = JSON.parse(localStorage.getItem(key)); } catch(e) {}
                 
                 var mergedVal = key === "ht_d" ? mergeTemplate(localVal, remoteVal) : mergeData(localVal, remoteVal);
-                localStorage.setItem(key, JSON.stringify(mergedVal));
-                
-                if (typeof dk === "function" && typeof cDate !== "undefined" && key === "ht_" + dk(cDate)) {
-                    cData = mergedVal;
+                var localStr = localStorage.getItem(key);
+                var mergedStr = JSON.stringify(mergedVal);
+                if (localStr !== mergedStr) {
+                    localStorage.setItem(key, mergedStr);
+                    if (typeof dk === "function" && typeof cDate !== "undefined" && key === "ht_" + dk(cDate)) {
+                        cData = mergedVal;
+                    }
+                    if (typeof render === "function") render();
                 }
-                if (typeof render === "function") render();
             }
         })
         .subscribe();

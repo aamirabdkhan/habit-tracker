@@ -592,9 +592,9 @@ function rSettings() {
     h += '<div class="sec-t" style="margin:0"><i class="fas fa-chart-line mr-1.5" style="color:var(--ac)"></i>Streak Tracker</div>';
     h += '<div class="demo-selector" style="margin:0">';
     h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='rings'?' act':'')+'" data-a="st-preview" data-mode="rings"><i class="fas fa-circle-notch mr-1"></i>Activity Rings</button>';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Seinfeld Chain</button>';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Micro Heatmap</button>';
     h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='bars'?' act':'')+'" data-a="st-preview" data-mode="bars"><i class="fas fa-chart-bar mr-1"></i>Weekly Bars</button>';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Roadmap</button>';
+    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Micro Roadmap</button>';
     h += '</div></div>';
     h += '<p class="text-xs mb-4" style="color:var(--mt)">Select a visualization style for all active streak trackers in your monthly overview.</p>';
     h += '<div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">';
@@ -629,24 +629,15 @@ function rSettings() {
         var daysCount = 30;
         mockItems.forEach(function(s){
             h+='<div class="calendar-card" style="margin:0">';
-            h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+            h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
             h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
-            h+='<div class="cal-grid">';
-            var daysInitials = ["S","M","T","W","T","F","S"];
-            daysInitials.forEach(function(dayInit){h+='<div class="cal-hdr">'+dayInit+'</div>'});
-            var firstDayOfWeek = 4;
-            for(var i=0; i<firstDayOfWeek; i++){h+='<div class="cal-day empty"></div>'}
+            h+='<div class="micro-hm">';
             for(var d=0; d<daysCount; d++){
                 var on = s.days[d];
-                var prev = d > 0 && s.days[d-1];
-                var next = d < daysCount - 1 && s.days[d+1];
-                var chainCls = '';
-                if(on){
-                    if(prev && next) chainCls = ' chain-mid';
-                    else if(prev) chainCls = ' chain-end';
-                    else if(next) chainCls = ' chain-start';
-                }
-                h+='<div class="cal-day'+(on?' on'+chainCls:'')+'" title="Day '+(d+1)+'">'+(d+1)+'</div>';
+                var isTd = (d === (daysCount - 1));
+                var cls = on ? ' on' : '';
+                if(isTd) cls += ' today';
+                h+='<div class="micro-hm-day'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
             }
             h+='</div></div>';
         });
@@ -690,20 +681,16 @@ function rSettings() {
         ];
         var daysCount = 30;
         mockItems.forEach(function(s){
-            h+='<div class="roadmap-card" style="flex:1 1 100%;width:100%;margin:0">';
-            h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold">'+esc(s.name)+'</span>';
+            h+='<div class="roadmap-card" style="margin:0">';
+            h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
             h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
             h+='<div class="road-path">';
             for(var d=0; d<daysCount; d++){
                 var on = s.days[d];
-                var isCurrentStreakAv = (s.current > 0 && d === (daysCount - 1));
+                var isTd = (d === (daysCount - 1));
                 var cls = on ? ' on' : '';
-                if (isCurrentStreakAv) cls = ' active-streak';
-                h+='<div class="road-node'+cls+'" title="Day '+(d+1)+'">';
-                if(isCurrentStreakAv) h+='🔥';
-                else if(on) h+='✓';
-                else h+=(d+1);
-                h+='</div>';
+                if (isTd) cls += ' active-streak';
+                h+='<div class="road-node'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
                 if(d < daysCount - 1){
                     var nextOn = s.days[d+1];
                     var lineOn = on && nextOn;
@@ -999,24 +986,15 @@ function rOverview() {
             }
             else if(concept==='calendar'){
                 h+='<div class="calendar-card" style="margin:0">';
-                h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
                 h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
-                h+='<div class="cal-grid">';
-                var daysInitials = ["S","M","T","W","T","F","S"];
-                daysInitials.forEach(function(dayInit){h+='<div class="cal-hdr">'+dayInit+'</div>'});
-                var firstDayOfWeek = new Date(oMonth.getFullYear(), oMonth.getMonth(), 1).getDay();
-                for(var i=0; i<firstDayOfWeek; i++){h+='<div class="cal-day empty"></div>'}
+                h+='<div class="micro-hm">';
                 for(var d=0; d<days; d++){
                     var on = s.days[d];
-                    var prev = d > 0 && s.days[d-1];
-                    var next = d < days - 1 && s.days[d+1];
-                    var chainCls = '';
-                    if(on){
-                        if(prev && next) chainCls = ' chain-mid';
-                        else if(prev) chainCls = ' chain-end';
-                        else if(next) chainCls = ' chain-start';
-                    }
-                    h+='<div class="cal-day'+(on?' on'+chainCls:'')+'" title="Day '+(d+1)+'">'+(d+1)+'</div>';
+                    var isTd = md[d].key === dk(new Date());
+                    var cls = on ? ' on' : '';
+                    if(isTd) cls += ' today';
+                    h+='<div class="micro-hm-day'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
                 }
                 h+='</div></div>';
             }
@@ -1047,20 +1025,16 @@ function rOverview() {
                 h+='</div></div>';
             }
             else if(concept==='roadmap'){
-                h+='<div class="roadmap-card" style="flex:1 1 100%;width:100%;margin:0">';
-                h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold">'+esc(s.name)+'</span>';
+                h+='<div class="roadmap-card" style="margin:0">';
+                h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
                 h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
                 h+='<div class="road-path">';
                 for(var d=0; d<days; d++){
                     var on = s.days[d];
-                    var isCurrentStreakAv = (s.current > 0 && d === (days - 1));
+                    var isTd = md[d].key === dk(new Date());
                     var cls = on ? ' on' : '';
-                    if (isCurrentStreakAv) cls = ' active-streak';
-                    h+='<div class="road-node'+cls+'" title="Day '+(d+1)+'">';
-                    if(isCurrentStreakAv) h+='🔥';
-                    else if(on) h+='✓';
-                    else h+=(d+1);
-                    h+='</div>';
+                    if (isTd) cls += ' active-streak';
+                    h+='<div class="road-node'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
                     if(d < days - 1){
                         var nextOn = s.days[d+1];
                         var lineOn = on && nextOn;
@@ -1246,7 +1220,7 @@ render();
 // ===== SERVICE WORKER (offline support) =====
 if ('serviceWorker' in navigator) {
   var swCode = `
-const CACHE = 'habit-tracker-v7';
+const CACHE = 'habit-tracker-v10';
 const URLS = [
   'https://cdn.tailwindcss.com',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',

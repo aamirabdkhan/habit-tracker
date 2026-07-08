@@ -181,17 +181,13 @@ input[type=number],input[type=text],textarea{font-size:16px!important}/* prevent
 .ring-info{position:absolute;top:34px;left:0;right:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .ring-val{font-size:1.15rem;font-weight:700;line-height:1}
 
-/* Concept 2: Seinfeld Calendar Grid */
+/* Concept 2: Micro Heatmap Row */
 .calendar-grid-container{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
-.calendar-card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:1rem;width:210px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:.5rem}
-.cal-hdr{font-size:9px;color:var(--mt);text-align:center;font-weight:600}
-.cal-day{aspect-ratio:1;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--mt);background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.02)}
-.cal-day.on{background:rgba(94,204,111,0.12);border-color:rgba(94,204,111,0.25);color:#5ECC6F;font-weight:700;box-shadow:0 0 6px rgba(94,204,111,0.1)}
-.cal-day.on.chain-mid{border-radius:0}
-.cal-day.on.chain-start{border-radius:4px 0 0 4px}
-.cal-day.on.chain-end{border-radius:0 4px 4px 0}
-.cal-day.empty{background:none;border:none}
+.calendar-card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:1rem;width:240px}
+.micro-hm{display:flex;gap:2.5px;margin-top:.6rem;justify-content:space-between;align-items:center}
+.micro-hm-day{flex:1;height:12px;border-radius:2px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.02);min-width:3px;transition:background 0.2s}
+.micro-hm-day.on{background:#5ECC6F;border-color:#5ECC6F;box-shadow:0 0 4px rgba(94,204,111,0.3)}
+.micro-hm-day.today{border:1px solid #FF7A00;box-shadow:0 0 5px rgba(255,122,0,0.6)}
 
 /* Concept 3: Weekly Bar Chart */
 .bar-grid{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
@@ -201,13 +197,13 @@ input[type=number],input[type=text],textarea{font-size:16px!important}/* prevent
 .bar-track{width:12px;height:50px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden;display:flex;align-items:flex-end}
 .bar-fill{width:100%;background:linear-gradient(to top, var(--ac), #5ECC6F);border-radius:6px;transition:height 0.3s ease}
 
-/* Concept 4: Roadmap Path */
+/* Concept 4: Micro Roadmap Path */
 .roadmap-container{display:flex;flex-direction:column;gap:1rem}
-.roadmap-card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:1.25rem}
-.road-path{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:.5rem 0;position:relative}
-.road-node{width:22px;height:22px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:600;flex-shrink:0;position:relative;z-index:2;color:var(--mt)}
-.road-node.on{background:#5ECC6F;border-color:#5ECC6F;color:#000;box-shadow:0 0 8px rgba(94,204,111,0.4)}
-.road-node.active-streak{background:#FF7A00;border-color:#FF7A00;color:#000;box-shadow:0 0 10px rgba(255,122,0,0.5);transform:scale(1.2)}
-.road-line{height:2px;background:var(--bd);flex-grow:1;min-width:12px;flex-shrink:0;position:relative;z-index:1;margin:0 -3px}
+.roadmap-card{background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:1rem;width:240px}
+.road-path{display:flex;align-items:center;gap:0;padding:.5rem 0;position:relative;justify-content:space-between}
+.road-node{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);flex-shrink:0;position:relative;z-index:2;transition:all 0.2s}
+.road-node.on{background:#5ECC6F;border-color:#5ECC6F;box-shadow:0 0 4px rgba(94,204,111,0.5)}
+.road-node.active-streak{background:#FF7A00;border-color:#FF7A00;box-shadow:0 0 6px rgba(255,122,0,0.8);transform:scale(1.4)}
+.road-line{height:1px;background:rgba(255,255,255,0.04);flex-grow:1;min-width:1px;flex-shrink:0;position:relative;z-index:1;margin:0}
 .road-line.on{background:#5ECC6F}
 

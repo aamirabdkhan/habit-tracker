@@ -11,6 +11,8 @@ var REFP = {good:"Write about your wins...",bad:"What could have been better..."
 var cDate = new Date();
 var cData = null;
 var svT = null;
+var dbT = null;
+var defT = null;
 var view = "daily";
 var oMonth = new Date();
 var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
@@ -144,7 +146,10 @@ function gDef() {
 }
 function sDef(d) {
     try { localStorage.setItem("ht_d", JSON.stringify(d)); } catch(e) {}
-    if (typeof dbSave === "function") dbSave("ht_d", d);
+    clearTimeout(defT);
+    defT = setTimeout(function() {
+        if (typeof dbSave === "function") dbSave("ht_d", d);
+    }, 800);
 }
 
 function mkDay() {
@@ -215,7 +220,10 @@ function gDay(key) {
 }
 function sDay() { 
     try { localStorage.setItem("ht_" + dk(cDate), JSON.stringify(cData)); } catch(e) {} 
-    if (typeof dbSave === "function") dbSave("ht_" + dk(cDate), cData); 
+    clearTimeout(dbT);
+    dbT = setTimeout(function() {
+        if (typeof dbSave === "function") dbSave("ht_" + dk(cDate), cData);
+    }, 800);
 }
 function dSave() { clearTimeout(svT); svT = setTimeout(sDay, 400); }
 
@@ -279,21 +287,21 @@ function renderReflModal() {
 
     var html = '<div class="rfl-modal" id="rfl-modal">';
     html += '<div class="rfl-box">';
-    html += '<div class="flex items-center justify-between mb-1">';
-    html += '<p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Daily Reflection</p>';
+    html += '<div class="flx aic jcb mb-1">';
+    html += '<p class="t-xs t-trw t-up" style="color:var(--mt)">Daily Reflection</p>';
     html += '<button style="background:none;border:none;color:var(--mt);cursor:pointer;font-size:1.1rem;padding:2px 6px;border-radius:6px" id="rfl-close" title="Close"><i class="fas fa-xmark"></i></button>';
     html += '</div>';
     html += '<h2>'+REFL[k]+'</h2>';
     html += '<div class="rfl-prog">'+pips+'</div>';
-    html += '<p class="text-xs mb-3" style="color:var(--mt)">'+(rflStep+1)+' of '+REFK.length+'</p>';
+    html += '<p class="t-xs mb-3" style="color:var(--mt)">'+(rflStep+1)+' of '+REFK.length+'</p>';
     html += '<textarea id="rfl-ta" class="rta" rows="4" placeholder="'+esA(REFP[k])+'">'+esc(rflAnswers[k])+'</textarea>';
-    html += '<div class="flex gap-2 mt-4 justify-between">';
-    if (rflStep > 0) html += '<button class="bt text-sm" id="rfl-back"><i class="fas fa-arrow-left mr-1.5"></i>Back</button>';
+    html += '<div class="flx gap-2 mt-4 jcb">';
+    if (rflStep > 0) html += '<button class="bt t-sm" id="rfl-back"><i class="fas fa-arrow-left mr-1.5"></i>Back</button>';
     else html += '<div></div>';
     if (rflStep < REFK.length - 1) {
-        html += '<button class="bt bta text-sm" id="rfl-next">Next<i class="fas fa-arrow-right ml-1.5"></i></button>';
+        html += '<button class="bt bta t-sm" id="rfl-next">Next<i class="fas fa-arrow-right ml-1.5"></i></button>';
     } else {
-        html += '<button class="bt bta text-sm" id="rfl-save"><i class="fas fa-check mr-1.5"></i>Save Reflection</button>';
+        html += '<button class="bt bta t-sm" id="rfl-save"><i class="fas fa-check mr-1.5"></i>Save Reflection</button>';
     }
     html += '</div></div></div>';
 
@@ -378,33 +386,33 @@ function toEdit(id, ph) {
 function rChk(obj, field, cls, rem) {
     return Object.entries(obj).map(function(e){
         var n = e[0], c = e[1];
-        return '<div class="ci '+cls+(c?' on':'')+'" data-a="tog" data-f="'+field+'" data-k="'+esA(n)+'" role="checkbox" aria-checked="'+c+'" tabindex="0"><div class="ck"><i class="fas fa-check"></i></div><span class="lb text-sm">'+esc(n)+'</span>'+(rem?'<button class="rm" data-a="rm-'+field+'" data-n="'+esA(n)+'"><i class="fas fa-xmark"></i></button>':'')+'</div>';
+        return '<div class="ci '+cls+(c?' on':'')+'" data-a="tog" data-f="'+field+'" data-k="'+esA(n)+'" role="checkbox" aria-checked="'+c+'" tabindex="0"><div class="ck"><i class="fas fa-check"></i></div><span class="lb t-sm">'+esc(n)+'</span>'+(rem?'<button class="rm" data-a="rm-'+field+'" data-n="'+esA(n)+'"><i class="fas fa-xmark"></i></button>':'')+'</div>';
     }).join("");
 }
 
 function rNav(act) {
-    return '<div class="flex items-center justify-center gap-2 mt-4 flex-wrap"><button class="bto'+(act==="daily"?' act':'')+'" data-a="vday"><i class="fas fa-calendar-day mr-1.5"></i>Daily</button><button class="bto'+(act==="overview"?' act':'')+'" data-a="vov"><i class="fas fa-chart-pie mr-1.5"></i>Overview</button><button class="bto'+(act==="settings"?' act':'')+'" data-a="vset"><i class="fas fa-gear mr-1.5"></i>Template</button></div>';
+    return '<div class="flx aic jcc gap-2 mt-4 flx-w"><button class="bto'+(act==="daily"?' act':'')+'" data-a="vday"><i class="fas fa-calendar-day mr-1.5"></i>Daily</button><button class="bto'+(act==="overview"?' act':'')+'" data-a="vov"><i class="fas fa-chart-pie mr-1.5"></i>Overview</button><button class="bto'+(act==="settings"?' act':'')+'" data-a="vset"><i class="fas fa-gear mr-1.5"></i>Template</button></div>';
 }
 
 function rHead() {
     var td = isT(cDate), fu = isF(cDate);
     var done = reflDone();
-    var h = '<header class="text-center mb-5">';
-    h += '<p class="text-xs tracking-widest uppercase" style="color:var(--mt)">'+greet()+'</p>';
-    h += '<h1 class="text-2xl md:text-3xl mt-1.5">'+fLong(cDate)+'</h1>';
-    h += '<div class="flex items-center justify-center gap-2 mt-1">';
-    if (td) h += '<span class="text-xs px-2.5 py-0.5 rounded-full" style="background:rgba(74,140,92,.15);color:var(--ok)">Today</span>';
-    if (fu) h += '<span class="text-xs px-2.5 py-0.5 rounded-full" style="background:var(--acd);color:var(--ac)">Future</span>';
+    var h = '<header class="t-ctr mb-5">';
+    h += '<p class="t-xs t-trw t-up" style="color:var(--mt)">'+greet()+'</p>';
+    h += '<h1 class="t-2xl md-t-3xl mt-1-5">'+fLong(cDate)+'</h1>';
+    h += '<div class="flx aic jcc gap-2 mt-1">';
+    if (td) h += '<span class="bdg" style="background:rgba(74,140,92,.15);color:var(--ok)">Today</span>';
+    if (fu) h += '<span class="bdg" style="background:var(--acd);color:var(--ac)">Future</span>';
     h += '</div>';
-    h += '<div class="flex items-center justify-center gap-3 mt-4">';
-    h += '<button class="dnb" data-a="prev"><i class="fas fa-chevron-left text-xs"></i></button>';
-    if (!td) h += '<button class="bt text-xs" data-a="today">Today</button>';
-    h += '<button class="dnb" data-a="next"><i class="fas fa-chevron-right text-xs"></i></button>';
+    h += '<div class="flx aic jcc gap-3 mt-4">';
+    h += '<button class="dnb" data-a="prev"><i class="fas fa-chevron-left t-xs"></i></button>';
+    if (!td) h += '<button class="bt t-xs" data-a="today">Today</button>';
+    h += '<button class="dnb" data-a="next"><i class="fas fa-chevron-right t-xs"></i></button>';
     h += '</div>';
     // Reflection button in header
-    h += '<div class="flex items-center justify-center mt-3">';
+    h += '<div class="flx aic jcc mt-3">';
     h += '<div class="rfl-btn-wrap">';
-    h += '<button class="bt text-xs" data-a="openrefl" style="'+(done?'border-color:var(--ok);color:var(--ok)':'border-color:rgba(184,76,76,.5);color:var(--fg)')+'"><i class="fas fa-'+(done?'check-circle':'pen-fancy')+' mr-1.5" style="color:'+(done?'var(--ok)':'var(--dn)')+'"></i>'+(done?'Reflection done':'Daily Reflection')+'</button>';
+    h += '<button class="bt t-xs" data-a="openrefl" style="'+(done?'border-color:var(--ok);color:var(--ok)':'border-color:rgba(184,76,76,.5);color:var(--fg)')+'"><i class="fas fa-'+(done?'check-circle':'pen-fancy')+' mr-1.5" style="color:'+(done?'var(--ok)':'var(--dn)')+'"></i>'+(done?'Reflection done':'Daily Reflection')+'</button>';
     if (!done) h += '<span class="rfl-dot" id="rfl-indicator"></span>';
     h += '</div></div>';
     h += rNav("daily");
@@ -414,11 +422,11 @@ function rHead() {
 
 function rWeek() {
     var ds = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    var h = '<div class="flex justify-center gap-0.5 mb-5">';
+    var h = '<div class="flx jcc gap-1 mb-5">';
     for (var i = -6; i <= 0; i++) {
         var d = new Date(cDate); d.setDate(d.getDate()+i);
         var k = dk(d), s = dScore(k), a = k===dk(cDate);
-        h += '<div class="wk'+(a?' on':'')+'" data-a="goto" data-k="'+k+'"><span class="text-[10px]" style="color:'+(a?'var(--ac)':'var(--mt)')+'">'+ds[d.getDay()]+'</span><span class="text-xs font-semibold" style="color:'+(a?'var(--fg)':'var(--mt)')+'">'+d.getDate()+'</span><div class="wkd '+sCls(s)+'"></div></div>';
+        h += '<div class="wk'+(a?' on':'')+'" data-a="goto" data-k="'+k+'"><span class="t-10" style="color:'+(a?'var(--ac)':'var(--mt)')+'">'+ds[d.getDay()]+'</span><span class="t-xs fw-s" style="color:'+(a?'var(--fg)':'var(--mt)')+'">'+d.getDate()+'</span><div class="wkd '+sCls(s)+'"></div></div>';
     }
     return h + '</div>';
 }
@@ -429,8 +437,8 @@ function rHabits() {
     var p = t===0 ? 0 : Math.round(c/t*100);
     var s = '<div class="cd ai" style="animation-delay:.05s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-bullseye"></i></div><h2 class="stl">Daily Goals</h2></div>';
     s += '<div id="hl">'+rChk(h,"habits","",true)+'</div>';
-    s += '<div class="flex items-center gap-2 mt-3"><input type="text" id="nh" class="inp flex-1 text-sm" placeholder="Add a new goal..." maxlength="60"><button class="bt bta text-sm" data-a="ah"><i class="fas fa-plus mr-1"></i>Add</button></div>';
-    s += '<div class="mt-4"><div class="flex justify-between text-xs mb-1.5"><span style="color:var(--mt)">Goal completion</span><span id="hp" style="color:var(--ac);font-weight:600">'+p+'%</span></div>';
+    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nh" class="inp flx-1 t-sm" placeholder="Add a new goal..." maxlength="60"><button class="bt bta t-sm" data-a="ah"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+    s += '<div class="mt-4"><div class="flx jcb t-xs mb-2"><span style="color:var(--mt)">Goal completion</span><span id="hp" style="color:var(--ac);font-weight:600">'+p+'%</span></div>';
     s += '<div class="ptr"><div id="hf" class="pfl" style="width:'+p+'%;background:var(--ac)"></div></div>';
     if (p===100 && t>0) s += '<div class="cb" style="background:var(--acd);color:var(--ac)"><i class="fas fa-trophy mr-1"></i> All goals completed!</div>';
     s += '</div></div>';
@@ -439,7 +447,7 @@ function rHabits() {
 
 function rPrayers() {
     var p = cData.prayers, c = Object.values(p).filter(Boolean).length;
-    var s = '<div class="cd ai" style="animation-delay:.1s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-mosque"></i></div><h2 class="stl">Daily Prayers</h2><span class="ml-auto text-xs font-semibold" style="color:var(--pr)">'+c+'/5</span></div>';
+    var s = '<div class="cd ai" style="animation-delay:.1s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-mosque"></i></div><h2 class="stl">Daily Prayers</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/5</span></div>';
     s += rChk(p,"prayers","pr",false);
     if (c===5) s += '<div class="cb" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent mr-1"></i> All prayers completed \u2014 MashaAllah</div>';
     s += '</div>';
@@ -449,9 +457,9 @@ function rPrayers() {
 function rExtra() {
     var ex = cData.extra, keys = Object.keys(ex);
     var c = keys.filter(function(k){return ex[k]}).length;
-    var s = '<div class="cd ai" style="animation-delay:.15s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent"></i></div><h2 class="stl">Extra Deeds</h2><span class="ml-auto text-xs font-semibold" style="color:var(--pr)">'+c+'/'+keys.length+'</span></div>';
+    var s = '<div class="cd ai" style="animation-delay:.15s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent"></i></div><h2 class="stl">Extra Deeds</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/'+keys.length+'</span></div>';
     s += '<div id="exl">'+rChk(ex,"extra","ex",true)+'</div>';
-    s += '<div class="flex items-center gap-2 mt-3"><input type="text" id="ne" class="inp flex-1 text-sm" placeholder="Add an extra deed..." maxlength="60"><button class="bt bta text-sm" data-a="ae"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ne" class="inp flx-1 t-sm" placeholder="Add an extra deed..." maxlength="60"><button class="bt bta t-sm" data-a="ae"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
     return s;
 }
@@ -459,11 +467,11 @@ function rExtra() {
 function rReading() {
     var rows = "";
     cData.reading.forEach(function(r,i){
-        rows += '<div class="rr"><div style="width:10px;height:10px;border-radius:3px;flex-shrink:0;background:'+RCOLS[i%RCOLS.length]+'"></div><span class="text-sm flex-1">'+esc(r.n)+'</span><input type="number" class="nin" id="ri'+i+'" min="0" placeholder="0" value="0" style="width:64px;font-size:.85rem"><button class="bt text-sm" data-a="ra" data-i="'+i+'">Add</button><span class="text-sm font-semibold ml-1" id="rt'+i+'" style="color:'+RCOLS[i%RCOLS.length]+'">'+r.t+' pg</span><button class="rm" data-a="rmr" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
+        rows += '<div class="rr"><div style="width:10px;height:10px;border-radius:3px;flex-shrink:0;background:'+RCOLS[i%RCOLS.length]+'"></div><span class="t-sm flx-1">'+esc(r.n)+'</span><input type="number" class="nin" id="ri'+i+'" min="0" placeholder="0" value="0" style="width:64px;font-size:.85rem"><button class="bt t-sm" data-a="ra" data-i="'+i+'">Add</button><span class="t-sm fw-s ml-1" id="rt'+i+'" style="color:'+RCOLS[i%RCOLS.length]+'">'+r.t+' pg</span><button class="rm" data-a="rmr" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
     var s = '<div class="cd ai" style="animation-delay:.2s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-book-open-reader"></i></div><h2 class="stl">Reading</h2></div>';
     s += '<div id="rl">'+rows+'</div>';
-    s += '<div class="flex items-center gap-2 mt-3"><input type="text" id="nr" class="inp flex-1 text-sm" placeholder="Add a book..." maxlength="60"><button class="bt bta text-sm" data-a="ar"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nr" class="inp flx-1 t-sm" placeholder="Add a book..." maxlength="60"><button class="bt bta t-sm" data-a="ar"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
     return s;
 }
@@ -478,9 +486,9 @@ function rWater() {
         drops += '<div class="wdr'+(ch?' f':'')+'" data-a="wt" data-i="'+i+'" role="checkbox" aria-checked="'+ch+'" tabindex="0"><i class="fas fa-droplet"></i></div>';
     }
     var s = '<div class="cd ai" style="animation-delay:.25s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-bottle-water"></i></div><h2 class="stl">Water Intake</h2>';
-    s += '<div class="ml-auto flex items-center gap-2"><button class="wtb" data-a="wta" data-d="-1">&minus;</button><span class="text-xs font-medium" style="color:var(--wa)">'+tg+' ('+gm+' ml)</span><button class="wtb" data-a="wta" data-d="1">+</button></div></div>';
+    s += '<div class="mla flx aic gap-2"><button class="wtb" data-a="wta" data-d="-1">&minus;</button><span class="t-xs fw-m" style="color:var(--wa)">'+tg+' ('+gm+' ml)</span><button class="wtb" data-a="wta" data-d="1">+</button></div></div>';
     s += '<div class="wgr mb-4" id="wgr">'+drops+'</div>';
-    s += '<div><div class="flex justify-between text-xs mb-1.5"><span style="color:var(--mt)">Intake</span><span id="wtx" style="color:var(--wa);font-weight:600">'+ml+' / '+gm+' ml</span></div>';
+    s += '<div><div class="flx jcb t-xs mb-2"><span style="color:var(--mt)">Intake</span><span id="wtx" style="color:var(--wa);font-weight:600">'+ml+' / '+gm+' ml</span></div>';
     s += '<div class="ptr"><div id="wfl" class="pfl" style="width:'+p+'%;background:var(--wa)"></div></div></div></div>';
     return s;
 }
@@ -493,7 +501,7 @@ function rWeight() {
     var statusTxt = w ? 'Saved: '+w+' kg' : (carried ? 'Carrying: '+carried+' kg (from previous day)' : 'Not recorded yet');
     var statusColor = w ? 'var(--ok)' : (carried ? 'var(--ac)' : 'var(--mt)');
     var s = '<div class="cd ai" style="animation-delay:.3s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-weight-scale"></i></div><h2 class="stl">Weight</h2></div>';
-    s += '<div class="flex items-center gap-3"><input type="number" class="nin" id="wi" step="0.1" value="'+displayVal+'" placeholder="'+placeholder+'" style="width:90px;font-size:1rem"><span class="text-sm" style="color:var(--mt)">kg</span><span class="text-xs ml-2" id="ws" style="color:'+statusColor+'">'+statusTxt+'</span></div>';
+    s += '<div class="flx aic gap-3"><input type="number" class="nin" id="wi" step="0.1" value="'+displayVal+'" placeholder="'+placeholder+'" style="width:90px;font-size:1rem"><span class="t-sm" style="color:var(--mt)">kg</span><span class="t-xs ml-2" id="ws" style="color:'+statusColor+'">'+statusTxt+'</span></div>';
     s += '</div>';
     return s;
 }
@@ -502,9 +510,9 @@ function rHealth() {
     var h = cData.health, keys = Object.keys(h), t = keys.length;
     var c = keys.filter(function(k){return h[k]}).length;
     var p = t===0 ? 0 : Math.round(c/t*100);
-    var s = '<div class="cd ai" style="animation-delay:.35s"><div class="shd"><div class="sic" style="background:var(--hld);color:var(--hl)"><i class="fas fa-shield-heart"></i></div><h2 class="stl">Healthy Lifestyle</h2><span class="ml-auto text-xs font-semibold" style="color:var(--hl)">'+p+'%</span></div>';
+    var s = '<div class="cd ai" style="animation-delay:.35s"><div class="shd"><div class="sic" style="background:var(--hld);color:var(--hl)"><i class="fas fa-shield-heart"></i></div><h2 class="stl">Healthy Lifestyle</h2><span class="mla t-xs fw-s" style="color:var(--hl)">'+p+'%</span></div>';
     s += '<div id="hll">'+rChk(h,"health","hl",true)+'</div>';
-    s += '<div class="flex items-center gap-2 mt-3"><input type="text" id="nhl" class="inp flex-1 text-sm" placeholder="Add a health goal..." maxlength="60"><button class="bt bta text-sm" data-a="ahl"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nhl" class="inp flx-1 t-sm" placeholder="Add a health goal..." maxlength="60"><button class="bt bta t-sm" data-a="ahl"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '<div class="mt-3"><div class="ptr"><div id="hfl" class="pfl" style="width:'+p+'%;background:var(--hl)"></div></div></div>';
     s += '</div>';
     return s;
@@ -513,46 +521,46 @@ function rHealth() {
 function rGoalRef() {
     var g = "";
     cData.goalRef.forEach(function(gr,i){
-        g += '<div class="gri"><div class="flex items-center gap-2 mb-2"><span class="text-sm font-semibold" style="color:var(--ac)">'+esc(gr.name)+'</span><button class="rm" data-a="rg" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
+        g += '<div class="gri"><div class="flx aic gap-2 mb-2"><span class="t-sm fw-s" style="color:var(--ac)">'+esc(gr.name)+'</span><button class="rm" data-a="rg" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
         g += '<div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>';
     });
     var s = '<div class="cd ai" style="animation-delay:.4s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-crosshairs"></i></div><h2 class="stl">Goal Reflection</h2></div>';
     s += '<div id="gl">'+g+'</div>';
-    s += '<div class="flex items-center gap-2 mt-3"><input type="text" id="ng" class="inp flex-1 text-sm" placeholder="Add a goal to reflect on..." maxlength="80"><button class="bt bta text-sm" data-a="ag"><i class="fas fa-plus mr-1"></i>Add</button></div>';
+    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ng" class="inp flx-1 t-sm" placeholder="Add a goal to reflect on..." maxlength="80"><button class="bt bta t-sm" data-a="ag"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
     return s;
 }
 
 function rFoot() {
-    return '<footer class="text-center mt-8 pb-4"><div class="flex items-center justify-center gap-3"><button class="bt text-xs" data-a="exp"><i class="fas fa-download mr-1.5"></i>Export</button><button class="bt text-xs" data-a="impb"><i class="fas fa-upload mr-1.5"></i>Import</button><input type="file" id="imf" accept=".json" style="display:none"></div><p class="text-[10px] mt-4" style="color:var(--bd)">Data stored locally in your browser</p></footer>';
+    return '<footer class="t-ctr mt-8 pb-4"><div class="flx aic jcc gap-3"><button class="bt t-xs" data-a="exp"><i class="fas fa-download mr-1.5"></i>Export</button><button class="bt t-xs" data-a="impb"><i class="fas fa-upload mr-1.5"></i>Import</button><input type="file" id="imf" accept=".json" style="display:none"></div><p class="t-10 mt-4" style="color:var(--bd)">Data stored locally in your browser</p></footer>';
 }
 
 // ===== SETTINGS =====
 function rSettings() {
     var df = gDef();
-    var h = '<header class="text-center mb-6"><p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Configuration</p><h1 class="text-2xl md:text-3xl mt-1.5">Template</h1><p class="text-xs mt-2" style="color:var(--mt)">Manage what appears on your daily page and monthly overview.</p>';
+    var h = '<header class="t-ctr mb-6"><p class="t-xs t-trw t-up" style="color:var(--mt)">Configuration</p><h1 class="t-2xl md-t-3xl mt-1-5">Template</h1><p class="t-xs mt-2" style="color:var(--mt)">Manage what appears on your daily page and monthly overview.</p>';
     h += rNav("settings");
     h += '<div class="al"></div></header>';
 
     h += '<div class="sync-card">';
     h += '<div class="sec-t"><i class="fas fa-rotate mr-1.5" style="color:var(--wa)"></i>Cloud Sync</div>';
     if (typeof sbClient === "undefined" || !sbClient) {
-        h += '<p class="text-xs mb-3" style="color:var(--mt)">To enable sync, configure your Supabase URL and Anon Key in the source code.</p>';
-        h += '<button class="bt text-sm opacity-50 cursor-not-allowed" disabled><i class="fas fa-lock mr-1.5"></i>Sync Disabled</button>';
+        h += '<p class="t-xs mb-3" style="color:var(--mt)">To enable sync, configure your Supabase URL and Anon Key in the source code.</p>';
+        h += '<button class="bt t-sm opacity-50 cursor-not-allowed" disabled><i class="fas fa-lock mr-1.5"></i>Sync Disabled</button>';
     } else if (currentUser) {
-        h += '<p class="text-xs mb-3" style="color:var(--mt)">Logged in as <strong>' + esc(currentUser.email) + '</strong>. Your data is synced automatically.</p>';
-        h += '<div class="flex gap-2">';
-        h += '<button class="bt text-sm" data-a="sync-now">' + (isSyncing ? '<i class="fas fa-spinner fa-spin mr-1.5"></i>Syncing...' : '<i class="fas fa-rotate mr-1.5"></i>Sync Now') + '</button>';
-        h += '<button class="bt text-sm" data-a="signout" style="border-color:var(--dn);color:var(--dn)"><i class="fas fa-right-from-bracket mr-1.5"></i>Sign Out</button>';
+        h += '<p class="t-xs mb-3" style="color:var(--mt)">Logged in as <strong>' + esc(currentUser.email) + '</strong>. Your data is synced automatically.</p>';
+        h += '<div class="flx gap-2">';
+        h += '<button class="bt t-sm" data-a="sync-now">' + (isSyncing ? '<i class="fas fa-spinner fa-spin mr-1.5"></i>Syncing...' : '<i class="fas fa-rotate mr-1.5"></i>Sync Now') + '</button>';
+        h += '<button class="bt t-sm" data-a="signout" style="border-color:var(--dn);color:var(--dn)"><i class="fas fa-right-from-bracket mr-1.5"></i>Sign Out</button>';
         h += '</div>';
     } else {
-        h += '<p class="text-xs mb-3" style="color:var(--mt)">Sign in to synchronize your habits and tracking data across multiple devices.</p>';
-        h += '<button class="bt text-sm" data-a="show-login"><i class="fas fa-cloud mr-1.5"></i>Connect Cloud Sync</button>';
+        h += '<p class="t-xs mb-3" style="color:var(--mt)">Sign in to synchronize your habits and tracking data across multiple devices.</p>';
+        h += '<button class="bt t-sm" data-a="show-login"><i class="fas fa-cloud mr-1.5"></i>Connect Cloud Sync</button>';
     }
     h += '</div>';
 
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-bottle-water mr-1.5" style="color:var(--wa)"></i>Water Target</div>';
-    h += '<div class="flex items-center gap-3"><button class="wtb" data-a="swta" data-d="-1">&minus;</button><span class="text-sm" id="swtv">'+(df.wt||8)+' glasses ('+((df.wt||8)*WML)+' ml)</span><button class="wtb" data-a="swta" data-d="1">+</button></div></div>';
+    h += '<div class="flx aic gap-3"><button class="wtb" data-a="swta" data-d="-1">&minus;</button><span class="t-sm" id="swtv">'+(df.wt||8)+' glasses ('+((df.wt||8)*WML)+' ml)</span><button class="wtb" data-a="swta" data-d="1">+</button></div></div>';
 
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-bullseye mr-1.5" style="color:var(--ac)"></i>Daily Goals</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that habit in the monthly overview.</p>';
     df.habits.forEach(function(hObj,i){
@@ -562,42 +570,42 @@ function rSettings() {
         h += '<button class="tog'+(hStreak?' on':'')+'" data-a="tghs-toggle" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="srh" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
-    h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snh" class="inp flex-1 text-sm" placeholder="Add goal..." maxlength="60"><button class="bt bta text-sm" data-a="sah"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
+    h += '<div class="flx aic gap-2 mt-2"><input type="text" id="snh" class="inp flx-1 t-sm" placeholder="Add goal..." maxlength="60"><button class="bt bta t-sm" data-a="sah"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
-    h += '<div class="cd"><div class="sec-t"><i class="fas fa-star-and-crescent mr-1.5" style="color:var(--pr)"></i>Extra Deeds</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that deed in the monthly overview.</p>';
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-star-and-crescent mr-1.5" style="color:var(--pr)"></i>Extra Deeds</div><p class="t-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that deed in the monthly overview.</p>';
     df.ex.forEach(function(e,i){
         h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
         h += '<button class="tog'+(e.s?' on':'')+'" data-a="tges" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="sre" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
-    h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="sne" class="inp flex-1 text-sm" placeholder="Add deed..." maxlength="60"><button class="bt bta text-sm" data-a="sae"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
+    h += '<div class="flx aic gap-2 mt-2"><input type="text" id="sne" class="inp flx-1 t-sm" placeholder="Add deed..." maxlength="60"><button class="bt bta t-sm" data-a="sae"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
-    h += '<div class="cd"><div class="sec-t"><i class="fas fa-shield-heart mr-1.5" style="color:var(--hl)"></i>Healthy Lifestyle</div><p class="text-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that item in the monthly overview.</p>';
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-shield-heart mr-1.5" style="color:var(--hl)"></i>Healthy Lifestyle</div><p class="t-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that item in the monthly overview.</p>';
     df.hl.forEach(function(e,i){
         h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
         h += '<button class="tog'+(e.s?' on':'')+'" data-a="tghs" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="srhl" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
-    h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snhl" class="inp flex-1 text-sm" placeholder="Add health goal..." maxlength="60"><button class="bt bta text-sm" data-a="sahl"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
+    h += '<div class="flx aic gap-2 mt-2"><input type="text" id="snhl" class="inp flx-1 t-sm" placeholder="Add health goal..." maxlength="60"><button class="bt bta t-sm" data-a="sahl"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-book-open-reader mr-1.5" style="color:var(--pr)"></i>Reading</div>';
     df.rd.forEach(function(name,i){
         h += '<div class="sr"><span class="sr-nm">'+esc(name)+'</span><button class="rm" data-a="srr" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
-    h += '<div class="flex items-center gap-2 mt-2"><input type="text" id="snr" class="inp flex-1 text-sm" placeholder="Add book..." maxlength="60"><button class="bt bta text-sm" data-a="sar"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
+    h += '<div class="flx aic gap-2 mt-2"><input type="text" id="snr" class="inp flx-1 t-sm" placeholder="Add book..." maxlength="60"><button class="bt bta t-sm" data-a="sar"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
     var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
     h += '<div class="cd">';
-    h += '<div class="flex items-center justify-between mb-4 flex-wrap gap-2">';
+    h += '<div class="flx aic jcb mb-4 flx-w gap-2">';
     h += '<div class="sec-t" style="margin:0"><i class="fas fa-chart-line mr-1.5" style="color:var(--ac)"></i>Streak Tracker</div>';
     h += '<div class="demo-selector" style="margin:0">';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='rings'?' act':'')+'" data-a="st-preview" data-mode="rings"><i class="fas fa-circle-notch mr-1"></i>Activity Rings</button>';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Micro Heatmap</button>';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='bars'?' act':'')+'" data-a="st-preview" data-mode="bars"><i class="fas fa-chart-bar mr-1"></i>Weekly Bars</button>';
-    h += '<button class="bt text-[9px] py-1 px-2.5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Micro Roadmap</button>';
+    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='rings'?' act':'')+'" data-a="st-preview" data-mode="rings"><i class="fas fa-circle-notch mr-1"></i>Activity Rings</button>';
+    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Micro Heatmap</button>';
+    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='bars'?' act':'')+'" data-a="st-preview" data-mode="bars"><i class="fas fa-chart-bar mr-1"></i>Weekly Bars</button>';
+    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Micro Roadmap</button>';
     h += '</div></div>';
-    h += '<p class="text-xs mb-4" style="color:var(--mt)">Select a visualization style for all active streak trackers in your monthly overview.</p>';
-    h += '<div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">';
+    h += '<p class="t-xs mb-4" style="color:var(--mt)">Select a visualization style for all active streak trackers in your monthly overview.</p>';
+    h += '<div class="flx gap-4 flx-w jcc">';
 
     if (streakConceptMode === 'rings') {
         var mockItems = [
@@ -1051,7 +1059,7 @@ function rOverview() {
     h+='<div class="cc2"><h3>Water Intake (ml)</h3><div id="wbw"><canvas id="wb"></canvas></div></div>';
 
     if(Object.keys(readingTotals).length>0){
-        h+='<div class="cd"><h3 class="text-sm font-semibold mb-3" style="color:var(--mt)">Reading Progress</h3>';
+        h+='<div class="cd"><h3 class="t-sm fw-s mb-3" style="color:var(--mt)">Reading Progress</h3>';
         var maxR=Math.max.apply(null,Object.values(readingTotals).concat([1]));
         var ri=0;
         Object.entries(readingTotals).forEach(function(entry){

@@ -384,9 +384,24 @@ function toEdit(id, ph) {
     if (ta) { ta.focus(); ta.selectionStart = ta.value.length; }
 }
 
-function rChk(obj, field, cls, rem) {
-    return Object.entries(obj).map(function(e){
-        var n = e[0], c = e[1];
+function rChk(obj, field, cls, rem, orderArr) {
+    var keys = [];
+    if (orderArr) {
+        orderArr.forEach(function(k) {
+            var name = typeof k === "string" ? k : k.n;
+            if (name in obj) keys.push(name);
+        });
+        Object.keys(obj).forEach(function(name) {
+            var exists = orderArr.some(function(k) {
+                return (typeof k === "string" ? k : k.n) === name;
+            });
+            if (!exists) keys.push(name);
+        });
+    } else {
+        keys = Object.keys(obj);
+    }
+    return keys.map(function(n) {
+        var c = obj[n];
         return '<div class="ci '+cls+(c?' on':'')+'" data-a="tog" data-f="'+field+'" data-k="'+esA(n)+'" role="checkbox" aria-checked="'+c+'" tabindex="0"><div class="ck"><i class="fas fa-check"></i></div><span class="lb t-sm">'+esc(n)+'</span>'+(rem?'<button class="rm" data-a="rm-'+field+'" data-n="'+esA(n)+'"><i class="fas fa-xmark"></i></button>':'')+'</div>';
     }).join("");
 }
@@ -437,7 +452,8 @@ function rHabits() {
     var c = keys.filter(function(k){return h[k]}).length;
     var p = t===0 ? 0 : Math.round(c/t*100);
     var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.05s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-bullseye"></i></div><h2 class="stl">Daily Goals</h2></div>';
-    s += '<div id="hl">'+rChk(h,"habits","",true)+'</div>';
+    var df = gDef();
+    s += '<div id="hl">'+rChk(h,"habits","",true,df.habits)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nh" class="inp flx-1 t-sm" placeholder="Add a new goal..." maxlength="60"><button class="bt bta t-sm" data-a="ah"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '<div class="mt-4"><div class="flx jcb t-xs mb-2"><span style="color:var(--mt)">Goal completion</span><span id="hp" style="color:var(--ac);font-weight:600">'+p+'%</span></div>';
     s += '<div class="ptr"><div id="hf" class="pfl" style="width:'+p+'%;background:var(--ac)"></div></div>';
@@ -449,7 +465,7 @@ function rHabits() {
 function rPrayers() {
     var p = cData.prayers, c = Object.values(p).filter(Boolean).length;
     var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.1s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-mosque"></i></div><h2 class="stl">Daily Prayers</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/5</span></div>';
-    s += rChk(p,"prayers","pr",false);
+    s += rChk(p,"prayers","pr",false,PRAYERS);
     if (c===5) s += '<div class="cb" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent mr-1"></i> All prayers completed \u2014 MashaAllah</div>';
     s += '</div>';
     return s;
@@ -459,7 +475,8 @@ function rExtra() {
     var ex = cData.extra, keys = Object.keys(ex);
     var c = keys.filter(function(k){return ex[k]}).length;
     var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.15s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent"></i></div><h2 class="stl">Extra Deeds</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/'+keys.length+'</span></div>';
-    s += '<div id="exl">'+rChk(ex,"extra","ex",true)+'</div>';
+    var df = gDef();
+    s += '<div id="exl">'+rChk(ex,"extra","ex",true,df.ex)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ne" class="inp flx-1 t-sm" placeholder="Add an extra deed..." maxlength="60"><button class="bt bta t-sm" data-a="ae"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
     return s;
@@ -512,7 +529,8 @@ function rHealth() {
     var c = keys.filter(function(k){return h[k]}).length;
     var p = t===0 ? 0 : Math.round(c/t*100);
     var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.35s"><div class="shd"><div class="sic" style="background:var(--hld);color:var(--hl)"><i class="fas fa-shield-heart"></i></div><h2 class="stl">Healthy Lifestyle</h2><span class="mla t-xs fw-s" style="color:var(--hl)">'+p+'%</span></div>';
-    s += '<div id="hll">'+rChk(h,"health","hl",true)+'</div>';
+    var df = gDef();
+    s += '<div id="hll">'+rChk(h,"health","hl",true,df.hl)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nhl" class="inp flx-1 t-sm" placeholder="Add a health goal..." maxlength="60"><button class="bt bta t-sm" data-a="ahl"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '<div class="mt-3"><div class="ptr"><div id="hfl" class="pfl" style="width:'+p+'%;background:var(--hl)"></div></div></div>';
     s += '</div>';

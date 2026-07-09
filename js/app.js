@@ -153,6 +153,37 @@ function sDef(d) {
     }, 800);
 }
 
+function syncGoalRefsFor(dayObj) {
+    if (!dayObj) return;
+    if (!Array.isArray(dayObj.goalRef)) dayObj.goalRef = [];
+    if (!dayObj.habits) dayObj.habits = {};
+    var habitsKeys = [];
+    var df = gDef();
+    df.habits.forEach(function(h) {
+        var name = typeof h === "string" ? h : h.n;
+        if (name in dayObj.habits) habitsKeys.push(name);
+    });
+    Object.keys(dayObj.habits).forEach(function(name) {
+        var exists = df.habits.some(function(h) {
+            return (typeof h === "string" ? h : h.n) === name;
+        });
+        if (!exists) habitsKeys.push(name);
+    });
+
+    var newGoalRefs = [];
+    habitsKeys.forEach(function(name) {
+        var existing = dayObj.goalRef.find(function(gr) {
+            return gr.name === name;
+        });
+        if (existing) {
+            newGoalRefs.push(existing);
+        } else {
+            newGoalRefs.push({ name: name, text: "" });
+        }
+    });
+    dayObj.goalRef = newGoalRefs;
+}
+
 function mkDay() {
     var df = gDef(), tg = df.wt || 8;
     var habits = {}, prayers = {}, extra = {}, health = {};
@@ -163,7 +194,9 @@ function mkDay() {
     var reading = df.rd.map(function(n){ return {n:n, t:0}; });
     var reflections = {};
     REFK.forEach(function(k){ reflections[k] = ""; });
-    return {habits:habits, prayers:prayers, extra:extra, reading:reading, water:Array(tg).fill(false), weight:"", health:health, goalRef:[], reflections:reflections};
+    var dayObj = {habits:habits, prayers:prayers, extra:extra, reading:reading, water:Array(tg).fill(false), weight:"", health:health, goalRef:[], reflections:reflections};
+    syncGoalRefsFor(dayObj);
+    return dayObj;
 }
 
 function gDay(key) {
@@ -214,6 +247,7 @@ function gDay(key) {
             if (d.water.length === 0) {
                 while (d.water.length < tg) d.water.push(false);
             }
+            syncGoalRefsFor(d);
             return d;
         }
     } catch(e) {}
@@ -540,12 +574,10 @@ function rHealth() {
 function rGoalRef() {
     var g = "";
     cData.goalRef.forEach(function(gr,i){
-        g += '<div class="gri"><div class="flx aic gap-2 mb-2"><span class="t-sm fw-s" style="color:var(--ac)">'+esc(gr.name)+'</span><button class="rm" data-a="rg" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
-        g += '<div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>';
+        g += '<div class="gri"><div class="flx aic gap-2 mb-2"><span class="t-sm fw-s" style="color:var(--ac)">'+esc(gr.name)+'</span></div><div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>';
     });
     var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.4s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-crosshairs"></i></div><h2 class="stl">Goal Reflection</h2></div>';
     s += '<div id="gl">'+g+'</div>';
-    s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ng" class="inp flx-1 t-sm" placeholder="Add a goal to reflect on..." maxlength="80"><button class="bt bta t-sm" data-a="ag"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
     return s;
 }
@@ -746,7 +778,7 @@ function uHP() {
 }
 function uEP() {
     var keys=Object.keys(cData.extra),c=keys.filter(function(k){return cData.extra[k]}).length;
-    var cards=document.querySelectorAll(".cd"); for(var i=0;i<cards.length;i++){if(cards[i].querySelector('[data-a="ae"]')){var ct=cards[i].querySelector(".shd .ml-auto");if(ct)ct.textContent=c+"/"+keys.length;break}}
+    var cards=document.querySelectorAll(".cd"); for(var i=0;i<cards.length;i++){if(cards[i].querySelector('[data-a="ae"]')){var ct=cards[i].querySelector(".shd .mla");if(ct)ct.textContent=c+"/"+keys.length;break}}
 }
 function uWP() {
     var tg=cData.water.length,gm=tg*WML,fi=cData.water.filter(Boolean).length,ml=fi*WML,p=Math.min(100,Math.round(ml/gm*100));
@@ -756,18 +788,19 @@ function uWP() {
 function uHL() {
     var h=cData.health,keys=Object.keys(h),t=keys.length,c=keys.filter(function(k){return h[k]}).length,p=t?Math.round(c/t*100):0;
     var f=document.getElementById("hfl"); if(f) f.style.width=p+"%";
-    var cards=document.querySelectorAll(".cd"); for(var i=0;i<cards.length;i++){if(cards[i].querySelector('[data-a="ahl"]')){var ct=cards[i].querySelector(".shd .ml-auto");if(ct)ct.textContent=p+"%";break}}
+    var cards=document.querySelectorAll(".cd"); for(var i=0;i<cards.length;i++){if(cards[i].querySelector('[data-a="ahl"]')){var ct=cards[i].querySelector(".shd .mla");if(ct)ct.textContent=p+"%";break}}
 }
 function uWD() { var s=document.querySelector(".wk.on .wkd"); if(s) s.className="wkd "+sCls(dScore(dk(cDate))); }
 function uAll() { uHP(); uEP(); uWP(); uHL(); uWD(); }
 
-function reHL() { var e=document.getElementById("hl"); if(e) e.innerHTML=rChk(cData.habits,"habits","",true); uHP(); }
-function reHLL() { var e=document.getElementById("hll"); if(e) e.innerHTML=rChk(cData.health,"health","hl",true); uHL(); }
+function reHL() { var e=document.getElementById("hl"); var df=gDef(); if(e) e.innerHTML=rChk(cData.habits,"habits","",true,df.habits); uHP(); }
+function reHLL() { var e=document.getElementById("hll"); var df=gDef(); if(e) e.innerHTML=rChk(cData.health,"health","hl",true,df.hl); uHL(); }
 function reEX() {
     var e=document.getElementById("exl"); if(!e) return;
+    var df=gDef();
     var keys=Object.keys(cData.extra),c=keys.filter(function(k){return cData.extra[k]}).length;
-    e.innerHTML=rChk(cData.extra,"extra","ex",true);
-    var cd=e.closest(".cd"); var ct=cd.querySelector(".shd .ml-auto"); if(ct) ct.textContent=c+"/"+keys.length;
+    e.innerHTML=rChk(cData.extra,"extra","ex",true,df.ex);
+    var cd=e.closest(".cd"); var ct=cd.querySelector(".shd .mla"); if(ct) ct.textContent=c+"/"+keys.length;
 }
 function reRL() {
     var e=document.getElementById("rl"); if(!e) return;
@@ -780,7 +813,7 @@ function reWT() {
     var cards=document.querySelectorAll(".cd");
     for(var i=0;i<cards.length;i++){
         if(cards[i].querySelector(".wgr")){
-            var cd=cards[i],lbl=cd.querySelector(".shd .ml-auto");
+            var cd=cards[i],lbl=cd.querySelector(".shd .mla");
             if(lbl) lbl.innerHTML='<button class="wtb" data-a="wta" data-d="-1">&minus;</button><span class="text-xs font-medium" style="color:var(--wa)">'+tg+' ('+gm+' ml)</span><button class="wtb" data-a="wta" data-d="1">+</button>';
             var gr=document.getElementById("wgr"); if(gr){var d2="";for(var j=0;j<tg;j++){var ch=cData.water[j]||false;d2+='<div class="wdr'+(ch?' f':'')+'" data-a="wt" data-i="'+j+'" role="checkbox" aria-checked="'+ch+'" tabindex="0"><i class="fas fa-droplet"></i></div>'}gr.innerHTML=d2}
             var f=document.getElementById("wfl"),t=document.getElementById("wtx"); if(f) f.style.width=p+"%"; if(t) t.textContent=ml+" / "+gm+" ml"; break;
@@ -790,7 +823,7 @@ function reWT() {
 function reGL() {
     var e=document.getElementById("gl"); if(!e) return;
     var h="";
-    cData.goalRef.forEach(function(gr,i){h+='<div class="gri"><div class="flex items-center gap-2 mb-2"><span class="text-sm font-semibold" style="color:var(--ac)">'+esc(gr.name)+'</span><button class="rm" data-a="rg" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div><div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>'});
+    cData.goalRef.forEach(function(gr,i){h+='<div class="gri"><div class="flx aic gap-2 mb-2"><span class="t-sm fw-s" style="color:var(--ac)">'+esc(gr.name)+'</span></div><div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>'});
     e.innerHTML=h;
 }
 
@@ -1158,13 +1191,12 @@ ct.addEventListener("click",function(e){
 
     if(a==="tog"){var f=t.dataset.f,k=t.dataset.k;cData[f][k]=!cData[f][k];sDay();t.classList.toggle("on");t.setAttribute("aria-checked",cData[f][k]);uAll();return}
 
-    if(a==="rm-habits"){e.stopPropagation();var n=t.dataset.n;delete cData.habits[n];sDay();t.closest(".ci").remove();uHP();toast("Removed");return}
+    if(a==="rm-habits"){e.stopPropagation();var n=t.dataset.n;delete cData.habits[n];syncGoalRefsFor(cData);sDay();t.closest(".ci").remove();uHP();reGL();toast("Removed");return}
     if(a==="rm-health"){e.stopPropagation();var n2=t.dataset.n;delete cData.health[n2];sDay();t.closest(".ci").remove();uHL();toast("Removed");return}
     if(a==="rm-extra"){e.stopPropagation();var n3=t.dataset.n;delete cData.extra[n3];sDay();t.closest(".ci").remove();reEX();toast("Removed");return}
     if(a==="rmr"){e.stopPropagation();var idx=+t.dataset.i;cData.reading.splice(idx,1);sDay();reRL();toast("Removed");return}
-    if(a==="rg"){e.stopPropagation();var idx2=+t.dataset.i;cData.goalRef.splice(idx2,1);sDay();reGL();toast("Goal removed");return}
 
-    if(a==="ah"){var inp=document.getElementById("nh"),nm=inp.value.trim();if(!nm){toast("Enter a name");return}if(cData.habits.hasOwnProperty(nm)){toast("Already exists");return}cData.habits[nm]=false;sDay();inp.value="";reHL();toast("Added");inp.focus();return}
+    if(a==="ah"){var inp=document.getElementById("nh"),nm=inp.value.trim();if(!nm){toast("Enter a name");return}if(cData.habits.hasOwnProperty(nm)){toast("Already exists");return}cData.habits[nm]=false;syncGoalRefsFor(cData);sDay();inp.value="";reHL();reGL();toast("Added");inp.focus();return}
     if(a==="ahl"){var inp2=document.getElementById("nhl"),nm2=inp2.value.trim();if(!nm2){toast("Enter a name");return}if(cData.health.hasOwnProperty(nm2)){toast("Already exists");return}cData.health[nm2]=false;sDay();inp2.value="";reHLL();toast("Added");inp2.focus();return}
     if(a==="ae"){var inp3=document.getElementById("ne"),nm3=inp3.value.trim();if(!nm3){toast("Enter a name");return}if(cData.extra.hasOwnProperty(nm3)){toast("Already exists");return}cData.extra[nm3]=false;sDay();inp3.value="";reEX();toast("Added");inp3.focus();return}
     if(a==="ar"){var inp4=document.getElementById("nr"),nm4=inp4.value.trim();if(!nm4){toast("Enter a name");return}if(cData.reading.find(function(x){return x.n===nm4})){toast("Already exists");return}cData.reading.push({n:nm4,t:0});sDay();inp4.value="";reRL();toast("Book added");inp4.focus();return}
@@ -1173,8 +1205,6 @@ ct.addEventListener("click",function(e){
     if(a==="wta"){var delta=+t.dataset.d;var tg=cData.water.length+delta;if(tg<1)tg=1;if(tg>30)tg=30;while(cData.water.length<tg)cData.water.push(false);cData.water=cData.water.slice(0,tg);sDay();reWT();uWD();return}
 
     if(a==="ra"){var ri2=+t.dataset.i;var inp5=document.getElementById("ri"+ri2);if(!inp5)return;var v=parseInt(inp5.value);if(!v||v<=0)return;cData.reading[ri2].t+=v;inp5.value="0";var sp=document.getElementById("rt"+ri2);if(sp)sp.textContent=cData.reading[ri2].t+" pg";sDay();toast("Added "+v+" page"+(v>1?"s":""));return}
-
-    if(a==="ag"){var inp6=document.getElementById("ng"),nm5=inp6.value.trim();if(!nm5){toast("Enter a goal");return}cData.goalRef.push({name:nm5,text:""});sDay();inp6.value="";reGL();toast("Goal added");inp6.focus();return}
 
     if(a==="eref"){var id=t.dataset.rid;var ph=id.indexOf("g-")===0?"Write your reflection for this goal...":(REFP[id.replace("r-","")]||"Write...");toEdit(id,ph);return}
 
@@ -1203,7 +1233,6 @@ ct.addEventListener("keydown",function(e){
         if(e.target.id==="nhl"){e.preventDefault();document.querySelector('[data-a="ahl"]').click();return}
         if(e.target.id==="ne"){e.preventDefault();document.querySelector('[data-a="ae"]').click();return}
         if(e.target.id==="nr"){e.preventDefault();document.querySelector('[data-a="ar"]').click();return}
-        if(e.target.id==="ng"){e.preventDefault();document.querySelector('[data-a="ag"]').click();return}
         if(e.target.id&&e.target.id.indexOf("ri")===0){e.preventDefault();var i=+e.target.id.replace("ri","");var btn=document.querySelector('[data-a="ra"][data-i="'+i+'"]');if(btn)btn.click();return}
         if(e.target.id==="snh"){e.preventDefault();document.querySelector('[data-a="sah"]').click();return}
         if(e.target.id==="sne"){e.preventDefault();document.querySelector('[data-a="sae"]').click();return}

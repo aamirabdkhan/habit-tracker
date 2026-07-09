@@ -152,18 +152,20 @@ function subscribeRealtime() {
 function syncDown() {
     if (!sbClient || !currentUser) return Promise.resolve();
     isSyncing = true;
-    if (typeof render === "function") render();
+    if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
     return sbClient.from('user_data').select('key, value').then(function(res) {
         isSyncing = false;
         if (res.error) {
             console.error("Sync down error:", res.error);
-            if (typeof render === "function") render();
+            if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
             return;
         }
         if (res.data && res.data.length > 0) {
+            var anyChanged = false;
             var promises = res.data.map(function(row) {
                 var localVal = null;
-                try { localVal = JSON.parse(localStorage.getItem(row.key)); } catch(e) {}
+                var localRaw = localStorage.getItem(row.key);
+                try { localVal = JSON.parse(localRaw); } catch(e) {}
                 
                 var mergedVal = null;
                 if (localVal) {
@@ -174,32 +176,45 @@ function syncDown() {
                     } else {
                         mergedVal = row.value;
                     }
-                    if (JSON.stringify(mergedVal) !== JSON.stringify(row.value)) {
+                    var mergedStr = JSON.stringify(mergedVal);
+                    if (mergedStr !== JSON.stringify(row.value)) {
+                        anyChanged = true;
                         return sbClient.from('user_data').upsert({
                             user_id: currentUser.id,
                             key: row.key,
                             value: mergedVal,
                             updated_at: new Date().toISOString()
                         }).then(function() {
-                            try { localStorage.setItem(row.key, JSON.stringify(mergedVal)); } catch(e) {}
+                            try { localStorage.setItem(row.key, mergedStr); } catch(e) {}
                         });
+                    }
+                    if (localRaw !== mergedStr) {
+                        anyChanged = true;
+                        try { localStorage.setItem(row.key, mergedStr); } catch(e) {}
                     }
                 } else {
                     mergedVal = row.value;
+                    anyChanged = true;
+                    try { localStorage.setItem(row.key, JSON.stringify(mergedVal)); } catch(e) {}
                 }
-                try { localStorage.setItem(row.key, JSON.stringify(mergedVal)); } catch(e) {}
                 return Promise.resolve();
             });
             
             return Promise.all(promises).then(function() {
-                if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
-                    cData = gDay(dk(cDate));
+                if (anyChanged) {
+                    if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
+                        cData = gDay(dk(cDate));
+                    }
+                    if (typeof toast === "function") toast("Cloud data synced!");
+                    if (typeof render === "function") render();
+                } else {
+                    if (typeof view !== "undefined" && view === "settings" && typeof render === "function") {
+                        render();
+                    }
                 }
-                if (typeof toast === "function") toast("Cloud data synced!");
-                if (typeof render === "function") render();
             });
         }
-        if (typeof render === "function") render();
+        if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
     });
 }
 

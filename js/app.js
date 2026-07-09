@@ -14,6 +14,7 @@ var svT = null;
 var dbT = null;
 var defT = null;
 var view = "daily";
+var isFirstRender = true;
 var oMonth = new Date();
 var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
 
@@ -435,7 +436,7 @@ function rHabits() {
     var h = cData.habits, keys = Object.keys(h), t = keys.length;
     var c = keys.filter(function(k){return h[k]}).length;
     var p = t===0 ? 0 : Math.round(c/t*100);
-    var s = '<div class="cd ai" style="animation-delay:.05s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-bullseye"></i></div><h2 class="stl">Daily Goals</h2></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.05s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-bullseye"></i></div><h2 class="stl">Daily Goals</h2></div>';
     s += '<div id="hl">'+rChk(h,"habits","",true)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nh" class="inp flx-1 t-sm" placeholder="Add a new goal..." maxlength="60"><button class="bt bta t-sm" data-a="ah"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '<div class="mt-4"><div class="flx jcb t-xs mb-2"><span style="color:var(--mt)">Goal completion</span><span id="hp" style="color:var(--ac);font-weight:600">'+p+'%</span></div>';
@@ -447,7 +448,7 @@ function rHabits() {
 
 function rPrayers() {
     var p = cData.prayers, c = Object.values(p).filter(Boolean).length;
-    var s = '<div class="cd ai" style="animation-delay:.1s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-mosque"></i></div><h2 class="stl">Daily Prayers</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/5</span></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.1s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-mosque"></i></div><h2 class="stl">Daily Prayers</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/5</span></div>';
     s += rChk(p,"prayers","pr",false);
     if (c===5) s += '<div class="cb" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent mr-1"></i> All prayers completed \u2014 MashaAllah</div>';
     s += '</div>';
@@ -457,7 +458,7 @@ function rPrayers() {
 function rExtra() {
     var ex = cData.extra, keys = Object.keys(ex);
     var c = keys.filter(function(k){return ex[k]}).length;
-    var s = '<div class="cd ai" style="animation-delay:.15s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent"></i></div><h2 class="stl">Extra Deeds</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/'+keys.length+'</span></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.15s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-star-and-crescent"></i></div><h2 class="stl">Extra Deeds</h2><span class="mla t-xs fw-s" style="color:var(--pr)">'+c+'/'+keys.length+'</span></div>';
     s += '<div id="exl">'+rChk(ex,"extra","ex",true)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ne" class="inp flx-1 t-sm" placeholder="Add an extra deed..." maxlength="60"><button class="bt bta t-sm" data-a="ae"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
@@ -469,7 +470,7 @@ function rReading() {
     cData.reading.forEach(function(r,i){
         rows += '<div class="rr"><div style="width:10px;height:10px;border-radius:3px;flex-shrink:0;background:'+RCOLS[i%RCOLS.length]+'"></div><span class="t-sm flx-1">'+esc(r.n)+'</span><input type="number" class="nin" id="ri'+i+'" min="0" placeholder="0" value="0" style="width:64px;font-size:.85rem"><button class="bt t-sm" data-a="ra" data-i="'+i+'">Add</button><span class="t-sm fw-s ml-1" id="rt'+i+'" style="color:'+RCOLS[i%RCOLS.length]+'">'+r.t+' pg</span><button class="rm" data-a="rmr" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
-    var s = '<div class="cd ai" style="animation-delay:.2s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-book-open-reader"></i></div><h2 class="stl">Reading</h2></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.2s"><div class="shd"><div class="sic" style="background:var(--prd);color:var(--pr)"><i class="fas fa-book-open-reader"></i></div><h2 class="stl">Reading</h2></div>';
     s += '<div id="rl">'+rows+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nr" class="inp flx-1 t-sm" placeholder="Add a book..." maxlength="60"><button class="bt bta t-sm" data-a="ar"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
@@ -485,7 +486,7 @@ function rWater() {
         var ch = cData.water[i]||false;
         drops += '<div class="wdr'+(ch?' f':'')+'" data-a="wt" data-i="'+i+'" role="checkbox" aria-checked="'+ch+'" tabindex="0"><i class="fas fa-droplet"></i></div>';
     }
-    var s = '<div class="cd ai" style="animation-delay:.25s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-bottle-water"></i></div><h2 class="stl">Water Intake</h2>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.25s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-bottle-water"></i></div><h2 class="stl">Water Intake</h2>';
     s += '<div class="mla flx aic gap-2"><button class="wtb" data-a="wta" data-d="-1">&minus;</button><span class="t-xs fw-m" style="color:var(--wa)">'+tg+' ('+gm+' ml)</span><button class="wtb" data-a="wta" data-d="1">+</button></div></div>';
     s += '<div class="wgr mb-4" id="wgr">'+drops+'</div>';
     s += '<div><div class="flx jcb t-xs mb-2"><span style="color:var(--mt)">Intake</span><span id="wtx" style="color:var(--wa);font-weight:600">'+ml+' / '+gm+' ml</span></div>';
@@ -500,7 +501,7 @@ function rWeight() {
     var displayVal = w || "";
     var statusTxt = w ? 'Saved: '+w+' kg' : (carried ? 'Carrying: '+carried+' kg (from previous day)' : 'Not recorded yet');
     var statusColor = w ? 'var(--ok)' : (carried ? 'var(--ac)' : 'var(--mt)');
-    var s = '<div class="cd ai" style="animation-delay:.3s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-weight-scale"></i></div><h2 class="stl">Weight</h2></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.3s"><div class="shd"><div class="sic" style="background:var(--wad);color:var(--wa)"><i class="fas fa-weight-scale"></i></div><h2 class="stl">Weight</h2></div>';
     s += '<div class="flx aic gap-3"><input type="number" class="nin" id="wi" step="0.1" value="'+displayVal+'" placeholder="'+placeholder+'" style="width:90px;font-size:1rem"><span class="t-sm" style="color:var(--mt)">kg</span><span class="t-xs ml-2" id="ws" style="color:'+statusColor+'">'+statusTxt+'</span></div>';
     s += '</div>';
     return s;
@@ -510,7 +511,7 @@ function rHealth() {
     var h = cData.health, keys = Object.keys(h), t = keys.length;
     var c = keys.filter(function(k){return h[k]}).length;
     var p = t===0 ? 0 : Math.round(c/t*100);
-    var s = '<div class="cd ai" style="animation-delay:.35s"><div class="shd"><div class="sic" style="background:var(--hld);color:var(--hl)"><i class="fas fa-shield-heart"></i></div><h2 class="stl">Healthy Lifestyle</h2><span class="mla t-xs fw-s" style="color:var(--hl)">'+p+'%</span></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.35s"><div class="shd"><div class="sic" style="background:var(--hld);color:var(--hl)"><i class="fas fa-shield-heart"></i></div><h2 class="stl">Healthy Lifestyle</h2><span class="mla t-xs fw-s" style="color:var(--hl)">'+p+'%</span></div>';
     s += '<div id="hll">'+rChk(h,"health","hl",true)+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="nhl" class="inp flx-1 t-sm" placeholder="Add a health goal..." maxlength="60"><button class="bt bta t-sm" data-a="ahl"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '<div class="mt-3"><div class="ptr"><div id="hfl" class="pfl" style="width:'+p+'%;background:var(--hl)"></div></div></div>';
@@ -524,7 +525,7 @@ function rGoalRef() {
         g += '<div class="gri"><div class="flx aic gap-2 mb-2"><span class="t-sm fw-s" style="color:var(--ac)">'+esc(gr.name)+'</span><button class="rm" data-a="rg" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
         g += '<div class="grt" id="gt'+i+'">'+rComp(gr.text,"g-"+i,"Write your reflection for this goal...")+'</div></div>';
     });
-    var s = '<div class="cd ai" style="animation-delay:.4s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-crosshairs"></i></div><h2 class="stl">Goal Reflection</h2></div>';
+    var s = '<div class="cd' + (isFirstRender ? ' ai' : '') + '" style="animation-delay:.4s"><div class="shd"><div class="sic" style="background:var(--acd);color:var(--ac)"><i class="fas fa-crosshairs"></i></div><h2 class="stl">Goal Reflection</h2></div>';
     s += '<div id="gl">'+g+'</div>';
     s += '<div class="flx aic gap-2 mt-3"><input type="text" id="ng" class="inp flx-1 t-sm" placeholder="Add a goal to reflect on..." maxlength="80"><button class="bt bta t-sm" data-a="ag"><i class="fas fa-plus mr-1"></i>Add</button></div>';
     s += '</div>';
@@ -1090,6 +1091,7 @@ function render() {
     cData=gDay(dk(cDate));
     var h=rHead()+rWeek()+rHabits()+'<div class="dv"><div class="ln"></div><h2>Islamic Practices</h2><div class="ln"></div></div>'+rPrayers()+rExtra()+rReading()+'<div class="dv"><div class="ln"></div><h2>Health</h2><div class="ln"></div></div>'+rWater()+rWeight()+rHealth()+'<div class="dv"><div class="ln"></div><h2>Reflections</h2><div class="ln"></div></div>'+rGoalRef()+rFoot();
     document.getElementById("content").innerHTML=h;
+    isFirstRender = false;
 }
 
 // ===== EVENTS =====

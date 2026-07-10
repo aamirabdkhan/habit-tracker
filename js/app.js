@@ -645,121 +645,7 @@ function rSettings() {
     });
     h += '<div class="flx aic gap-2 mt-2"><input type="text" id="snr" class="inp flx-1 t-sm" placeholder="Add book..." maxlength="60"><button class="bt bta t-sm" data-a="sar"><i class="fas fa-plus mr-1"></i>Add</button></div></div>';
 
-    var streakConceptMode = localStorage.getItem("ht_streak_concept") || "rings";
-    h += '<div class="cd">';
-    h += '<div class="flx aic jcb mb-4 flx-w gap-2">';
-    h += '<div class="sec-t" style="margin:0"><i class="fas fa-chart-line mr-1.5" style="color:var(--ac)"></i>Streak Tracker</div>';
-    h += '<div class="demo-selector" style="margin:0">';
-    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='rings'?' act':'')+'" data-a="st-preview" data-mode="rings"><i class="fas fa-circle-notch mr-1"></i>Activity Rings</button>';
-    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='calendar'?' act':'')+'" data-a="st-preview" data-mode="calendar"><i class="fas fa-calendar-alt mr-1"></i>Micro Heatmap</button>';
-    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='bars'?' act':'')+'" data-a="st-preview" data-mode="bars"><i class="fas fa-chart-bar mr-1"></i>Weekly Bars</button>';
-    h += '<button class="bt t-9 py-1 px-2-5'+(streakConceptMode==='roadmap'?' act':'')+'" data-a="st-preview" data-mode="roadmap"><i class="fas fa-route mr-1"></i>Micro Roadmap</button>';
-    h += '</div></div>';
-    h += '<p class="t-xs mb-4" style="color:var(--mt)">Select a visualization style for all active streak trackers in your monthly overview.</p>';
-    h += '<div class="flx gap-4 flx-w jcc">';
 
-    if (streakConceptMode === 'rings') {
-        var mockItems = [
-            {name: "Tahajjud", rate: 85, current: 5, best: 12},
-            {name: "Exercise", rate: 45, current: 0, best: 4}
-        ];
-        mockItems.forEach(function(s){
-            var radius = 30;
-            var circ = 2 * Math.PI * radius;
-            var offset = circ - (s.rate / 100) * circ;
-            h+='<div class="ring-card" style="margin:0">';
-            h+='<svg class="ring-svg">';
-            h+='<circle class="ring-bg" cx="40" cy="40" r="'+radius+'" fill="none"></circle>';
-            h+='<circle class="ring-fg" cx="40" cy="40" r="'+radius+'" fill="none" stroke="var(--ac)" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>';
-            h+='</svg>';
-            h+='<div class="ring-info">';
-            h+='<span class="ring-val" style="color:#FF7A00"><i class="fas fa-fire" style="font-size:11px"></i> '+s.current+'</span>';
-            h+='</div>';
-            h+='<span class="text-xs font-semibold mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-            h+='<span class="text-[9px]" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
-            h+='</div>';
-        });
-    }
-    else if (streakConceptMode === 'calendar') {
-        var mockItems = [
-            {name: "Tahajjud", days: [false, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
-            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
-        ];
-        var daysCount = 30;
-        mockItems.forEach(function(s){
-            h+='<div class="calendar-card" style="margin:0">';
-            h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-            h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
-            h+='<div class="micro-hm">';
-            for(var d=0; d<daysCount; d++){
-                var on = s.days[d];
-                var isTd = (d === (daysCount - 1));
-                var cls = on ? ' on' : '';
-                if(isTd) cls += ' today';
-                h+='<div class="micro-hm-day'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
-            }
-            h+='</div></div>';
-        });
-    }
-    else if (streakConceptMode === 'bars') {
-        var mockItems = [
-            {name: "Tahajjud", days: [false, true, true, true, true, true, false, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
-            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
-        ];
-        var daysCount = 30;
-        mockItems.forEach(function(s){
-            h+='<div class="bar-card" style="margin:0">';
-            h+='<div style="flex:1;min-width:0"><span class="text-xs font-semibold block mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-            h+='<div class="flex flex-col gap-0.5">';
-            h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong></span>';
-            h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span>';
-            h+='</div></div>';
-            h+='<div class="bar-chart">';
-            var weeklyCounts = [0, 0, 0, 0, 0];
-            var weeklyTotals = [7, 7, 7, 7, 2];
-            for(var d=0; d<daysCount; d++){
-                var weekIdx = Math.floor(d / 7);
-                if(s.days[d]) weeklyCounts[weekIdx]++;
-            }
-            for(var w=0; w<5; w++){
-                var pct = Math.round((weeklyCounts[w] / weeklyTotals[w]) * 100);
-                h+='<div class="bar-col">';
-                h+='<div class="bar-track" title="Week '+(w+1)+': '+weeklyCounts[w]+'/'+weeklyTotals[w]+' days ('+pct+'%)">';
-                h+='<div class="bar-fill" style="height:'+pct+'%"></div>';
-                h+='</div>';
-                h+='<span style="font-size:7px;color:var(--mt)">W'+(w+1)+'</span>';
-                h+='</div>';
-            }
-            h+='</div></div>';
-        });
-    }
-    else if (streakConceptMode === 'roadmap') {
-        var mockItems = [
-            {name: "Tahajjud", days: [false, true, true, true, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 5, best: 12},
-            {name: "Exercise", days: [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false], current: 0, best: 4}
-        ];
-        var daysCount = 30;
-        mockItems.forEach(function(s){
-            h+='<div class="roadmap-card" style="margin:0">';
-            h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-            h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
-            h+='<div class="road-path">';
-            for(var d=0; d<daysCount; d++){
-                var on = s.days[d];
-                var isTd = (d === (daysCount - 1));
-                var cls = on ? ' on' : '';
-                if (isTd) cls += ' active-streak';
-                h+='<div class="road-node'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
-                if(d < daysCount - 1){
-                    var nextOn = s.days[d+1];
-                    var lineOn = on && nextOn;
-                    h+='<div class="road-line'+(lineOn?' on':'')+'"></div>';
-                }
-            }
-            h+='</div></div>';
-        });
-    }
-    h += '</div></div>';
 
     h += '<div class="cd" style="border-color:rgba(184,76,76,.2)"><div class="sec-t" style="color:var(--dn)"><i class="fas fa-triangle-exclamation mr-1.5"></i>Danger Zone</div><button class="bt text-sm" data-a="clr" style="border-color:var(--dn);color:var(--dn)"><i class="fas fa-trash mr-1.5"></i>Clear All Data</button></div>';
 
@@ -1025,89 +911,29 @@ function rOverview() {
 
     if(streakItems.length>0){
         h+='<div class="cd" style="margin-bottom:1.5rem">';
-        h+='<h3 class="t-sm fw-s mb-4" style="color:var(--mt);margin:0">Streak Tracker</h3>';
-        h+='<div class="flx gap-3 flx-w jcc">';
-
-        streakItems.forEach(function(s){
-            var concept = streakConceptMode;
-            if(concept==='rings'){
-                var radius = 30;
-                var circ = 2 * Math.PI * radius;
-                var offset = circ - (s.rate / 100) * circ;
-                h+='<div class="ring-card" style="margin:0">';
-                h+='<svg class="ring-svg">';
-                h+='<circle class="ring-bg" cx="40" cy="40" r="'+radius+'" fill="none"></circle>';
-                h+='<circle class="ring-fg" cx="40" cy="40" r="'+radius+'" fill="none" stroke="var(--ac)" stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"></circle>';
-                h+='</svg>';
-                h+='<div class="ring-info">';
-                h+='<span class="ring-val" style="color:#FF7A00"><i class="fas fa-fire" style="font-size:11px"></i> '+s.current+'</span>';
-                h+='</div>';
-                h+='<span class="t-xs fw-s mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="t-9" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
-                h+='</div>';
-            }
-            else if(concept==='calendar'){
-                h+='<div class="calendar-card" style="margin:0">';
-                h+='<div class="flx aic jcb" style="margin-bottom:6px"><span class="t-xs fw-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="t-9" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
-                h+='<div class="micro-hm">';
-                for(var d=0; d<days; d++){
-                    var on = s.days[d];
-                    var isTd = md[d].key === dk(new Date());
-                    var cls = on ? ' on' : '';
-                    if(isTd) cls += ' today';
-                    h+='<div class="micro-hm-day'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
-                }
-                h+='</div></div>';
-            }
-            else if(concept==='bars'){
-                h+='<div class="bar-card" style="margin:0">';
-                h+='<div style="flex:1;min-width:0"><span class="t-xs fw-s blk mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<div class="flx flx-c" style="gap:2px">';
-                h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong></span>';
-                h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span>';
-                h+='</div></div>';
-                h+='<div class="bar-chart">';
-                var weeklyCounts = [0, 0, 0, 0, 0];
-                var weeklyTotals = [7, 7, 7, 7, (days - 28)];
-                for(var d=0; d<days; d++){
-                    var weekIdx = Math.floor(d / 7);
-                    if(s.days[d]) weeklyCounts[weekIdx]++;
-                }
-                for(var w=0; w<5; w++){
-                    if(w===4 && weeklyTotals[4]<=0) continue;
-                    var pct = Math.round((weeklyCounts[w] / weeklyTotals[w]) * 100);
-                    h+='<div class="bar-col">';
-                    h+='<div class="bar-track" title="Week '+(w+1)+': '+weeklyCounts[w]+'/'+weeklyTotals[w]+' days ('+pct+'%)">';
-                    h+='<div class="bar-fill" style="height:'+pct+'%"></div>';
-                    h+='</div>';
-                    h+='<span style="font-size:7px;color:var(--mt)">W'+(w+1)+'</span>';
-                    h+='</div>';
-                }
-                h+='</div></div>';
-            }
-            else if(concept==='roadmap'){
-                h+='<div class="roadmap-card" style="margin:0">';
-                h+='<div class="flx aic jcb mb-2"><span class="t-xs fw-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="t-9" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
-                h+='<div class="road-path">';
-                for(var d=0; d<days; d++){
-                    var on = s.days[d];
-                    var isTd = md[d].key === dk(new Date());
-                    var cls = on ? ' on' : '';
-                    if (isTd) cls += ' active-streak';
-                    h+='<div class="road-node'+cls+'" title="Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
-                    if(d < days - 1){
-                        var nextOn = s.days[d+1];
-                        var lineOn = on && nextOn;
-                        h+='<div class="road-line'+(lineOn?' on':'')+'"></div>';
-                    }
-                }
-                h+='</div></div>';
-            }
-        });
-
+        h+='<h3 class="t-sm fw-s mb-3" style="color:var(--mt)">Habit Consistency</h3><div class="phs"><div class="ph">';
+        
+        h+='<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px"><div style="width:120px;flex-shrink:0"></div><div class="phg" style="--cols:'+days+';flex:1">';
+        for(var d=0;d<days;d++){h+='<div class="phn">'+(((d+1)%5===1)||d===0?(d+1):'')+'</div>'}
         h+='</div></div>';
+        
+        streakItems.forEach(function(s){
+            h+='<div style="display:flex;align-items:center;gap:3px;margin-bottom:4px">';
+            h+='<div class="phl" style="width:120px;flex-shrink:0;line-height:1.2;font-size:11px;display:flex;flex-direction:column;justify-content:center">';
+            h+='<strong style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--fg)" title="'+esc(s.name)+'">'+esc(s.name)+'</strong>';
+            h+='<span style="color:#FF7A00;font-size:9px;font-weight:600;margin-top:1px">🔥 '+s.current+'d <span style="color:var(--mt);font-weight:normal">· Best: '+s.best+'d</span></span>';
+            h+='</div>';
+            h+='<div class="phg" style="--cols:'+days+';flex:1">';
+            for(var d=0;d<days;d++){
+                var on = s.days[d];
+                var isTd = md[d].key === dk(new Date());
+                var cls = on ? ' on-habit' : '';
+                if(isTd) cls += ' today';
+                h+='<div class="phc'+cls+'" title="'+esc(s.name)+' Day '+(d+1)+': '+(on?'Done':'Missed')+'"></div>';
+            }
+            h+='</div></div>';
+        });
+        h+='</div></div></div>';
     }
 
     h+='<div class="cc2"><h3>Water Intake (ml)</h3><div id="wbw"><canvas id="wb"></canvas></div></div>';
@@ -1188,7 +1014,7 @@ ct.addEventListener("click",function(e){
     if(a==="back"){view="daily";render();return}
     if(a==="omp"){oMonth.setMonth(oMonth.getMonth()-1);rOverview();return}
     if(a==="omn"){oMonth.setMonth(oMonth.getMonth()+1);rOverview();return}
-    if(a==="st-preview"){var mode=t.dataset.mode;localStorage.setItem("ht_streak_concept",mode);streakConceptMode=mode;render();return}
+
     if(a==="openrefl"){openReflModal();return}
 
     if(a==="tog"){var f=t.dataset.f,k=t.dataset.k;cData[f][k]=!cData[f][k];sDay();t.classList.toggle("on");t.setAttribute("aria-checked",cData[f][k]);uAll();return}

@@ -103,6 +103,7 @@ h1,h2,h3{font-family:'DM Serif Display',serif}
 .phc{aspect-ratio:1;border-radius:3px;background:var(--sf);border:1px solid rgba(255,255,255,.03);transition:transform .15s}
 .phc:hover{transform:scale(1.3);z-index:2}
 .phc.on{background:var(--pr);border-color:rgba(123,158,107,.3);box-shadow:0 0 4px rgba(123,158,107,.2)}
+.phc.on-habit{background:var(--ac);border-color:rgba(201,148,62,.3);box-shadow:0 0 4px rgba(201,148,62,.2)}
 .sg{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.25rem}
 .sc{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:.85rem;text-align:center}
 .sv{font-size:1.3rem;font-weight:700}

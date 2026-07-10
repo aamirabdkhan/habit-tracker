@@ -864,7 +864,9 @@ function drawLine(id, pts, color) {
     var pd={t:15,b:25,l:44,r:10},cw=w-pd.l-pd.r,ch=h-pd.t-pd.b;
     var vals=valid.map(function(p){return p.v});
     var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals);
-    if(mn===mx){mn-=1;mx+=1}var rng=mx-mn;if(rng===0) rng=1;
+    var pad=Math.max(1.0,(mx-mn)*0.2);
+    mn-=pad; mx+=pad;
+    var rng=mx-mn; if(rng===0) rng=1;
     x.strokeStyle="rgba(255,255,255,0.05)";x.lineWidth=1;
     for(var i=0;i<=4;i++){var y=pd.t+ch*i/4;x.beginPath();x.moveTo(pd.l,y);x.lineTo(w-pd.r,y);x.stroke();x.fillStyle="#7A756E";x.font="10px Space Grotesk";x.textAlign="right";x.textBaseline="middle";x.fillText((mx-rng*i/4).toFixed(1),pd.l-5,y)}
     // Draw area under curve
@@ -980,7 +982,7 @@ function rOverview() {
         streakItems.push({name:e.n,concept:e.c||"rings",days:daysArr,current:cur,best:best,rate:Math.round(daysArr.filter(function(v){return v}).length/daysArr.length*100)});
     }});
 
-    var h='<header class="text-center mb-5"><p class="text-xs tracking-widest uppercase" style="color:var(--mt)">Monthly Overview</p><h1 class="text-2xl md:text-3xl mt-1.5">'+fMon(oMonth)+'</h1><div class="flex items-center justify-center gap-3 mt-4"><button class="dnb" data-a="omp"><i class="fas fa-chevron-left text-xs"></i></button><button class="bt text-xs" data-a="back">Back to Daily</button><button class="dnb" data-a="omn"><i class="fas fa-chevron-right text-xs"></i></button></div>'+rNav("overview")+'<div class="al"></div></header>';
+    var h='<header class="t-ctr mb-5"><p class="t-xs t-trw t-up" style="color:var(--mt)">Monthly Overview</p><h1 class="t-2xl md-t-3xl mt-1-5">'+fMon(oMonth)+'</h1><div class="flx aic jcc gap-3 mt-4"><button class="dnb" data-a="omp"><i class="fas fa-chevron-left t-xs"></i></button><button class="bt t-xs" data-a="back">Back to Daily</button><button class="dnb" data-a="omn"><i class="fas fa-chevron-right t-xs"></i></button></div>'+rNav("overview")+'<div class="al"></div></header>';
 
     h+='<div class="sg">';
     h+='<div class="sc"><div class="sv">'+tracked+'</div><div class="sl">Days Tracked</div></div>';
@@ -994,17 +996,17 @@ function rOverview() {
     h+='<div class="sc"><div class="sv" style="color:var(--pr)">'+totalPages+'</div><div class="sl">Pages Read</div></div>';
     h+='</div>';
 
-    h+='<div class="cd"><h3 class="text-sm font-semibold mb-3" style="color:var(--mt)">Daily Completion Heatmap</h3><div class="hmg">';
+    h+='<div class="cd"><h3 class="t-sm fw-s mb-3" style="color:var(--mt)">Daily Completion Heatmap</h3><div class="hmg">';
     ["S","M","T","W","T","F","S"].forEach(function(d){h+='<div class="hmh">'+d+'</div>'});
     var startDow=new Date(y,m,1).getDay();
     for(var i=0;i<startDow;i++) h+='<div class="hmc em"></div>';
     md.forEach(function(d){var s=dScore(d.key);var bg=s>=80?"rgba(74,140,92,0.5)":s>=50?"rgba(201,148,62,0.4)":s>0?"rgba(184,76,76,0.3)":"var(--sf)";var isTd=d.key===dk(new Date());h+='<div class="hmc'+(isTd?' today':'')+'" style="background:'+bg+'" title="Day '+d.day+': '+s+'%">'+d.day+'</div>'});
     h+='</div></div>';
 
-    h+='<div class="cc2"><h3>Weight Trend</h3><p class="text-xs mb-2" style="color:var(--mt)">Solid dots = recorded · faint dots = carried from previous entry</p><div id="wcw"><canvas id="wc"></canvas></div></div>';
+    h+='<div class="cc2"><h3>Weight Trend</h3><p class="t-xs mb-2" style="color:var(--mt)">Solid dots = recorded · faint dots = carried from previous entry</p><div id="wcw"><canvas id="wc"></canvas></div></div>';
     h+='<div class="cc2"><h3>Daily Habit Completion</h3><div id="hbw"><canvas id="hb"></canvas></div></div>';
 
-    h+='<div class="cd"><h3 class="text-sm font-semibold mb-3" style="color:var(--mt)">Prayer Consistency</h3><div class="phs"><div class="ph">';
+    h+='<div class="cd"><h3 class="t-sm fw-s mb-3" style="color:var(--mt)">Prayer Consistency</h3><div class="phs"><div class="ph">';
     h+='<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px"><div style="width:90px;flex-shrink:0"></div><div class="phg" style="--cols:'+days+';flex:1">';
     for(var d=0;d<days;d++){h+='<div class="phn">'+(((d+1)%5===1)||d===0?(d+1):'')+'</div>'}
     h+='</div></div>';
@@ -1017,14 +1019,14 @@ function rOverview() {
         h+='</div></div>';
     }
     h+='</div></div>';
-    h+='<div class="flex items-center gap-3 mt-3 flex-wrap">';
-    PRAYERS.forEach(function(p,i){var cnt=prayerCounts[p];var pct=tracked?Math.round(cnt/tracked*100):0;var clr=pct>=85?"var(--ok)":pct>=70?"var(--ac)":"var(--dn)";h+='<div class="flex items-center gap-1.5 text-xs"><div style="width:8px;height:8px;border-radius:2px;background:var(--pr)"></div><span style="color:var(--mt)">'+p+'</span><span style="color:'+clr+';font-weight:600">'+pct+'%</span></div>'});
+    h+='<div class="flx aic gap-3 mt-3 flx-w">';
+    PRAYERS.forEach(function(p,i){var cnt=prayerCounts[p];var pct=tracked?Math.round(cnt/tracked*100):0;var clr=pct>=85?"var(--ok)":pct>=70?"var(--ac)":"var(--dn)";h+='<div class="flx aic t-xs" style="gap:6px"><div style="width:8px;height:8px;border-radius:2px;background:var(--pr);flex-shrink:0"></div><span style="color:var(--mt);margin-right:4px">'+p+'</span><span style="color:'+clr+';font-weight:600">'+pct+'%</span></div>'});
     h+='</div></div>';
 
     if(streakItems.length>0){
         h+='<div class="cd" style="margin-bottom:1.5rem">';
-        h+='<h3 class="text-sm font-semibold mb-4" style="color:var(--mt);margin:0">Streak Tracker</h3>';
-        h+='<div style="display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">';
+        h+='<h3 class="t-sm fw-s mb-4" style="color:var(--mt);margin:0">Streak Tracker</h3>';
+        h+='<div class="flx gap-3 flx-w jcc">';
 
         streakItems.forEach(function(s){
             var concept = streakConceptMode;
@@ -1040,14 +1042,14 @@ function rOverview() {
                 h+='<div class="ring-info">';
                 h+='<span class="ring-val" style="color:#FF7A00"><i class="fas fa-fire" style="font-size:11px"></i> '+s.current+'</span>';
                 h+='</div>';
-                h+='<span class="text-xs font-semibold mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="text-[9px]" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
+                h+='<span class="t-xs fw-s mt-2" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<span class="t-9" style="color:var(--mt)">Best: '+s.best+'d · '+s.rate+'%</span>';
                 h+='</div>';
             }
             else if(concept==='calendar'){
                 h+='<div class="calendar-card" style="margin:0">';
-                h+='<div class="flex items-center justify-between mb-1.5"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="text-[9px]" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
+                h+='<div class="flx aic jcb" style="margin-bottom:6px"><span class="t-xs fw-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<span class="t-9" style="color:#FF7A00;font-weight:600">🔥 '+s.current+'d (Best: '+s.best+'d)</span></div>';
                 h+='<div class="micro-hm">';
                 for(var d=0; d<days; d++){
                     var on = s.days[d];
@@ -1060,8 +1062,8 @@ function rOverview() {
             }
             else if(concept==='bars'){
                 h+='<div class="bar-card" style="margin:0">';
-                h+='<div style="flex:1;min-width:0"><span class="text-xs font-semibold block mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<div class="flex flex-col gap-0.5">';
+                h+='<div style="flex:1;min-width:0"><span class="t-xs fw-s blk mb-1" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<div class="flx flx-c" style="gap:2px">';
                 h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong></span>';
                 h+='<span style="font-size:9px;color:var(--mt)"><i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span>';
                 h+='</div></div>';
@@ -1086,8 +1088,8 @@ function rOverview() {
             }
             else if(concept==='roadmap'){
                 h+='<div class="roadmap-card" style="margin:0">';
-                h+='<div class="flex items-center justify-between mb-2"><span class="text-xs font-semibold" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
-                h+='<span class="text-[9px]" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
+                h+='<div class="flx aic jcb mb-2"><span class="t-xs fw-s" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px" title="'+esc(s.name)+'">'+esc(s.name)+'</span>';
+                h+='<span class="t-9" style="color:var(--mt)"><i class="fas fa-fire mr-1" style="color:#FF7A00"></i>Streak: <strong>'+s.current+'d</strong> · <i class="fas fa-crown mr-1" style="color:#FFD700"></i>Best: <strong>'+s.best+'d</strong></span></div>';
                 h+='<div class="road-path">';
                 for(var d=0; d<days; d++){
                     var on = s.days[d];

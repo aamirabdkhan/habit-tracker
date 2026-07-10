@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v14';
+const CACHE = 'habit-tracker-v15';
 const URLS = [
   './',
   'index.html',

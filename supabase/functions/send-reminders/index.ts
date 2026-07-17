@@ -11,7 +11,11 @@ import webpush from "npm:web-push@3";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
+// Not sensitive (VAPID public keys are meant to be exposed) — must match
+// VAPID_PUBLIC_KEY in js/push-client.js. Hardcoded rather than read from a
+// secret so there's one less manual setup step; only the private key needs
+// to stay a secret.
+const VAPID_PUBLIC_KEY = "BMvpaT5hi2vpaMX0HUE80ZA6gn-xQPs-ZGVDy6VCllaP3Z80QVslvsYJs_cfGgYivyTb8W9BHQ-W3lMjzztZa6E";
 const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
 const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT")!;
 

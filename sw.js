@@ -1,10 +1,11 @@
-const CACHE = 'habit-tracker-v16';
+const CACHE = 'habit-tracker-v17';
 const URLS = [
   './',
   'index.html',
   'css/style.css',
   'js/app.js',
   'js/supabase-sync.js',
+  'js/manifest.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];

@@ -448,7 +448,7 @@ function rHead() {
     var td = isT(cDate), fu = isF(cDate);
     var done = reflDone();
     var h = '<header class="t-ctr mb-5">';
-    h += '<p class="t-xs t-trw t-up" style="color:var(--mt)">'+greet()+'</p>';
+    h += '<p class="t-xs t-trw t-up" style="color:var(--mt)">'+esc(greet())+'</p>';
     h += '<h1 class="t-2xl md-t-3xl mt-1-5">'+fLong(cDate)+'</h1>';
     h += '<div class="flx aic jcc gap-2 mt-1">';
     if (td) h += '<span class="bdg" style="background:rgba(74,140,92,.15);color:var(--ok)">Today</span>';
@@ -1083,7 +1083,7 @@ ct.addEventListener("change",function(e){
         if(s) s.style.color=(!isNaN(v)&&v)?"var(--ok)":"var(--mt)";
         return;
     }
-    if(e.target.id==="imf"){if(e.target.files[0]){var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);Object.entries(d).forEach(function(entry){localStorage.setItem(entry[0],JSON.stringify(entry[1]));if(entry[0].indexOf("ht_")===0 && typeof dbSave === "function")dbSave(entry[0],entry[1])});render();toast("Imported")}catch(ex){toast("Invalid file")}};r.readAsText(e.target.files[0])}e.target.value="";return}
+    if(e.target.id==="imf"){var f=e.target.files[0];if(f){if(f.size>2*1024*1024){toast("File too large");e.target.value="";return}var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d||typeof d!=="object"||Array.isArray(d))throw new Error("bad shape");Object.entries(d).forEach(function(entry){if(typeof entry[0]!=="string"||entry[0].indexOf("ht_")!==0)return;localStorage.setItem(entry[0],JSON.stringify(entry[1]));if(typeof dbSave === "function")dbSave(entry[0],entry[1])});render();toast("Imported")}catch(ex){toast("Invalid file")}};r.readAsText(f)}e.target.value="";return}
 });
 
 document.addEventListener("keydown",function(e){

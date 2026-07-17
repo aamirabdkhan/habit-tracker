@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v18';
+const CACHE = 'habit-tracker-v19';
 const URLS = [
   './',
   'index.html',
@@ -6,9 +6,7 @@ const URLS = [
   'js/app.js',
   'js/supabase-sync.js',
   'js/manifest.js',
-  'js/push-client.js',
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
+  'js/push-client.js'
 ];
 self.addEventListener('install', function(e) {
   e.waitUntil(
@@ -25,33 +23,28 @@ self.addEventListener('activate', function(e) {
   );
 });
 self.addEventListener('fetch', function(e) {
-  if (e.request.url.startsWith(self.location.origin)) {
-    e.respondWith(
-      caches.match(e.request).then(function(cached) {
-        var networked = fetch(e.request).then(function(res) {
-          if (res && res.status === 200) {
-            var clone = res.clone();
-            caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
-          }
-          return res;
-        }).catch(function() {
-          return cached;
-        });
-        return cached || networked;
-      })
-    );
-    return;
-  }
+  // Only intercept same-origin requests (the app shell). Cross-origin
+  // requests (Supabase CDN script, Google Fonts, Font Awesome) are left
+  // alone entirely — deliberately not calling respondWith() for them, so
+  // the browser handles them natively. Re-fetching a cross-origin request
+  // from inside the service worker subjects it to this page's CSP
+  // connect-src directive regardless of the original resource type (e.g. a
+  // <script src> load would need to satisfy connect-src instead of
+  // script-src), which silently broke third-party script loading under a
+  // strict CSP. Same-origin resources aren't affected by that quirk.
+  if (!e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
     caches.match(e.request).then(function(cached) {
-      if (cached) return cached;
-      return fetch(e.request).then(function(res) {
-        if (res && res.status === 200 && res.type !== 'opaque') {
+      var networked = fetch(e.request).then(function(res) {
+        if (res && res.status === 200) {
           var clone = res.clone();
           caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
         }
         return res;
-      }).catch(function() { return cached; });
+      }).catch(function() {
+        return cached;
+      });
+      return cached || networked;
     })
   );
 });

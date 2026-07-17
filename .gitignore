@@ -1,2 +1,5 @@
 habit-tracker-deploy.zip
 *.zip
+info/
+test-ground.html
+sandbox/

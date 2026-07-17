@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v17';
+const CACHE = 'habit-tracker-v18';
 const URLS = [
   './',
   'index.html',
@@ -6,6 +6,7 @@ const URLS = [
   'js/app.js',
   'js/supabase-sync.js',
   'js/manifest.js',
+  'js/push-client.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];
@@ -51,6 +52,36 @@ self.addEventListener('fetch', function(e) {
         }
         return res;
       }).catch(function() { return cached; });
+    })
+  );
+});
+
+// ===== WEB PUSH =====
+self.addEventListener('push', function(e) {
+  var data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (err) {}
+  var title = data.title || 'Habit Tracker Reminder';
+  var options = {
+    body: data.body || '',
+    tag: 'ht-notif-' + (data.field || '') + '::' + (data.name || ''),
+    data: { field: data.field, name: data.name }
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', function(e) {
+  var field = e.notification.data && e.notification.data.field;
+  var name = e.notification.data && e.notification.data.name;
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        client.postMessage({ type: 'ht-notif-click', field: field, name: name });
+        if ('focus' in client) return client.focus();
+      }
+      var targetUrl = self.registration.scope + '?notif_field=' + encodeURIComponent(field) + '&notif_name=' + encodeURIComponent(name);
+      if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
     })
   );
 });

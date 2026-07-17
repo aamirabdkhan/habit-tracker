@@ -610,6 +610,31 @@ function rSettings() {
     }
     h += '</div>';
 
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-bell mr-1.5" style="color:var(--ac)"></i>Notifications</div>';
+    h += '<p class="t-xs mb-3" style="color:var(--mt)">Set a reminder time on any item below to get a push notification — works even if this app is closed.</p>';
+    if (pushSubscriptionState === "unsupported") {
+        h += '<p class="t-xs" style="color:var(--mt)">Not supported in this browser.</p>';
+    } else if (pushSubscriptionState === "denied") {
+        h += '<p class="t-xs" style="color:var(--dn)"><i class="fas fa-ban mr-1"></i>Blocked — re-enable via your browser\'s site settings.</p>';
+    } else if (pushSubscriptionState === "loading") {
+        h += '<p class="t-xs" style="color:var(--mt)">Checking...</p>';
+    } else if (pushSubscriptionState === "subscribed") {
+        h += '<p class="t-xs mb-2" style="color:var(--ok)"><i class="fas fa-check-circle mr-1"></i>Enabled on this device</p>';
+        h += '<button class="bt t-sm" data-a="push-disable" style="border-color:var(--dn);color:var(--dn)">Disable on this device</button>';
+    } else if (!currentUser) {
+        h += '<p class="t-xs" style="color:var(--mt)">Connect Cloud Sync above first — notifications need an account to deliver to.</p>';
+    } else {
+        h += '<button class="bt bta t-sm" data-a="push-enable"><i class="fas fa-bell mr-1.5"></i>Enable Notifications</button>';
+    }
+    h += '</div>';
+
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-mosque mr-1.5" style="color:var(--pr)"></i>Daily Prayers</div><p class="t-xs mb-3" style="color:var(--mt)">Set an optional reminder time for each prayer.</p>';
+    PRAYERS.forEach(function(pName) {
+        h += '<div class="sr"><span class="sr-nm">'+esc(pName)+'</span>';
+        h += '<input type="time" class="inp t-xs notif-time-inp" value="'+esA(getNotifTime("prayers",pName))+'" data-field="prayers" data-name="'+esA(pName)+'" style="width:100px"></div>';
+    });
+    h += '</div>';
+
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-bottle-water mr-1.5" style="color:var(--wa)"></i>Water Target</div>';
     h += '<div class="flx aic gap-3"><button class="wtb" data-a="swta" data-d="-1">&minus;</button><span class="t-sm" id="swtv">'+(df.wt||8)+' glasses ('+((df.wt||8)*WML)+' ml)</span><button class="wtb" data-a="swta" data-d="1">+</button></div></div>';
 
@@ -618,6 +643,7 @@ function rSettings() {
         var hName = typeof hObj === "string" ? hObj : hObj.n;
         var hStreak = typeof hObj === "string" ? true : (hObj.s !== false);
         h += '<div class="sr"><span class="sr-nm">'+esc(hName)+'</span>';
+        h += '<input type="time" class="inp t-xs notif-time-inp" value="'+esA(getNotifTime("habits",hName))+'" data-field="habits" data-name="'+esA(hName)+'" style="width:100px">';
         h += '<button class="tog'+(hStreak?' on':'')+'" data-a="tghs-toggle" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="srh" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
@@ -626,6 +652,7 @@ function rSettings() {
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-star-and-crescent mr-1.5" style="color:var(--pr)"></i>Extra Deeds</div><p class="t-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that deed in the monthly overview.</p>';
     df.ex.forEach(function(e,i){
         h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
+        h += '<input type="time" class="inp t-xs notif-time-inp" value="'+esA(getNotifTime("extra",e.n))+'" data-field="extra" data-name="'+esA(e.n)+'" style="width:100px">';
         h += '<button class="tog'+(e.s?' on':'')+'" data-a="tges" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="sre" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
@@ -634,6 +661,7 @@ function rSettings() {
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-shield-heart mr-1.5" style="color:var(--hl)"></i>Healthy Lifestyle</div><p class="t-xs mb-3" style="color:var(--mt)">Toggle the streak switch to track that item in the monthly overview.</p>';
     df.hl.forEach(function(e,i){
         h += '<div class="sr"><span class="sr-nm">'+esc(e.n)+'</span>';
+        h += '<input type="time" class="inp t-xs notif-time-inp" value="'+esA(getNotifTime("health",e.n))+'" data-field="health" data-name="'+esA(e.n)+'" style="width:100px">';
         h += '<button class="tog'+(e.s?' on':'')+'" data-a="tghs" data-i="'+i+'" aria-label="Toggle streak" title="Track streak in overview"></button>';
         h += '<button class="rm" data-a="srhl" data-i="'+i+'"><i class="fas fa-xmark"></i></button></div>';
     });
@@ -1003,6 +1031,8 @@ ct.addEventListener("click",function(e){
     }
     if(a==="signout" && typeof handleSignOut === "function"){handleSignOut();return}
     if(a==="sync-now" && typeof syncDown === "function"){syncDown();return}
+    if(a==="push-enable" && typeof subscribeToPush === "function"){subscribeToPush();return}
+    if(a==="push-disable" && typeof unsubscribeFromPush === "function"){unsubscribeFromPush();return}
 
     if(a==="prev"){cDate.setDate(cDate.getDate()-1);render();return}
     if(a==="next"){cDate.setDate(cDate.getDate()+1);render();return}
@@ -1084,6 +1114,12 @@ ct.addEventListener("change",function(e){
         return;
     }
     if(e.target.id==="imf"){var f=e.target.files[0];if(f){if(f.size>2*1024*1024){toast("File too large");e.target.value="";return}var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d||typeof d!=="object"||Array.isArray(d))throw new Error("bad shape");Object.entries(d).forEach(function(entry){if(typeof entry[0]!=="string"||entry[0].indexOf("ht_")!==0)return;localStorage.setItem(entry[0],JSON.stringify(entry[1]));if(typeof dbSave === "function")dbSave(entry[0],entry[1])});render();toast("Imported")}catch(ex){toast("Invalid file")}};r.readAsText(f)}e.target.value="";return}
+    if(e.target.classList.contains("notif-time-inp")){
+        var nfField=e.target.dataset.field, nfName=e.target.dataset.name, nfVal=e.target.value;
+        if(typeof setNotifTime==="function")setNotifTime(nfField,nfName,nfVal);
+        toast(nfVal?("Reminder set: "+nfName+" @ "+nfVal):("Reminder cleared: "+nfName));
+        return;
+    }
 });
 
 document.addEventListener("keydown",function(e){
@@ -1101,6 +1137,11 @@ document.addEventListener("keydown",function(e){
 });
 
 render();
+
+if (typeof checkNotifClickParams === "function") checkNotifClickParams();
+if (typeof refreshPushSubscriptionState === "function") {
+    refreshPushSubscriptionState().then(function(){ if (view === "settings") render(); });
+}
 
 // ===== SERVICE WORKER (offline support) =====
 if ('serviceWorker' in navigator) {

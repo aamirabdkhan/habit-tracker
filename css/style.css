@@ -131,6 +131,8 @@ h1,h2,h3{font-family:'DM Serif Display',serif}
 .rfl-dot{width:8px;height:8px;border-radius:50%;background:var(--dn);position:absolute;top:-3px;right:-3px;border:2px solid var(--cd)}
 @keyframes rdpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.8)}}
 .rfl-dot{animation:rdpulse 2s ease-in-out infinite}
+@keyframes htNotifFlash{0%,100%{background-color:transparent;box-shadow:none}15%,45%,75%{background-color:rgba(201,148,62,0.35);box-shadow:0 0 0 2px var(--ac)}30%,60%,90%{background-color:transparent;box-shadow:none}}
+.ht-notif-flash{animation:htNotifFlash 2s ease-in-out;border-radius:8px}
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px}

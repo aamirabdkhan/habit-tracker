@@ -1,9 +1,11 @@
-const CACHE = 'habit-tracker-v20';
+const CACHE = 'habit-tracker-v21';
 const URLS = [
   './',
   'index.html',
   'css/style.css',
+  'css/waqt.css',
   'js/app.js',
+  'js/waqt.js',
   'js/supabase-sync.js',
   'js/manifest.js',
   'js/push-client.js',

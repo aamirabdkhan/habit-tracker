@@ -1,0 +1,397 @@
+/* ============================================================
+   WEEKLY-HTML REDESIGN (experimental, test-ground only)
+   - Whole app retheme via :root variable override (ink palette).
+   - Daily view IS the timeline.
+   - Everything for an item happens ON the timeline: tap ✎ to edit
+     (time/days/delete), "+ Add task" to create. Template ⚙ holds
+     only the plumbing now (sync / export / push).
+   ============================================================ */
+:root{
+  /* Live-site warm palette. Same token names, same roles: only the values move from the
+     cool ink set to the warm gold set already shipping in production's css/style.css. */
+  --bg:#0C0C0C;--sf:#131313;--cd:#1A1A1A;--bd:#2A2725;
+  --fg:#E8E2D9;--mt:#7A756E;
+  --ac:#C9943E;--ach:#DBA84E;--acd:rgba(201,148,62,.12);
+  --ok:#4A8C5C;
+  --pr:#7B9E6B;--prd:rgba(123,158,107,.12);
+  --wa:#5A8FA8;--wad:rgba(90,143,168,.12);
+  --hl:#B87333;--hld:rgba(184,115,51,.12);
+  --dn:#B84C4C;
+}
+body{background:radial-gradient(120% 60% at 50% -10%,#1a1512 0%,transparent 60%),#0C0C0C!important}
+body::before{display:none!important}
+
+.sch-view{
+  /* Re-pointed at the same warm values as :root so the two token systems cannot drift. */
+  --ink:#0C0C0C;--ink2:#1A1A1A;--surface:rgba(26,26,26,.72);--line:#2A2725;
+  --stext:#E8E2D9;--smut:#7A756E;
+  /* rail = warm blend of the section colours */
+  --dawn:#5A8FA8;--noon:#C9943E;--afternoon:#DBA84E;--dusk:#B87333;--night:#7B9E6B;
+  /* Warm equivalents. These drive the day pills, the Repeat segments, the dial stroke and the
+     add/save buttons; left cool they clashed with everything else after the palette swap. */
+  --study:#C9943E;--move:#7B9E6B;
+  --smono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--stext);color-scheme:dark;
+  font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+/* masthead */
+.sch-mast{position:relative;padding:6px 0 4px}
+.sch-eyebrow{font-family:var(--smono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--smut);margin:0 0 6px}
+.sch-dayname{font-family:'Space Grotesk',sans-serif;font-size:clamp(34px,11vw,54px);line-height:.92;font-weight:700;letter-spacing:-.035em;margin:0;color:var(--stext)}
+.sch-sub{font-family:var(--smono);font-size:12px;color:var(--smut);margin:8px 0 0;letter-spacing:.02em}
+/* Daily's full date is a longer string than the one-word view titles, so it gets a smaller clamp. */
+.sch-datefull{font-size:clamp(24px,7vw,34px);line-height:1.05}
+/* corner action button on centered mastheads (gear on Plan, close on Settings) */
+.sch-mastbtn{position:absolute;top:0;right:0}
+/* Day stepper: Today jump-back pill (green when already on today) + prev/next-day arrows. */
+.sch-daynav{display:flex;align-items:center;gap:12px;margin-top:12px}
+.sch-daytoday{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:999px;padding:5px 14px;cursor:pointer;font-family:var(--smono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;transition:.15s}
+.sch-daytoday.on{background:var(--acd);border-color:transparent;color:var(--ac);font-weight:700}
+.sch-daytoday:active{transform:scale(.96)}
+.sch-dayarrows{display:flex;gap:6px}
+@media (prefers-reduced-motion:reduce){.sch-daytoday:active{transform:none!important}}
+.sch-now{font-size:13px;color:var(--smut);margin:8px 0 0}
+.sch-now b{color:var(--stext);font-weight:600}
+.sch-dnav{display:flex;gap:8px;margin-top:14px}
+/* Month stepper: arrows flank the month title so their target is obvious. Title takes the slack
+   so the arrows stay pinned to the row's edges at any width. */
+.sch-monthrow{display:flex;align-items:center;gap:10px}
+.sch-monthrow .sch-dayname{flex:1;min-width:0}
+.sch-monthrow .sch-ib{flex-shrink:0}
+.sch-ib{appearance:none;background:transparent;border:1px solid var(--line);color:var(--smut);width:38px;height:34px;border-radius:10px;cursor:pointer;font-size:13px;transition:.18s}
+.sch-ib.sch-ibw{width:auto;padding:0 14px;font-family:var(--smono);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.sch-ib:hover{color:var(--stext);border-color:rgba(126,146,180,.4)}
+
+/* week strip (Task 6) */
+.sch-week{display:flex;align-items:center;gap:6px;margin-top:14px;max-width:100%}
+.sch-wkstrip{display:flex;flex:1;min-width:0;gap:4px}
+.sch-wkday{appearance:none;background:transparent;border:1px solid transparent;border-radius:10px;flex:1;min-width:0;padding:6px 2px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;color:var(--smut);transition:.18s}
+.sch-wkday:hover{border-color:rgba(126,146,180,.35)}
+.sch-wkdow{font-family:var(--smono);font-size:10px;letter-spacing:.06em;text-transform:uppercase}
+.sch-wknum{font-size:14px;font-weight:600;color:var(--stext)}
+.sch-wkdot{width:5px;height:5px;border-radius:50%;background:transparent}
+.sch-wkday.issel{border-color:rgba(126,146,180,.45)}
+.sch-wkday.istoday{background:var(--stext);border-color:var(--stext)}
+.sch-wkday.istoday .sch-wkdow,.sch-wkday.istoday .sch-wknum{color:var(--ink)}
+.sch-wktoday{margin-top:8px}
+
+/* ring + counts */
+.sch-status{display:flex;flex-direction:column;margin-top:18px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(6px)}
+.sch-statusrow{display:flex;align-items:center;gap:16px}
+.sch-nextdiv{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
+.sch-next{display:flex;align-items:center;gap:7px;font-family:var(--smono);font-size:12px;color:var(--smut);margin:0}
+.sch-next b{color:var(--stext);font-weight:600}
+.sch-nextdot{width:6px;height:6px;border-radius:50%;background:var(--move);flex-shrink:0}
+.sch-ring{flex:0 0 62px;width:62px;height:62px;position:relative}
+.sch-ring svg{transform:rotate(-90deg);display:block}
+.sch-ring circle{fill:none;stroke-width:6;stroke-linecap:round}
+.sch-ring .sch-track{stroke:rgba(126,146,180,.16)}
+.sch-ring .sch-fill{stroke:var(--study);transition:stroke-dashoffset .5s ease,stroke .3s ease}
+.sch-pct{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--smono);font-size:14px;font-weight:600}
+.sch-statcols{display:flex;flex-wrap:wrap;justify-content:space-around;align-items:flex-start;gap:10px 6px;flex:1;min-width:0}
+.sch-statcol{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:38px}
+.sch-statnum{font-family:var(--smono);font-size:18px;font-weight:700;line-height:1;color:var(--stext);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sch-statlbl{font-family:var(--smono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mt);white-space:nowrap}
+
+/* weight tile */
+.sch-wtile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sch-wlbl{font-family:var(--smono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--smut)}
+.sch-wgroup{display:flex;align-items:center;gap:6px}
+.sch-winp{width:74px;background:var(--ink2);border:1px solid var(--line);color:var(--stext);border-radius:8px;padding:6px 8px;font-family:var(--smono);font-size:14px;text-align:center;color-scheme:dark;-moz-appearance:textfield}
+.sch-winp::-webkit-outer-spin-button,.sch-winp::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.sch-winp::placeholder{color:var(--smut);opacity:.7}
+.sch-wunit{font-size:12px;color:var(--smut)}
+.sch-wstat{font-family:var(--smono);font-size:11px;color:var(--smut);text-align:right}
+
+/* timeline rail */
+.sch-rail{position:relative;padding:22px 0 0}
+.sch-rail::before{content:"";position:absolute;left:76px;top:32px;bottom:24px;width:2px;border-radius:2px;opacity:.65;background:linear-gradient(180deg,var(--dawn) 0%,var(--noon) 34%,var(--afternoon) 52%,var(--dusk) 70%,var(--night) 88%,rgba(132,121,221,.15) 100%)}
+.sch-block{position:relative;display:grid;grid-template-columns:64px 26px 1fr;gap:0 6px;padding:9px 0 0;align-items:start}
+.sch-time{font-family:var(--smono);font-size:13px;font-variant-numeric:tabular-nums;text-align:right;padding-top:12px;letter-spacing:-.02em;color:var(--stext)}
+.sch-node{display:grid;place-items:center;padding-top:16px;position:relative;z-index:2}
+.sch-node i{display:block;width:9px;height:9px;border-radius:50%;background:var(--ink);border:2px solid var(--kc,var(--smut))}
+.sch-block.prayer .sch-node i{width:13px;height:13px;background:var(--kc);border-color:var(--kc);box-shadow:0 0 0 4px var(--ink),0 0 14px var(--kc)}
+.sch-card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--kc,var(--line));border-radius:12px;padding:11px 12px;cursor:pointer;transition:.18s;display:flex;align-items:center;gap:8px}
+.sch-card:hover{border-color:rgba(126,146,180,.35);border-left-color:var(--kc)}
+.sch-title{font-size:15px;font-weight:600;letter-spacing:-.01em;flex:1;margin:0}
+.sch-edit{appearance:none;background:transparent;border:0;color:var(--smut);cursor:pointer;padding:4px 6px;font-size:12px;opacity:.55;transition:.15s;flex-shrink:0}
+.sch-edit:hover{opacity:1;color:var(--stext)}
+.sch-box{flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:1.5px solid rgba(126,146,180,.45);display:grid;place-items:center;transition:.16s}
+.sch-box svg{width:12px;height:12px;stroke:var(--ink);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0;transform:scale(.5);transition:.16s}
+.sch-block.checked .sch-box,.sch-rep.on .sch-box{background:var(--kc,var(--study));border-color:var(--kc,var(--study))}
+.sch-block.checked .sch-box svg{opacity:1;transform:scale(1)}
+.sch-block.checked .sch-title{text-decoration:line-through;text-decoration-thickness:1px;opacity:.5}
+.sch-block.now .sch-card{border-color:var(--kc);box-shadow:0 0 0 1px var(--kc),0 8px 30px -12px var(--kc)}
+.sch-nowtag{font-family:var(--smono);font-size:9.5px;letter-spacing:.16em;color:var(--ink);background:var(--kc);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:2px}
+.sch-time small{display:block;font-size:10.5px;color:var(--smut);margin-top:1px;font-weight:400}
+.sch-block.sch-openblock .sch-card{cursor:pointer;background:transparent;border-style:dashed;opacity:.48}
+.sch-block.sch-openblock .sch-card:hover{border-color:var(--line)}
+.sch-block.sch-openblock .sch-node i{background:transparent;border-color:var(--smut)}
+.sch-block.sch-openblock .sch-title{font-style:italic;font-weight:500;opacity:.65}
+.sch-block.sch-openblock.now .sch-card{border-color:var(--kc);box-shadow:0 0 0 1px var(--kc),0 8px 30px -12px var(--kc)}
+.sch-overlap{font-family:var(--smono);font-size:9px;letter-spacing:.06em;color:#e0a35c;border:1px solid rgba(224,163,92,.55);border-radius:4px;padding:2px 4px;white-space:nowrap}
+.sch-gapform{margin:6px 0 4px 70px;padding:12px 14px;background:var(--ink2);border:1px solid var(--line);border-radius:12px}
+.sch-gapcards{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 10px}
+.sch-gapcard{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:999px;padding:5px 8px;cursor:pointer;font-size:11px}
+.sch-gapcard.on{color:var(--ink);background:var(--kc);border-color:var(--kc)}
+.sch-peharhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin-top:22px}
+.sch-phleft{justify-self:start}
+.sch-phtitle{margin:0;text-align:center}
+.sch-phright{justify-self:end}
+.sch-copyy{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:7px;padding:5px 8px;cursor:pointer;font-family:var(--smono);font-size:10px}
+
+/* inline editor */
+.sch-editor{margin:6px 0 4px 70px;padding:12px 14px;background:var(--ink2);border:1px solid var(--line);border-radius:12px}
+.sch-editrow{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.sch-editrow:last-child{margin-bottom:0}
+.sch-editlbl{font-family:var(--smono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--smut);width:62px;flex-shrink:0}
+.sch-timeinp{background:var(--ink);border:1px solid var(--line);color:var(--stext);border-radius:8px;padding:6px 8px;font-family:var(--smono);font-size:13px;color-scheme:dark}
+.sch-durinp{background:var(--ink);border:1px solid var(--line);color:var(--stext);border-radius:8px;padding:6px 8px;font-family:var(--smono);font-size:13px;color-scheme:dark;width:60px}
+.sch-days{display:flex;gap:5px;flex-wrap:wrap}
+.sch-day{width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--smut);font-family:var(--smono);font-size:12px;cursor:pointer;padding:0;transition:.14s}
+.sch-day.on{background:var(--study);border-color:transparent;color:var(--ink);font-weight:700}
+.sch-daysbig .sch-day{width:38px;height:38px;font-size:10.5px}
+/* Option C: single-letter day pills that flex-fill the editor width, one clean row, no gutter. */
+.sch-repeatrow{align-items:flex-start}
+.sch-daysrow{flex:1;flex-wrap:nowrap;gap:4px}
+.sch-daysrow .sch-day{flex:1;width:auto;min-width:0;height:34px}
+.sch-del{appearance:none;background:transparent;border:1px solid rgba(212,112,112,.4);color:var(--dusk);border-radius:8px;padding:7px 12px;cursor:pointer;font-family:var(--smono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sch-del:hover{background:rgba(212,112,112,.12)}
+
+/* item editor redesign (Task 12) — time pill, duration slider+presets, big day pills, stats switch, save */
+.sch-timepill{display:inline-flex;align-items:center;gap:8px;background:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
+.sch-timepill i{color:var(--smut);font-size:12px}
+.sch-timepill input{background:transparent;border:0;color:var(--stext);font-family:var(--smono);font-size:13px;color-scheme:dark;padding:0;cursor:pointer}
+.sch-durrow{align-items:flex-start}
+.sch-durwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.sch-durread{font-family:var(--smono);font-size:20px;font-weight:700;letter-spacing:-.01em}
+.sch-durslider{width:100%;accent-color:var(--study)}
+.sch-durpresets,.sch-adddur{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.sch-durchip{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:20px;padding:5px 10px;cursor:pointer;font-family:var(--smono);font-size:10.5px;transition:.15s}
+.sch-durchip.on{background:var(--study);border-color:transparent;color:var(--ink);font-weight:700}
+.sch-switch{appearance:none;background:var(--ink);border:1px solid var(--line);border-radius:999px;width:38px;height:22px;position:relative;cursor:pointer;padding:0;flex-shrink:0}
+.sch-switch .sch-switchknob{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--smut);transition:.16s}
+.sch-switch.on{background:var(--acd);border-color:var(--ac)}
+.sch-switch.on .sch-switchknob{transform:translateX(16px);background:var(--ac)}
+.sch-switchlbl{font-size:12px;color:var(--smut);margin-left:8px}
+.sch-savebtn{appearance:none;background:var(--ok);border:0;color:#0e131c;font-weight:700;border-radius:8px;padding:7px 14px;cursor:pointer;font-family:var(--smono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sch-editfoot{display:flex;gap:8px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){.sch-switch .sch-switchknob{transition:none!important}}
+
+/* untimed set */
+.sch-anylbl{font-family:var(--smono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--smut);margin:0 0 6px}
+.sch-rep{display:flex;align-items:center;gap:10px;padding:8px 2px;cursor:pointer;border-radius:8px}
+.sch-rep:hover{background:rgba(126,146,180,.05)}
+.sch-rep .sch-box{width:16px;height:16px;border-radius:5px;flex:0 0 16px}
+.sch-rep.on .sch-name{opacity:.45;text-decoration:line-through}
+.sch-name{font-size:14px;flex:1}
+
+.sch-empty{text-align:center;color:var(--smut);font-size:14px;margin:24px 0;line-height:1.5}
+.sch-emptystate{display:flex;align-items:center;gap:8px;color:var(--smut);font-size:13px;margin:2px 0 10px}
+.sch-emptystate i{font-size:13px;opacity:.7;flex-shrink:0}
+.sch-emptystate p{margin:0}
+
+/* add task */
+.sch-addbtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:20px;appearance:none;background:transparent;border:1px dashed var(--line);color:var(--smut);border-radius:12px;padding:13px;cursor:pointer;font-family:var(--smono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;transition:.18s}
+.sch-addbtn:hover{color:var(--stext);border-color:rgba(126,146,180,.45)}
+.sch-addform{margin-top:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sch-addname{width:100%;background:var(--ink2);border:1px solid var(--line);color:var(--stext);border-radius:9px;padding:10px 12px;font-size:15px;font-family:inherit;margin-bottom:10px;color-scheme:dark}
+.sch-seg{display:flex;gap:6px;margin-bottom:10px}
+.sch-segbtn{flex:1;appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:9px;padding:8px;cursor:pointer;font-family:var(--smono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;transition:.15s}
+.sch-segbtn.on{background:var(--study);border-color:transparent;color:var(--ink);font-weight:700}
+.sch-addfoot{display:flex;align-items:center;gap:10px}
+.sch-addgo{margin-left:auto;appearance:none;background:var(--kc,var(--study));border:0;color:var(--ink);font-weight:700;border-radius:9px;padding:10px 18px;cursor:pointer;font-family:var(--smono);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sch-rowdel:hover{color:var(--dn);border-color:var(--dn)}
+
+/* cards (above the timeline) */
+/* margin-bottom matches margin-top so the gap survives next to a production .cd card (which has
+   no top margin); adjacent .sch-cardblock siblings still collapse to a single 14px gap. */
+.sch-cardblock{margin-top:14px;margin-bottom:14px;padding:14px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sch-cardhead{display:flex;align-items:center;gap:9px}
+.sch-cardicon{color:var(--kc);font-size:14px;width:16px;text-align:center;flex-shrink:0}
+.sch-cardname{flex:1;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.sch-cardcount{font-family:var(--smono);font-size:12px;color:var(--smut)}
+.sch-cardbar{height:3px;border-radius:2px;background:rgba(126,146,180,.16);margin:9px 0 10px;overflow:hidden}
+.sch-cardbarfill{height:100%;width:100%;background:var(--kc);border-radius:2px;transform-origin:left;transition:transform .3s ease}
+.sch-cardnothing{font-size:13px;color:var(--smut);margin:2px 0}
+.sch-cardnothing i{font-size:11px;margin:0 2px}
+.sch-tlrow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
+.sch-tlrow-lbl{font-size:11px;color:var(--smut);width:100%;margin-bottom:1px}
+.sch-tlink{appearance:none;border:1px solid var(--kc,var(--line));background:transparent;color:var(--kc,var(--ink));font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.sch-tlink i{font-size:10px}
+@media (prefers-reduced-motion:reduce){.sch-tlink:active{transform:none!important}}
+.sch-addbtn-sm{margin-top:8px;padding:10px}
+.sch-odform{margin-top:10px;padding:0}
+/* Persistent inline add row on each Plan card: name box + Add, side by side, always visible. */
+.sch-inlineadd{display:flex;gap:8px;align-items:center;margin-top:10px}
+.sch-inlineadd .sch-addname{margin-bottom:0;flex:1;font-size:14px}
+.sch-inlineadd .sch-addgo{margin-left:0;flex-shrink:0;display:inline-flex;align-items:center}
+.sch-todaytag{font-family:var(--smono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--smut);border:1px solid var(--line);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+
+/* prayers fallback strip */
+.sch-prayerstrip{margin-top:14px;padding:14px 16px;background:rgba(130,160,110,.08);border:1px solid rgba(130,160,110,.28);border-radius:14px}
+.sch-prayerlbl{font-family:var(--smono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--move);margin:0 0 6px}
+.sch-prayerlbl i{margin-right:6px}
+.sch-prayernudge{font-size:12px;color:var(--smut);margin:8px 0 0}
+
+/* prayers card (Template) */
+.sch-prayrow{display:flex;align-items:center;gap:10px;padding:8px 2px}
+.sch-praynode{width:9px;height:9px;border-radius:50%;background:var(--kc);flex-shrink:0}
+.sch-prayrow .sch-timeinp{margin-left:auto}
+.sch-bell{appearance:none;background:transparent;border:1px solid var(--line);color:var(--smut);width:30px;height:30px;border-radius:8px;cursor:pointer;transition:.15s;flex-shrink:0}
+.sch-bell.on{background:rgba(130,160,110,.18);border-color:var(--move);color:var(--move)}
+.sch-autolbl{font-family:var(--smono);font-size:10px;color:var(--smut);margin-top:10px}
+
+/* plan cards (Template) — card management */
+.sch-planhead{display:flex;align-items:center;justify-content:space-between;margin-top:26px}
+.sch-plusbtn{appearance:none;background:transparent;border:1px solid var(--line);color:var(--smut);width:30px;height:30px;border-radius:9px;cursor:pointer;transition:.18s}
+.sch-plusbtn:hover{color:var(--stext);border-color:rgba(126,146,180,.4)}
+.sch-cardiconbtn{appearance:none;background:transparent;border:0;color:var(--kc);font-size:14px;width:22px;height:22px;cursor:pointer;flex-shrink:0;padding:0}
+.sch-cardname[data-a]{cursor:pointer}
+.sch-cardnameinp{flex:1;margin:0;padding:6px 8px;font-size:15px}
+.sch-stylepop{margin:10px 0;padding:12px;background:var(--ink2);border:1px solid var(--line);border-radius:12px}
+/* Overview stats picker: choose which of a card's items appear in its consistency grid. */
+.sch-ovcard h3{display:flex;align-items:center;gap:6px}
+.sch-ovedit{margin-left:auto;width:30px;height:28px;flex-shrink:0}
+.sch-ovpick{display:flex;flex-direction:column;gap:2px;margin:8px 0 10px;padding:8px;background:var(--ink2);border:1px solid var(--line);border-radius:10px}
+.sch-ovpickrow{appearance:none;background:transparent;border:0;color:var(--smut);display:flex;align-items:center;gap:9px;padding:6px 4px;cursor:pointer;font-size:12.5px;text-align:left;transition:.15s}
+.sch-ovpickrow.on{color:var(--stext)}
+.sch-ovpickrow .sch-box{width:17px;height:17px;flex-shrink:0}
+.sch-ovpickrow.on .sch-box{background:var(--kc);border-color:var(--kc)}
+.sch-ovintro{display:flex;align-items:flex-start;gap:10px;margin:10px 0 4px;padding:12px 14px;background:var(--acd);border:1px solid var(--ac);border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--stext)}
+.sch-ovintro .sch-ib{flex-shrink:0;width:26px;height:24px}
+.sch-carddel{width:30px;height:28px;flex-shrink:0;margin-left:6px}
+.sch-carddel:hover{color:var(--dn);border-color:var(--dn)}
+.sch-swatches{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.sch-swatch{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0}
+.sch-swatch.on{border-color:var(--stext)}
+.sch-swatch.taken,.sch-iconbtn.taken{opacity:.28;cursor:not-allowed}
+.sch-icongrid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:10px}
+.sch-iconbtn{appearance:none;background:transparent;border:1px solid var(--line);color:var(--smut);border-radius:8px;height:32px;cursor:pointer}
+.sch-iconbtn.on{background:rgba(126,146,180,.16);border-color:var(--stext);color:var(--stext)}
+/* Segmented control for the two import paths. One inset track, active half filled — reads as a
+   single either/or control, unlike two detached buttons that look like unrelated actions.
+   Deliberately NOT .sch-tab: that one is sized for the 3-up page nav and looks cramped at 2-up. */
+.sch-seg{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:3px;background:var(--ink2);border:1px solid var(--line);border-radius:11px}
+.sch-segtab{appearance:none;border:0;background:transparent;color:var(--smut);border-radius:8px;padding:9px 10px;cursor:pointer;transition:.18s;font-size:12.5px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sch-segtab:hover{color:var(--stext)}
+.sch-segtab.act{background:var(--surface);color:var(--stext);box-shadow:0 1px 3px rgba(0,0,0,.28)}
+.sch-segtab:active{transform:scale(.98)}
+@media (prefers-reduced-motion:reduce){.sch-segtab,.sch-segtab:active{transition:none;transform:none!important}}
+/* Numbered steps for the AI path — compact, roomy enough to actually read. */
+.sch-aibtns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+.sch-aibtns .bt{width:100%;justify-content:center}
+@media (max-width:380px){.sch-aibtns{grid-template-columns:1fr}}
+.sch-steps{margin:0 0 10px;padding-left:20px;font-size:12px;line-height:1.65;color:var(--stext)}
+.sch-steps li{margin-bottom:3px}
+.sch-steps li::marker{color:var(--smut);font-family:var(--smono);font-size:11px}
+.sch-importbox{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.sch-importbox textarea{width:100%;min-height:118px;resize:vertical;background:var(--ink2);border:1px solid var(--line);border-radius:10px;color:var(--stext);padding:10px;font-family:var(--smono);font-size:12px;color-scheme:dark}
+.sch-importerr{margin:8px 0 0;color:var(--dn);font-size:12px}.sch-importsummary{margin:10px 0;color:var(--stext);font-size:13px}.sch-importrow{padding:9px 0;border-top:1px solid var(--line);font-size:12px}.sch-importrow b{font-size:13px}.sch-importchoices{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}.sch-importchoices .on{border-color:var(--stext);color:var(--stext)}
+.sch-planitem{margin-top:2px}
+.sch-planrow{display:flex;align-items:center;gap:8px;padding:8px 2px}
+.sch-planinfo{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.sch-summary{font-family:var(--smono);font-size:11px;color:var(--smut)}
+
+/* view nav */
+.sch-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:28px}
+.sch-tab{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:11px;padding:11px 4px;cursor:pointer;transition:.18s;font-family:var(--smono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
+.sch-tab:hover{color:var(--stext);border-color:rgba(126,146,180,.4)}
+.sch-tab.act{background:var(--stext);color:var(--ink);border-color:var(--stext);font-weight:700}
+
+/* overview */
+.sch-ovstats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:18px}
+@media (min-width:460px){.sch-ovstats{grid-template-columns:repeat(3,1fr)}}
+.sch-ovstat{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+.sch-ovstatv{font-family:var(--smono);font-size:19px;font-weight:700;letter-spacing:-.02em}
+.sch-ovstatl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--smut);margin-top:4px}
+.sch-ovcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:14px}
+.sch-ovcard h3{font-size:14px;font-weight:600;margin:0 0 8px;letter-spacing:-.01em}
+.sch-ovcard canvas{width:100%!important;display:block}
+.sch-ovsub{font-family:var(--smono);font-size:10.5px;color:var(--smut);margin:-4px 0 10px}
+.sch-ovstreak{font-family:var(--smono);font-size:10px;color:#e0a35c}
+.sch-ovrow{display:flex;align-items:flex-start;gap:4px;margin-bottom:3px}
+.sch-ovrowlbl{width:84px;flex-shrink:0;font-size:10.5px;line-height:1.3;color:var(--stext);padding-top:1px}
+.sch-ovlegend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.sch-ovlegenditem{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--smut)}
+
+@media (max-width:400px){.sch-block{grid-template-columns:56px 22px 1fr}.sch-rail::before{left:66px}.sch-editor{margin-left:60px}}
+@media (prefers-reduced-motion:reduce){.sch-view *{transition:none!important}}
+
+/* Task 14: "gototimeline" jump — 2s highlight pulse on the target block, keyed off the
+   item's own --kc so it matches its section color. Reduced-motion gets a static outline
+   for the same 2s instead of the animated pulse (cleared by the same JS timeout either way). */
+.sch-block.sch-flash .sch-card{animation:schFlashPulse .7s ease-in-out 2;border-color:var(--kc)}
+@keyframes schFlashPulse{0%,100%{filter:none}50%{filter:brightness(.4)}}
+@media (prefers-reduced-motion:reduce){.sch-block.sch-flash .sch-card{animation:none;box-shadow:0 0 0 2px var(--kc)}}
+
+/* Row gestures (Task 8) — swipe-right-to-complete (Daily) / swipe-left-to-delete (Template) */
+.sch-gest{position:relative;overflow:hidden;border-radius:8px}
+.sch-gest-row{position:relative;z-index:1;transition:transform .22s cubic-bezier(.22,.61,.36,1)}
+.sch-rep.sch-gest-row,.sch-planrow.sch-gest-row{background:var(--ink2);border-radius:8px}
+/* Timeline cards must be OPAQUE so the green swipe-complete layer behind them
+   only shows while actively swiping — otherwise the 55%-alpha surface let green
+   bleed through every card. Keeps the card's own radius + section left-border. */
+.sch-card.sch-gest-row{background:var(--cd)}
+.sch-gest-action{position:absolute;inset:0;display:flex;align-items:center;color:#fff;font-size:14px;border:0;cursor:default;padding:0;appearance:none}
+.sch-gest-complete{background:var(--kc, var(--ok));justify-content:flex-start;padding-left:16px}
+.sch-gest-delete{background:var(--dn);justify-content:flex-end;padding-right:18px;cursor:pointer;width:100%}
+@media (prefers-reduced-motion:reduce){.sch-gest-row{transition:none!important}}
+
+/* Check-off pop (Task 8) — CSS animation replays on every freshly-rendered checked box, since render() always mounts fresh DOM */
+@keyframes schPop{0%{transform:scale(1)}45%{transform:scale(1.22)}100%{transform:scale(1)}}
+.sch-block.checked .sch-box,.sch-rep.on .sch-box{animation:schPop .32s cubic-bezier(.34,1.56,.64,1)}
+@media (prefers-reduced-motion:reduce){.sch-block.checked .sch-box,.sch-rep.on .sch-box{animation:none}}
+
+/* Press feedback (Task 8) — tactile scale on interactive controls */
+.sch-card:active,.sch-rep:active,.sch-planrow:active,.sch-tab:active,.sch-ib:active,.sch-addbtn:active,.sch-edit:active,.sch-plusbtn:active,.sch-day:active,.sch-segbtn:active,.sch-swatch:active,.sch-iconbtn:active,.sch-bell:active,.sch-wkday:active,.sch-gest-delete:active,.sch-addgo:active,.sch-del:active,.sch-box:active,.sch-cardiconbtn:active,.sch-durchip:active,.sch-switch:active,.sch-savebtn:active,.sch-timepill:active{transform:scale(.96)}
+@media (prefers-reduced-motion:reduce){.sch-card:active,.sch-rep:active,.sch-planrow:active,.sch-tab:active,.sch-ib:active,.sch-addbtn:active,.sch-edit:active,.sch-plusbtn:active,.sch-day:active,.sch-segbtn:active,.sch-swatch:active,.sch-iconbtn:active,.sch-bell:active,.sch-wkday:active,.sch-gest-delete:active,.sch-addgo:active,.sch-del:active,.sch-box:active,.sch-cardiconbtn:active,.sch-durchip:active,.sch-switch:active,.sch-savebtn:active,.sch-timepill:active{transform:none!important}}
+
+/* Onboarding (Task 9) — 2-step first-run overlay, replaces #content while active */
+.sch-onb{min-height:70vh;display:flex;flex-direction:column;padding-top:6px}
+.sch-onbprog{display:flex;gap:6px;margin-bottom:26px}
+.sch-onbprog i{flex:1;height:3px;border-radius:2px;background:rgba(150,160,180,.16)}
+.sch-onbprog i.on{background:var(--ac)}
+.sch-onbtitle{font-size:clamp(26px,8vw,36px);font-weight:700;letter-spacing:-.03em;margin:0 0 8px}
+.sch-onblede{font-size:14px;color:var(--smut);line-height:1.55;margin:0 0 20px}
+.sch-onbfoot{display:flex;gap:10px;margin-top:auto;padding-top:24px}
+.sch-onbgo{flex:1;appearance:none;background:var(--ac);border:0;color:#1a1206;font-weight:700;border-radius:12px;padding:14px;cursor:pointer;font-family:var(--smono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;transition:.18s}
+.sch-onbtrack{display:flex;flex-direction:column;gap:10px;margin:2px 0 8px}
+.sch-onbrow{display:flex;align-items:center;gap:12px;background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.sch-onbrow .txt{flex:1;min-width:0}
+.sch-onbrow .txt b{display:block;font-size:14px;font-weight:600;color:var(--stext)}
+.sch-onbrow .txt small{display:block;font-size:12px;color:var(--smut);margin-top:2px;line-height:1.4}
+.sch-pehardemo{background:var(--ink2);border:1px solid var(--line);border-radius:12px;padding:14px 14px 12px;margin:0 0 10px}
+.pdemo{position:relative;display:flex;flex-direction:column;gap:8px}
+.pdemo::before{content:"";position:absolute;left:57px;top:8px;bottom:8px;width:2px;background:var(--ac);opacity:.45;border-radius:2px;z-index:0}
+.pdemo-row{display:grid;grid-template-columns:44px 18px 1fr;align-items:center;gap:9px;position:relative;z-index:1}
+.pdemo-time{font-size:10px;color:var(--smut);text-align:right;font-family:var(--smono);line-height:1.25}
+.pdemo-time span{opacity:.7}
+.pdemo-rail{display:flex;justify-content:center}
+.pdemo-node{width:10px;height:10px;border-radius:50%;background:var(--ink2);border:2px solid var(--smut);box-sizing:border-box}
+.pdemo-node.on{background:#82a06e;border-color:#82a06e}
+.pdemo-node.task{background:var(--ac);border-color:var(--ac)}
+.pdemo-card{font-size:12px;border-radius:8px;padding:8px 10px;background:var(--ink);border:1px solid var(--line);border-left:2px solid #82a06e;color:var(--stext);display:flex;justify-content:space-between;gap:8px}
+.pdemo-card.task{border-left-color:var(--ac)}
+.pdemo-card.free{border:1px dashed var(--line);border-left:1px dashed var(--line);color:var(--smut);font-style:italic;background:transparent}
+.pdemo-card .tag{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--smut);font-style:normal;align-self:center;flex:none}
+.sch-parsesteps{margin:0 0 10px;padding-left:20px;font-size:11.5px;color:var(--smut);line-height:1.5}
+.sch-parsesteps li{margin:3px 0}
+.sch-parsesteps b{color:var(--stext);font-weight:600}
+.sch-parselbl{font-size:11px;color:var(--smut);margin:10px 0 4px;font-weight:600}
+.sch-parsehint{font-size:11px;color:var(--smut);opacity:.85;margin:6px 0 0}
+.sch-parsehint b{color:var(--ac);font-weight:600}
+.sch-onbgo:disabled{opacity:.6;cursor:default}
+.sch-onbskip{appearance:none;background:transparent;border:1px solid var(--line);color:var(--smut);border-radius:12px;padding:14px 16px;cursor:pointer;font-family:var(--smono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;transition:.18s}
+.sch-onbskip:hover{color:var(--stext);border-color:rgba(126,146,180,.4)}
+.sch-onbgo:active,.sch-onbskip:active{transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.sch-onbgo:active,.sch-onbskip:active{transform:none!important}}
+
+/* Help & tutorial (help/tour/AI-walkthrough) — spec 2026-08-12-waqt-help-tutorial-design */
+.sch-ovbackdrop{position:fixed;inset:0;background:rgba(6,9,15,.72);display:flex;align-items:flex-end;justify-content:center;z-index:60;backdrop-filter:blur(3px)}
+.sch-ovsheet{width:100%;max-width:480px;max-height:80vh;overflow-y:auto;background:var(--ink2,var(--surface));border:1px solid var(--line);border-radius:18px 18px 0 0;padding:18px}
+@media (min-width:520px){.sch-ovbackdrop{align-items:center}.sch-ovsheet{border-radius:16px}}
+.sch-ovhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sch-ovhead h2{font-size:16px;margin:0}
+.sch-ovsteps{margin:0 0 14px;padding:0 0 0 18px;font-size:13px;line-height:1.7;color:var(--stext,var(--fg))}

@@ -25,6 +25,16 @@ body::before{display:none!important}
    by the safe-area inset so the header always clears it. env() resolves to 0 in a normal browser
    tab, so this is a no-op everywhere except an installed app with a real inset. */
 #app{padding-top:max(1.25rem, calc(env(safe-area-inset-top) + 8px)) !important}
+/* "update available" banner (pinned above the home indicator on iOS) */
+.waqt-update-banner{position:fixed;left:12px;right:12px;bottom:max(14px,calc(env(safe-area-inset-bottom) + 8px));z-index:9999;
+  display:flex;align-items:center;gap:12px;max-width:620px;margin:0 auto;
+  background:#1A1A1A;border:1px solid var(--ac,#C9943E);border-radius:14px;padding:12px 14px;
+  box-shadow:0 14px 40px -10px rgba(0,0,0,.65);animation:waqtUpIn .28s ease}
+.waqt-update-banner span{flex:1;font-size:13.5px;color:#E8E2D9;line-height:1.35}
+.waqt-update-banner button{flex:none;background:var(--ac,#C9943E);color:#1a1206;border:0;border-radius:9px;
+  padding:9px 15px;font-weight:600;font-size:13px;font-family:inherit;cursor:pointer}
+@keyframes waqtUpIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.waqt-update-banner{animation:none}}
 
 .sch-view{
   /* Re-pointed at the same warm values as :root so the two token systems cannot drift. */

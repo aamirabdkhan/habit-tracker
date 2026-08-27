@@ -11,6 +11,44 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
   sDef.__mtWrapped = true;
 }
 
+// ---- App updates (no reinstall, no data loss) --------------------------------------------------
+// A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
+// install). We surface an "update available" banner and a Settings button; tapping either tells the
+// waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
+var APP_VERSION = "2026-08-27.1";
+var swReg = null, swUpdateReady = false;
+function markUpdateReady() {
+  if (swUpdateReady) return;
+  swUpdateReady = true;
+  showUpdateBanner();
+  if (view === "prefs" && typeof render === "function") render();  // reflect "update ready" in Settings
+}
+function showUpdateBanner() {
+  if (document.getElementById("waqt-update-banner")) return;
+  var b = document.createElement("div");
+  b.id = "waqt-update-banner";
+  b.className = "waqt-update-banner";
+  b.innerHTML = '<span>A new version of Waqt is ready.</span><button type="button" data-a="doupdate">Update now</button>';
+  document.body.appendChild(b);
+}
+if ("serviceWorker" in navigator) {
+  var hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener("controllerchange", function() { if (hadController) location.reload(); });
+  navigator.serviceWorker.getRegistration().then(function(reg) {
+    if (!reg) return;
+    swReg = reg;
+    reg.update().catch(function() {});
+    if (reg.waiting && navigator.serviceWorker.controller) markUpdateReady();
+    reg.addEventListener("updatefound", function() {
+      var nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener("statechange", function() {
+        if (nw.state === "installed" && navigator.serviceWorker.controller) markUpdateReady();
+      });
+    });
+  }).catch(function() {});
+}
+
 var schEdit = null;          // "field::name" of the item whose inline editor is open
 var schAddCard = null;       // cardId whose "Add for today" form is open (or null)
 var schQuickGap = null;      // {start, cardId} for the Free time quick-add form
@@ -1474,6 +1512,11 @@ function rPrefs() {
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn)" data-a="resetschedule"><i class="fas fa-trash-can mr-1.5"></i>Reset schedule</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p></div>';
 
+  h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
+  h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + (swUpdateReady ? ' <span style="color:var(--ac)">· update ready</span>' : '') + '</p>';
+  h += '<button type="button" class="bt t-sm" data-a="doupdate"><i class="fas fa-rotate mr-1.5"></i>Check for updates</button>';
+  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Gets the latest features without removing the app from your home screen.</p></div>';
+
   h += rFoot();
   return h + '</div>';
 }
@@ -2384,6 +2427,17 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     if (a === "vprefs") { view = "prefs"; render(); window.scrollTo(0, 0); return; }
+    if (a === "doupdate") {
+      toast("Checking for updates…");
+      var applied = false;
+      if (swReg) {
+        swReg.update().catch(function() {});
+        if (swReg.waiting) { swReg.waiting.postMessage("skipWaiting"); applied = true; }  // -> controllerchange -> reload
+      }
+      // If nothing was waiting, reg.update() may still fetch a new worker; reload to pick up fresh files.
+      if (!applied) setTimeout(function() { location.reload(); }, 800);
+      return;
+    }
     if (a === "setupwithai") { view = "prefs"; importError = ""; importTab = "ai"; aiStep = 0; render(); setTimeout(function() { var panel = document.getElementById("schedule-import"); if (panel) panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); }, 0); return; }
     if (a === "importpreview") {
       var importInput = document.getElementById("import-json"); importDraft = importInput ? importInput.value : importDraft;

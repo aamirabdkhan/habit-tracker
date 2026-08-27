@@ -30,10 +30,21 @@ function mergeTemplate(local, remote) {
     if (!local) return remote;
     if (!remote) return local;
     var result = {
-        habits: Array.from(new Set((local.habits || []).concat(remote.habits || []))),
         rd: Array.from(new Set((local.rd || []).concat(remote.rd || []))),
         wt: Math.max(local.wt || 8, remote.wt || 8)
     };
+    // habits items are objects ({n,s,c}); a plain Set can't dedupe them, so the old
+    // concat+Set unioned every sync and DOUBLED the list. Merge by item name instead
+    // (mirrors ex/hl below), tolerating legacy string items too.
+    function tKey(it) { return (it && typeof it === "object") ? it.n : it; }
+    var habMap = {};
+    (local.habits || []).forEach(function(item) { var k = tKey(item); if (k != null) habMap[k] = item; });
+    (remote.habits || []).forEach(function(item) {
+        var k = tKey(item); if (k == null) return;
+        if (habMap[k]) { if (typeof habMap[k] === "object" && typeof item === "object") habMap[k].s = habMap[k].s || item.s; }
+        else { habMap[k] = item; }
+    });
+    result.habits = Object.values(habMap);
     var exMap = {};
     (local.ex || []).forEach(function(item) { exMap[item.n] = item; });
     (remote.ex || []).forEach(function(item) {

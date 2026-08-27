@@ -15,7 +15,7 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-08-27.2";
+var APP_VERSION = "2026-08-27.3";
 var swReg = null, swUpdateReady = false;
 function markUpdateReady() {
   if (swUpdateReady) return;
@@ -1355,14 +1355,20 @@ function renderPrayersCard() {
   var bells = getPrayerBells();
   var h = '<div class="sch-cardblock" style="--kc:' + PRAYER_GREEN + '">';
   h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><button type="button" class="sch-ib" style="margin-left:auto" data-a="help" data-topic="prayers" aria-label="Help with prayers">?</button></div>';
+  var anyTimed = false;
   PRAYERS.forEach(function(name) {
     var t = getNotifTime("prayers", name);
+    if (t) anyTimed = true;
     h += '<div class="sch-prayrow">';
     h += '<span class="sch-praynode" style="--kc:' + PRAYER_GREEN + '"></span><span class="sch-name">' + esc(name) + '</span>';
     h += '<input type="time" class="sch-timeinp" data-field="prayers" data-name="' + esA(name) + '" value="' + esA(t) + '">';
+    // Native time inputs cannot be emptied on iOS, so give an explicit clear that removes the time
+    // (the prayer then shows as a checklist row in the Prayers card instead of on the Pehar).
+    if (t) h += '<button type="button" class="sch-ib sch-praytclear" data-a="clearprayertime" data-k="' + esA(name) + '" aria-label="Clear ' + esA(name) + ' time"><i class="fas fa-xmark"></i></button>';
     h += '<button class="sch-bell' + (bells[name] ? ' on' : '') + '" data-a="prayerbell" data-k="' + esA(name) + '"><i class="fas fa-bell"></i></button>';
     h += '</div>';
   });
+  if (anyTimed) h += '<button type="button" class="bt t-sm" style="margin-top:8px" data-a="clearallprayertimes"><i class="fas fa-xmark mr-1.5"></i>Clear all times</button>';
   h += '<p class="sch-autolbl">set your prayer times · updates your Pehar</p>';
   return h + '</div>';
 }
@@ -2641,6 +2647,8 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     // ---- Template: prayers card ----
+    if (a === "clearprayertime") { setNotifTime("prayers", t.dataset.k, ""); render(); toast(t.dataset.k + " time cleared"); return; }
+    if (a === "clearallprayertimes") { PRAYERS.forEach(function(p) { setNotifTime("prayers", p, ""); }); render(); toast("Prayer times cleared"); return; }
     if (a === "prayerbell") {
       var pbk = t.dataset.k;
       if (getPrayerBells()[pbk]) { var offBells = getPrayerBells(); offBells[pbk] = false; savePrayerBells(offBells); syncPrayerReminder(pbk); render(); return; }

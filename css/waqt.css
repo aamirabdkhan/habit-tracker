@@ -20,6 +20,11 @@
 }
 body{background:radial-gradient(120% 60% at 50% -10%,#1a1512 0%,transparent 60%),#0C0C0C!important}
 body::before{display:none!important}
+/* iOS standalone PWA: viewport-fit=cover + a black-translucent status bar means the status bar
+   overlays the page, hiding the Plan masthead's gear button behind the battery/notch. Pad the top
+   by the safe-area inset so the header always clears it. env() resolves to 0 in a normal browser
+   tab, so this is a no-op everywhere except an installed app with a real inset. */
+#app{padding-top:max(1.25rem, calc(env(safe-area-inset-top) + 8px)) !important}
 
 .sch-view{
   /* Re-pointed at the same warm values as :root so the two token systems cannot drift. */

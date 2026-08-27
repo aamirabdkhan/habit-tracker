@@ -26,40 +26,39 @@ function dbSave(key, value) {
 
 var realtimeChannel = null;
 
-function mergeTemplate(local, remote) {
-    if (!local) return remote;
-    if (!remote) return local;
-    var result = {
-        rd: Array.from(new Set((local.rd || []).concat(remote.rd || []))),
-        wt: Math.max(local.wt || 8, remote.wt || 8)
-    };
-    // habits items are objects ({n,s,c}); a plain Set can't dedupe them, so the old
-    // concat+Set unioned every sync and DOUBLED the list. Merge by item name instead
-    // (mirrors ex/hl below), tolerating legacy string items too.
-    function tKey(it) { return (it && typeof it === "object") ? it.n : it; }
-    var habMap = {};
-    (local.habits || []).forEach(function(item) { var k = tKey(item); if (k != null) habMap[k] = item; });
-    (remote.habits || []).forEach(function(item) {
-        var k = tKey(item); if (k == null) return;
-        if (habMap[k]) { if (typeof habMap[k] === "object" && typeof item === "object") habMap[k].s = habMap[k].s || item.s; }
-        else { habMap[k] = item; }
+// Dedupe a template item list by name (items are objects {n,s,c}, sometimes legacy strings),
+// keeping the first occurrence. Also self-heals any list already ballooned by the old union merge.
+function dedupItemsByName(arr) {
+    var seen = {}, out = [];
+    (arr || []).forEach(function(it) {
+        var k = (it && typeof it === "object") ? it.n : it;
+        if (k == null || seen[k]) return;
+        seen[k] = true; out.push(it);
     });
-    result.habits = Object.values(habMap);
-    var exMap = {};
-    (local.ex || []).forEach(function(item) { exMap[item.n] = item; });
-    (remote.ex || []).forEach(function(item) {
-        if (exMap[item.n]) { exMap[item.n].s = exMap[item.n].s || item.s; }
-        else { exMap[item.n] = item; }
-    });
-    result.ex = Object.values(exMap);
-    var hlMap = {};
-    (local.hl || []).forEach(function(item) { hlMap[item.n] = item; });
-    (remote.hl || []).forEach(function(item) {
-        if (hlMap[item.n]) { hlMap[item.n].s = hlMap[item.n].s || item.s; }
-        else { hlMap[item.n] = item; }
-    });
-    result.hl = Object.values(hlMap);
-    return result;
+    return out;
+}
+function normTemplate(t) {
+    if (t && typeof t === "object") {
+        t.habits = dedupItemsByName(t.habits);
+        t.ex = dedupItemsByName(t.ex);
+        t.hl = dedupItemsByName(t.hl);
+    }
+    return t;
+}
+// Last-write-wins on the whole template. The old union merge resurrected any item deleted on one
+// device (it still existed on the other) and, for habits, doubled the list every sync. Instead the
+// side that changed more recently wins its entire item list, so deletions stick. A never-edited
+// local (ht_d_mt absent => 0) always yields to remote, so a fresh device still pulls the cloud plan.
+function mergeTemplate(local, remote, remoteUpdatedAt) {
+    if (!local) return normTemplate(remote);
+    if (!remote) return normTemplate(local);
+    var localMt = parseInt(localStorage.getItem("ht_d_mt") || "0", 10) || 0;
+    var remoteTs = remoteUpdatedAt ? Date.parse(remoteUpdatedAt) : 0;
+    if (remoteTs && remoteTs > localMt) {
+        try { localStorage.setItem("ht_d_mt", String(remoteTs)); } catch(e) {}
+        return normTemplate(remote);
+    }
+    return normTemplate(local);
 }
 
 function mergeData(local, remote) {
@@ -145,7 +144,7 @@ function subscribeRealtime() {
                 var localVal = null;
                 try { localVal = JSON.parse(localStorage.getItem(key)); } catch(e) {}
                 
-                var mergedVal = key === "ht_d" ? mergeTemplate(localVal, remoteVal) : mergeData(localVal, remoteVal);
+                var mergedVal = key === "ht_d" ? mergeTemplate(localVal, remoteVal, payload.new.updated_at) : mergeData(localVal, remoteVal);
                 var localStr = localStorage.getItem(key);
                 var mergedStr = JSON.stringify(mergedVal);
                 if (localStr !== mergedStr) {
@@ -164,7 +163,7 @@ function syncDown() {
     if (!sbClient || !currentUser) return Promise.resolve();
     isSyncing = true;
     if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
-    return sbClient.from('user_data').select('key, value').then(function(res) {
+    return sbClient.from('user_data').select('key, value, updated_at').then(function(res) {
         isSyncing = false;
         if (res.error) {
             console.error("Sync down error:", res.error);
@@ -181,7 +180,7 @@ function syncDown() {
                 var mergedVal = null;
                 if (localVal) {
                     if (row.key === "ht_d") {
-                        mergedVal = mergeTemplate(localVal, row.value);
+                        mergedVal = mergeTemplate(localVal, row.value, row.updated_at);
                     } else if (row.key.indexOf("ht_") === 0 && row.key !== "ht_migrated_v3") {
                         mergedVal = mergeData(localVal, row.value);
                     } else {
@@ -249,22 +248,23 @@ function syncUpAll() {
             keys.push(k);
         }
     }
-    return sbClient.from('user_data').select('key, value').then(function(res) {
+    return sbClient.from('user_data').select('key, value, updated_at').then(function(res) {
         var remoteData = {};
         if (res.data) {
-            res.data.forEach(function(row) { remoteData[row.key] = row.value; });
+            res.data.forEach(function(row) { remoteData[row.key] = row; });
         }
-        
+
         var promises = keys.map(function(k) {
             var localVal = null;
             try { localVal = JSON.parse(localStorage.getItem(k)); } catch(e) {}
             if (localVal === null) return Promise.resolve();
-            
-            var remoteVal = remoteData[k];
+
+            var remoteRow = remoteData[k];
+            var remoteVal = remoteRow && remoteRow.value;
             var mergedVal = localVal;
             if (remoteVal) {
                 if (k === "ht_d") {
-                    mergedVal = mergeTemplate(localVal, remoteVal);
+                    mergedVal = mergeTemplate(localVal, remoteVal, remoteRow.updated_at);
                 } else if (k.indexOf("ht_") === 0 && k !== "ht_migrated_v3") {
                     mergedVal = mergeData(localVal, remoteVal);
                 }

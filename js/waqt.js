@@ -2,6 +2,15 @@
 // Real data, real functions (gDef/sDef/gDay/getNotifTime/setNotifTime/sDay —
 // all production, untouched). Nothing here is ever auto-deployed.
 
+// Stamp a local modified-time on every genuine local ht_d write so cloud sync can do last-write-wins
+// (see mergeTemplate). Cloud sync writes ht_d via localStorage.setItem directly, NOT via sDef, so
+// this only records real local edits (add/remove/toggle items) and the one-time v3 migration.
+if (typeof sDef === "function" && !sDef.__mtWrapped) {
+  var _sDefBase = sDef;
+  sDef = function(d) { _sDefBase(d); try { localStorage.setItem("ht_d_mt", String(Date.now())); } catch(e) {} };
+  sDef.__mtWrapped = true;
+}
+
 var schEdit = null;          // "field::name" of the item whose inline editor is open
 var schAddCard = null;       // cardId whose "Add for today" form is open (or null)
 var schQuickGap = null;      // {start, cardId} for the Free time quick-add form

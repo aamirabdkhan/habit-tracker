@@ -99,6 +99,12 @@ var CARDS_KEY = "ht_cards";
 var CARDS_V1_KEY = "ht_cards_v1";
 var CARDS_GOLD_KEY = "ht_cards_gold_v1";
 var CARDS_STATS_KEY = "ht_stats_all_v1";
+// Marks a profile that was seeded fresh (single Daily Goals card) while storage was empty. On a
+// new device/origin the fresh seed can be written BEFORE the user's legacy ht_d arrives via cloud
+// sync, which would otherwise permanently shadow the legacy->3-card migration. This flag lets a
+// later-arriving legacy history trigger a one-time re-migration. Cleared once that happens (or once
+// the user grows the profile past the single seed).
+var CARDS_FRESH_KEY = "ht_cards_freshseed";
 var OV_INTRO_KEY = "ht_ov_intro_seen";
 var CARD_ITEMS_KEY = "ht_card_items";
 var PRAYERS_ON_KEY = "ht_prayers_on";
@@ -162,8 +168,29 @@ function seedCardsForState(isExisting) {
 
 function migrateCardsIfNeeded() {
   if (localStorage.getItem(CARDS_V1_KEY)) return;
-  saveCards(seedCardsForState());
+  var existing = !!localStorage.getItem(CARDS_KEY) || hasLegacyCardHistory();
+  saveCards(seedCardsForState(existing));
+  // A fresh single-card seed is provisional: legacy data may still arrive via cloud sync. Flag it
+  // so remigrateIfLegacyArrivedLate() can redo the full 3-card migration if that happens.
+  if (existing) localStorage.removeItem(CARDS_FRESH_KEY);
+  else localStorage.setItem(CARDS_FRESH_KEY, "true");
   localStorage.setItem(CARDS_V1_KEY, "true");
+}
+// Fresh-origin / new-device fix: if this profile was seeded fresh (single Daily Goals card) and the
+// user's legacy habits/extra/health history has since appeared (typically pulled down by cloud sync
+// after the seed was written), redo the seed as an existing profile so the full 3-card base returns
+// and every legacy item backfills. Only fires while the profile is still the untouched single seed,
+// so a user who deliberately deleted their other cards is never overridden.
+function remigrateIfLegacyArrivedLate() {
+  if (!localStorage.getItem(CARDS_FRESH_KEY)) return;
+  var meta = getCardMeta();
+  var pristineSingleSeed = meta.length === 1 && meta[0].id === "habits";
+  if (!pristineSingleSeed) { localStorage.removeItem(CARDS_FRESH_KEY); return; }
+  if (!hasLegacyCardHistory()) return;
+  localStorage.removeItem(CARDS_KEY);
+  localStorage.removeItem(CARDS_V1_KEY);
+  localStorage.removeItem(CARDS_FRESH_KEY);
+  // migrateCardsIfNeeded() (called next in getCards) now sees the legacy history -> full 3-card seed.
 }
 // One-time: `s` defaulted to false for every card except Daily Goals, so most items were being
 // recorded but never displayed in the Overview grids, and a card with nothing flagged rendered no
@@ -241,6 +268,7 @@ function cardItemsFor(id) {
 
 // getCards() — migrates/seeds on first call, then returns [{id,name,icon,color,base,items}].
 function getCards() {
+  remigrateIfLegacyArrivedLate();
   migrateCardsIfNeeded();
   migrateBaseCardColors();
   return getCardMeta().map(function(meta) {

@@ -15,7 +15,7 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-08-27.1";
+var APP_VERSION = "2026-08-27.2";
 var swReg = null, swUpdateReady = false;
 function markUpdateReady() {
   if (swUpdateReady) return;
@@ -29,7 +29,10 @@ function showUpdateBanner() {
   b.id = "waqt-update-banner";
   b.className = "waqt-update-banner";
   b.innerHTML = '<span>A new version of Waqt is ready.</span><button type="button" data-a="doupdate">Update now</button>';
-  document.body.appendChild(b);
+  // Append inside #app, not document.body: the click handler is delegated on #app, so a banner
+  // outside it never receives the tap. It is position:fixed, and render() only replaces #content,
+  // so it stays put and stays clickable.
+  (document.getElementById("app") || document.body).appendChild(b);
 }
 if ("serviceWorker" in navigator) {
   var hadController = !!navigator.serviceWorker.controller;
@@ -2428,14 +2431,18 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "vprefs") { view = "prefs"; render(); window.scrollTo(0, 0); return; }
     if (a === "doupdate") {
-      toast("Checking for updates…");
-      var applied = false;
-      if (swReg) {
-        swReg.update().catch(function() {});
-        if (swReg.waiting) { swReg.waiting.postMessage("skipWaiting"); applied = true; }  // -> controllerchange -> reload
-      }
-      // If nothing was waiting, reg.update() may still fetch a new worker; reload to pick up fresh files.
-      if (!applied) setTimeout(function() { location.reload(); }, 800);
+      toast("Updating…");
+      var reload = function() { location.reload(); };
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistration().then(function(reg) {
+          swReg = reg || swReg;
+          if (reg) {
+            reg.update().catch(function() {});
+            if (reg.waiting) { reg.waiting.postMessage("skipWaiting"); return; }  // -> controllerchange -> reload
+          }
+          setTimeout(reload, 800);  // nothing waiting: reload to pick up any fresh files
+        }).catch(function() { setTimeout(reload, 800); });
+      } else setTimeout(reload, 800);
       return;
     }
     if (a === "setupwithai") { view = "prefs"; importError = ""; importTab = "ai"; aiStep = 0; render(); setTimeout(function() { var panel = document.getElementById("schedule-import"); if (panel) panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); }, 0); return; }

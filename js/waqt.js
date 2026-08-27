@@ -105,6 +105,10 @@ var CARDS_STATS_KEY = "ht_stats_all_v1";
 // later-arriving legacy history trigger a one-time re-migration. Cleared once that happens (or once
 // the user grows the profile past the single seed).
 var CARDS_FRESH_KEY = "ht_cards_freshseed";
+// One-shot-per-device recovery for profiles polluted BEFORE CARDS_FRESH_KEY existed. Deliberately
+// NOT ht_-prefixed so cloud sync never carries it: each device runs the recovery at most once,
+// independently. See recoverStalePollutedSeed().
+var CARDS_RECOVER_KEY = "waqt_recover_cards_v1";
 var OV_INTRO_KEY = "ht_ov_intro_seen";
 var CARD_ITEMS_KEY = "ht_card_items";
 var PRAYERS_ON_KEY = "ht_prayers_on";
@@ -192,6 +196,24 @@ function remigrateIfLegacyArrivedLate() {
   localStorage.removeItem(CARDS_FRESH_KEY);
   // migrateCardsIfNeeded() (called next in getCards) now sees the legacy history -> full 3-card seed.
 }
+// One-time-per-device recovery for the pollution window before CARDS_FRESH_KEY existed: a fresh
+// single-card seed was written (and possibly synced to the cloud) with no fresh-seed flag to trigger
+// re-migration, while the user's legacy ex/hl history sits unmigrated. If we still hold exactly the
+// single seed and legacy ex/hl items exist, redo the full migration. Runs at most once per device.
+// Trade-off: a user who had deliberately deleted Extra Deeds / Healthy Lifestyle sees them restored
+// this one time (harmless; deleting again sticks, since the recovery never runs a second time).
+function recoverStalePollutedSeed() {
+  if (localStorage.getItem(CARDS_RECOVER_KEY)) return;
+  localStorage.setItem(CARDS_RECOVER_KEY, "1");           // one-shot per device, whatever the outcome
+  if (localStorage.getItem(CARDS_FRESH_KEY)) return;       // the flag-based path already handles this
+  var meta = getCardMeta();
+  if (!(meta.length === 1 && meta[0].id === "habits")) return;
+  var d = null; try { d = JSON.parse(localStorage.getItem("ht_d")); } catch(e) {}
+  var hasExHl = d && ((Array.isArray(d.ex) && d.ex.length) || (Array.isArray(d.hl) && d.hl.length));
+  if (!hasExHl) return;
+  localStorage.removeItem(CARDS_KEY);
+  localStorage.removeItem(CARDS_V1_KEY);
+}
 // One-time: `s` defaulted to false for every card except Daily Goals, so most items were being
 // recorded but never displayed in the Overview grids, and a card with nothing flagged rendered no
 // heatmap at all. Flip every existing item to tracked. History is untouched — this only starts
@@ -269,6 +291,7 @@ function cardItemsFor(id) {
 // getCards() — migrates/seeds on first call, then returns [{id,name,icon,color,base,items}].
 function getCards() {
   remigrateIfLegacyArrivedLate();
+  recoverStalePollutedSeed();
   migrateCardsIfNeeded();
   migrateBaseCardColors();
   return getCardMeta().map(function(meta) {

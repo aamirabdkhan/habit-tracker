@@ -293,8 +293,13 @@ if (sbClient) {
                 sbClient.removeChannel(realtimeChannel);
                 realtimeChannel = null;
             }
-            clearLocalHabitData();
-            localStorage.removeItem("ht_migrated_v3");
+            // Only wipe local data on a real sign-out. This "no session" branch also fires on the
+            // INITIAL_SESSION event when a page loads logged-out, and clearing there would delete a
+            // logged-out user's local (anonymous) habit data on every load.
+            if (event === "SIGNED_OUT") {
+                clearLocalHabitData();
+                localStorage.removeItem("ht_migrated_v3");
+            }
             if (typeof gDay === "function" && typeof dk === "function" && typeof cDate !== "undefined") {
                 cData = gDay(dk(cDate));
             }

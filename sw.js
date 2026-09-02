@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v27';
+const CACHE = 'habit-tracker-v28';
 const URLS = [
   './',
   'index.html',
@@ -13,13 +13,13 @@ const URLS = [
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];
 self.addEventListener('install', function(e) {
-  // Deliberately NO self.skipWaiting() here: a new worker installs and WAITS, so the app can show
-  // an "update available" prompt and let the user apply it (via the message below) instead of the
-  // page swapping under them. The one reliable path on iOS PWAs.
+  // skipWaiting so a new worker activates itself instead of getting stuck "waiting" (on iOS PWAs a
+  // stuck waiting worker made the app show an update popup on every launch). controllerchange in the
+  // page then reloads once onto the fresh files.
   e.waitUntil(
     caches.open(CACHE).then(function(c) {
       return Promise.allSettled(URLS.map(function(u){ return c.add(u).catch(function(){}); }));
-    })
+    }).then(function(){ return self.skipWaiting(); })
   );
 });
 // The page posts 'skipWaiting' when the user taps "Update now" / "Check for updates".

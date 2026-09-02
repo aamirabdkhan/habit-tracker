@@ -15,25 +15,12 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-08-27.3";
-var swReg = null, swUpdateReady = false;
-function markUpdateReady() {
-  if (swUpdateReady) return;
-  swUpdateReady = true;
-  showUpdateBanner();
-  if (view === "prefs" && typeof render === "function") render();  // reflect "update ready" in Settings
-}
-function showUpdateBanner() {
-  if (document.getElementById("waqt-update-banner")) return;
-  var b = document.createElement("div");
-  b.id = "waqt-update-banner";
-  b.className = "waqt-update-banner";
-  b.innerHTML = '<span>A new version of Waqt is ready.</span><button type="button" data-a="doupdate">Update now</button>';
-  // Append inside #app, not document.body: the click handler is delegated on #app, so a banner
-  // outside it never receives the tap. It is position:fixed, and render() only replaces #content,
-  // so it stays put and stays clickable.
-  (document.getElementById("app") || document.body).appendChild(b);
-}
+var APP_VERSION = "2026-08-27.4";
+var swReg = null;
+// Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
+// worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
+// the earlier "waiting" model left a worker stuck waiting on iOS, which fired the update popup on
+// EVERY launch. Any worker that still ends up waiting is told to activate, healing that stuck state.
 if ("serviceWorker" in navigator) {
   var hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", function() { if (hadController) location.reload(); });
@@ -41,12 +28,12 @@ if ("serviceWorker" in navigator) {
     if (!reg) return;
     swReg = reg;
     reg.update().catch(function() {});
-    if (reg.waiting && navigator.serviceWorker.controller) markUpdateReady();
+    if (reg.waiting) reg.waiting.postMessage("skipWaiting");  // heal a stuck waiting worker -> activate + reload
     reg.addEventListener("updatefound", function() {
       var nw = reg.installing;
       if (!nw) return;
       nw.addEventListener("statechange", function() {
-        if (nw.state === "installed" && navigator.serviceWorker.controller) markUpdateReady();
+        if (nw.state === "installed" && navigator.serviceWorker.controller) nw.postMessage("skipWaiting");
       });
     });
   }).catch(function() {});
@@ -1522,7 +1509,7 @@ function rPrefs() {
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p></div>';
 
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
-  h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + (swUpdateReady ? ' <span style="color:var(--ac)">· update ready</span>' : '') + '</p>';
+  h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + '</p>';
   h += '<button type="button" class="bt t-sm" data-a="doupdate"><i class="fas fa-rotate mr-1.5"></i>Check for updates</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Gets the latest features without removing the app from your home screen.</p></div>';
 

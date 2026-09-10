@@ -77,6 +77,12 @@ function mergeData(local, remote) {
             result.prayers[k] = !!(result.prayers[k] || remote.prayers[k]);
         });
     }
+    if (remote.takbeer) {
+        if (!result.takbeer) result.takbeer = {};
+        Object.keys(remote.takbeer).forEach(function(k) {
+            result.takbeer[k] = !!(result.takbeer[k] || remote.takbeer[k]);
+        });
+    }
     if (remote.extra) {
         if (!result.extra) result.extra = {};
         Object.keys(remote.extra).forEach(function(k) {
@@ -287,6 +293,7 @@ if (sbClient) {
             var oldUser = currentUser;
             currentUser = session.user;
             subscribeRealtime();
+            if (typeof resyncPrayerReminders === "function") resyncPrayerReminders();
             if (oldUser && oldUser.id !== currentUser.id) {
                 clearLocalHabitData();
                 syncDown();

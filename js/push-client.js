@@ -25,11 +25,20 @@ function setNotifTime(field, name, time) {
   pushSaveReminderTime(field, name, time);
 }
 
+// Prayers get a 5-minute-early heads-up: the reminder fires 5 min before the saved time so you can
+// reach the congregation, while the displayed/Pehar time stays the actual prayer time. Wraps past
+// midnight safely. Non-prayer reminders fire at their exact time.
+var PRAYER_REMINDER_LEAD_MIN = 5;
+function reminderTimeFor(field, time) {
+  if (field !== "prayers" || !/^\d{1,2}:\d{2}$/.test(time)) return time;
+  var p = time.split(":"), mins = ((+p[0]) * 60 + (+p[1]) - PRAYER_REMINDER_LEAD_MIN + 1440) % 1440;
+  return String(Math.floor(mins / 60)).padStart(2, "0") + ":" + String(mins % 60).padStart(2, "0");
+}
 function pushSaveReminderTime(field, name, time) {
   if (!sbClient || !currentUser) return;
   if (time) {
     sbClient.from('reminder_times').upsert({
-      user_id: currentUser.id, field: field, name: name, time: time, updated_at: new Date().toISOString()
+      user_id: currentUser.id, field: field, name: name, time: reminderTimeFor(field, time), updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,field,name' }).then(function(res) {
       if (res.error) console.error("Reminder save error:", res.error);
     });
@@ -38,6 +47,19 @@ function pushSaveReminderTime(field, name, time) {
       .eq('user_id', currentUser.id).eq('field', field).eq('name', name)
       .then(function(res) { if (res.error) console.error("Reminder delete error:", res.error); });
   }
+}
+
+// One-time per device: re-push existing prayer reminders so they pick up the new 5-min-early lead
+// (reminderTimeFor) without the user having to re-save each time. Runs after sign-in.
+function resyncPrayerReminders() {
+  if (!sbClient || !currentUser) return;
+  if (localStorage.getItem("ht_prayer_lead_v1")) return;
+  localStorage.setItem("ht_prayer_lead_v1", "1");
+  var map = getNotifTimesMap();
+  ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"].forEach(function(p) {
+    var t = map[notifKey("prayers", p)];
+    if (t) pushSaveReminderTime("prayers", p, t);
+  });
 }
 
 function urlBase64ToUint8Array(base64String) {

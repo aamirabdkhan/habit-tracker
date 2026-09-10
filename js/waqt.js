@@ -15,7 +15,7 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-08-27.4";
+var APP_VERSION = "2026-09-11.1";
 var swReg = null;
 // Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
 // worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
@@ -56,6 +56,32 @@ function schToggle(f, k) {
   else if (isBaseCard(f)) { cData[f][k] = !cData[f][k]; }
   else { if (!cData.cards) cData.cards = {}; if (!cData.cards[f]) cData.cards[f] = {}; cData.cards[f][k] = !cData.cards[f][k]; }
   sDay();
+}
+
+// ---- First Takbīr (takbīrat al-iḥrām) tracking + 40-day streak ---------------------------------
+var TAKBEER_GOAL = 40;
+function schToggleTakbeer(name) {
+  if (!cData.takbeer) cData.takbeer = {};
+  cData.takbeer[name] = !cData.takbeer[name];
+  sDay();
+}
+// A day "counts" toward the streak when the first takbīr was caught for ALL five prayers.
+function allTakbeerCaught(key) {
+  if (!prayersOn()) return false;
+  var day = gDay(key);
+  return !!day.takbeer && PRAYERS.every(function(p) { return day.takbeer[p]; });
+}
+// Consecutive qualifying days ending at the most recent one. Today is only counted once it fully
+// qualifies, so an in-progress day never shows the streak as broken.
+function takbeerStreak() {
+  var count = 0, d = new Date();
+  var todayCounts = allTakbeerCaught(dk(new Date()));
+  d.setDate(d.getDate() - 1);
+  for (var i = 0; i < 1000; i++) {
+    if (allTakbeerCaught(dk(d))) { count++; d.setDate(d.getDate() - 1); } else break;
+  }
+  if (todayCounts) count++;
+  return count;
 }
 
 // Remove a one-day (today-only) item from the current day record (Task 9C). Base cards live at
@@ -1132,7 +1158,13 @@ var HELP_TOPICS = {
   import:   { title: "Set up with AI", steps: IMPORT_GUIDE_STEPS },
   prayers:  { title: "Prayers", steps: [
     "All 5 prayers, always shown. Tap a time to set or change it.",
-    "A timed prayer shows green on the Pehar, and reminds you before it starts."
+    "A timed prayer shows green on the Pehar, and reminds you 5 minutes before it starts."
+  ]},
+  takbeer:  { title: "First Takbīr", steps: [
+    "The first takbīr (takbīrat al-iḥrām) is the opening “Allāhu akbar” said with the imam. Catching it means you joined the congregation right from the start.",
+    "The Messenger of Allah ﷺ said: whoever prays forty days in congregation, catching the first takbīr, two exemptions are written for him: freedom from the Fire, and freedom from hypocrisy.",
+    "Reported by Anas ibn Mālik. Jāmiʿ at-Tirmidhī, 241.",
+    "Tap a prayer’s star on the day it happens; keep all five caught every day to build the 40-day streak."
   ]}
 };
 
@@ -2061,6 +2093,24 @@ function renderPrayersDayCard() {
     h += '</div>';
   }
   if (!timed.length) h += '<p style="font-size:11px;color:var(--mt);margin:8px 0 0">Set prayer times in Template to place them on your Pehar.</p>';
+  h += renderTakbeerTracker();
+  return h + '</div>';
+}
+// First-takbīr tracker: a star per prayer (caught / not) plus the 40-day streak and the hadith.
+function renderTakbeerTracker() {
+  var tk = cData.takbeer || {}, streak = takbeerStreak();
+  var frac = Math.max(0, Math.min(1, streak / TAKBEER_GOAL));
+  var h = '<div class="sch-takbeer">';
+  h += '<div class="sch-takbeerhead"><span class="sch-takbeerttl">First Takbīr</span>';
+  h += '<button type="button" class="sch-ib" data-a="help" data-topic="takbeer" aria-label="About the first takbir">?</button></div>';
+  h += '<div class="sch-tkpills">';
+  PRAYERS.forEach(function(p) {
+    h += '<button type="button" class="sch-tkpill' + (tk[p] ? ' on' : '') + '" data-a="takbeertog" data-k="' + esA(p) + '" aria-pressed="' + (tk[p] ? 'true' : 'false') + '"><i class="fas fa-star"></i>' + esc(p) + '</button>';
+  });
+  h += '</div>';
+  h += '<div class="sch-tkstreak"><span class="sch-tknum"><i class="fas fa-fire"></i> ' + streak + ' / ' + TAKBEER_GOAL + ' days</span>';
+  h += '<div class="sch-tkbar"><div class="sch-tkbarfill" style="transform:scaleX(' + frac + ')"></div></div></div>';
+  if (streak >= TAKBEER_GOAL) h += '<p class="sch-tkmsg">Ma sha Allah, 40 days complete. Keep going.</p>';
   return h + '</div>';
 }
 function renderPrayerStrip() {
@@ -2540,6 +2590,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (Date.now() - schGestSwipedAt < 500) return;
       schToggle(t.dataset.f, t.dataset.k); render(); return;
     }
+    if (a === "takbeertog") { schToggleTakbeer(t.dataset.k); render(); return; }
     // Single-open-editor (Task 12): opening Daily's editor closes Template's (if open) and vice
     // versa; re-tapping the same pencil (or hitting the editor's own Save button, which reuses
     // this same data-a) closes it. Either way the item being closed has its transient

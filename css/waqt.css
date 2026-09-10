@@ -36,6 +36,26 @@ body::before{display:none!important}
 @keyframes waqtUpIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.waqt-update-banner{animation:none}}
 
+/* First Takbīr tracker (inside the Prayers card) */
+.sch-takbeer{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.sch-takbeerhead{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.sch-takbeerttl{font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--stext);flex:1}
+.sch-tkpills{display:flex;flex-wrap:wrap;gap:6px}
+.sch-tkpill{display:inline-flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;
+  padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:var(--ink2);
+  color:var(--smut);cursor:pointer;transition:.14s}
+.sch-tkpill i{font-size:11px;color:var(--smut);transition:.14s}
+.sch-tkpill.on{border-color:var(--ac);background:var(--acd);color:var(--stext)}
+.sch-tkpill.on i{color:var(--ac)}
+.sch-tkpill:active{transform:scale(.96)}
+.sch-tkstreak{display:flex;align-items:center;gap:10px;margin-top:11px}
+.sch-tknum{font-family:var(--smono);font-size:12px;color:var(--stext);white-space:nowrap}
+.sch-tknum i{color:var(--ac);margin-right:2px}
+.sch-tkbar{flex:1;height:5px;border-radius:3px;background:var(--ink2);overflow:hidden}
+.sch-tkbarfill{height:100%;background:var(--ac);border-radius:3px;transform-origin:left;transition:transform .3s ease}
+.sch-tkmsg{font-size:11.5px;color:var(--ac);margin:8px 0 0}
+@media (prefers-reduced-motion:reduce){.sch-tkpill:active{transform:none}.sch-tkbarfill{transition:none}}
+
 .sch-view{
   /* Re-pointed at the same warm values as :root so the two token systems cannot drift. */
   --ink:#0C0C0C;--ink2:#1A1A1A;--surface:rgba(26,26,26,.72);--line:#2A2725;

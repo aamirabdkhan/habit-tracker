@@ -15,7 +15,7 @@ if (typeof sDef === "function" && !sDef.__mtWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-09-11.1";
+var APP_VERSION = "2026-09-11.2";
 var swReg = null;
 // Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
 // worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
@@ -197,6 +197,10 @@ function weightOn() { var v = localStorage.getItem(WEIGHT_ON_KEY); return v === 
 function setWeightOn(on) { localStorage.setItem(WEIGHT_ON_KEY, on ? "true" : "false"); }
 function prayersOn() { var v = localStorage.getItem(PRAYERS_ON_KEY); return v === null ? true : v === "true"; }
 function setPrayersOn(on) { localStorage.setItem(PRAYERS_ON_KEY, on ? "true" : "false"); }
+// First-takbir tracker is congregation-specific (not applicable to everyone), so it is toggleable.
+var TAKBEER_ON_KEY = "ht_takbeer_on";
+function takbeerOn() { var v = localStorage.getItem(TAKBEER_ON_KEY); return v === null ? true : v === "true"; }
+function setTakbeerOn(on) { localStorage.setItem(TAKBEER_ON_KEY, on ? "true" : "false"); }
 var PEHAR_ON_KEY = "ht_pehar_on";
 function peharOn() { var v = localStorage.getItem(PEHAR_ON_KEY); return v === null ? true : v === "true"; }
 function setPeharOn(on) { localStorage.setItem(PEHAR_ON_KEY, on ? "true" : "false"); }
@@ -1510,6 +1514,7 @@ function rPrefs() {
 
   h += '<div class="cd" style="margin-top:22px"><div class="sec-t">What you track</div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">The 5 daily prayers</span><button type="button" class="sch-switch' + (prayersOn() ? ' on' : '') + '" data-a="prayerstoggle" role="switch" aria-checked="' + (prayersOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
+  if (prayersOn()) h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">First Takbīr tracker<br><small style="color:var(--mt)">catching the first takbir in congregation</small></span><button type="button" class="sch-switch' + (takbeerOn() ? ' on' : '') + '" data-a="takbeertoggle" role="switch" aria-checked="' + (takbeerOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Weight</span><button type="button" class="sch-switch' + (weightOn() ? ' on' : '') + '" data-a="weighttoggle" role="switch" aria-checked="' + (weightOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center"><span style="flex:1">Pehar timeline</span><button type="button" class="sch-switch' + (peharOn() ? ' on' : '') + '" data-a="pehartoggle" role="switch" aria-checked="' + (peharOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div></div>';
 
@@ -2098,6 +2103,7 @@ function renderPrayersDayCard() {
 }
 // First-takbīr tracker: a star per prayer (caught / not) plus the 40-day streak and the hadith.
 function renderTakbeerTracker() {
+  if (!takbeerOn()) return "";
   var tk = cData.takbeer || {}, streak = takbeerStreak();
   var frac = Math.max(0, Math.min(1, streak / TAKBEER_GOAL));
   var h = '<div class="sch-takbeer">';
@@ -2663,6 +2669,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     // ---- Item editor (Task 12): duration presets, overview-stats switch ----
     if (a === "weighttoggle") { setWeightOn(!weightOn()); render(); return; }
+    if (a === "takbeertoggle") { setTakbeerOn(!takbeerOn()); render(); return; }
     if (a === "pehartoggle") { setPeharOn(!peharOn()); render(); return; }
     if (a === "prayerstoggle") {
       var wasPrayersOn = prayersOn();

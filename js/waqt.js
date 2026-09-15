@@ -26,7 +26,7 @@ if (typeof setNotifTime === "function" && !setNotifTime.__wpWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-09-11.3";
+var APP_VERSION = "2026-09-11.4";
 var swReg = null;
 // Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
 // worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
@@ -143,7 +143,7 @@ function widgetLoaderText() {
   return 'var TOKEN="' + token + '";\n'
     + 'var SUPABASE_URL="' + SUPABASE_URL + '";\n'
     + 'var ANON_KEY="' + SUPABASE_ANON_KEY + '";\n'
-    + 'const src=await new Request("' + location.origin + '/pehar-widget.js").loadString();\n'
+    + 'const src=await new Request("' + location.origin + '/pehar-widget.js?t="+Date.now()).loadString();\n'
     + 'await eval(src);';
 }
 

@@ -51,26 +51,30 @@
     const ht = head.addText("PEHAR"); ht.font = Font.boldSystemFont(10); ht.textColor = new Color(MUT);
     head.addSpacer();
     const c = head.addText((feed.done || 0) + " / " + (feed.total || items.length)); c.font = Font.mediumSystemFont(10); c.textColor = new Color(GOLD);
-    w.addSpacer(9);
+    w.addSpacer(fam === "large" ? 7 : 9);
     const n = nowMin();
-    const max = fam === "large" ? 9 : (fam === "medium" ? 4 : 3);
-    const gap = fam === "small" ? 5 : 7;
+    // Focus on what's ahead: drop items that are already finished AND done, so a busy day's
+    // remaining schedule fits. Missed (past but not done) items stay visible.
+    const upcoming = items.filter(function(it) { const s = toMin(it.t), e = it.end ? toMin(it.end) : s + 30; return e >= n || !it.done; });
+    const max = fam === "large" ? 14 : (fam === "medium" ? 4 : 3);
+    const gap = fam === "large" ? 5 : (fam === "small" ? 5 : 7);
+    const fsz = fam === "large" ? 12 : 12.5;
     let shown = 0;
-    for (const it of items) {
-      if (shown >= max) { const more = w.addText("+" + (items.length - shown) + " more"); more.font = Font.systemFont(10); more.textColor = new Color(MUT); break; }
+    for (const it of upcoming) {
+      if (shown >= max) { const more = w.addText("+" + (upcoming.length - shown) + " more"); more.font = Font.systemFont(10); more.textColor = new Color(MUT); break; }
       const s = toMin(it.t), e = it.end ? toMin(it.end) : s + 30, isNow = s <= n && n < e;
       const row = w.addStack(); row.centerAlignContent();
       const bar = row.addStack(); bar.backgroundColor = new Color(it.c || GOLD); bar.size = new Size(3, 18); bar.cornerRadius = 2;
       row.addSpacer(8);
       const name = row.addText(it.n); name.lineLimit = 1;
-      name.font = it.done ? Font.systemFont(12.5) : (isNow ? Font.boldSystemFont(12.5) : Font.mediumSystemFont(12.5));
+      name.font = it.done ? Font.systemFont(fsz) : (isNow ? Font.boldSystemFont(fsz) : Font.mediumSystemFont(fsz));
       name.textColor = new Color(FG, it.done ? 0.45 : 1);
       row.addSpacer();
       const tm = row.addText(isNow ? "now" : pretty(it.t)); tm.font = Font.systemFont(9.5); tm.textColor = new Color(isNow ? GOLD : MUT);
       w.addSpacer(gap);
       shown++;
     }
-    if (!items.length) { const em = w.addText(feed.error ? "Open Waqt to sync" : "No timed items today"); em.font = Font.systemFont(12); em.textColor = new Color(MUT); }
+    if (shown === 0) { const em = w.addText(feed.error ? "Open Waqt to sync" : (items.length ? "All done for today" : "No timed items today")); em.font = Font.systemFont(12); em.textColor = new Color(MUT); }
   }
 
   if (typeof Script !== "undefined") { Script.setWidget(w); Script.complete(); }

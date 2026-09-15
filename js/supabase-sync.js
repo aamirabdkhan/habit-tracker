@@ -294,6 +294,7 @@ if (sbClient) {
             currentUser = session.user;
             subscribeRealtime();
             if (typeof resyncPrayerReminders === "function") resyncPrayerReminders();
+            if (typeof publishWidgetFeed === "function") setTimeout(publishWidgetFeed, 2000);
             if (oldUser && oldUser.id !== currentUser.id) {
                 clearLocalHabitData();
                 syncDown();

@@ -7,15 +7,26 @@
 // this only records real local edits (add/remove/toggle items) and the one-time v3 migration.
 if (typeof sDef === "function" && !sDef.__mtWrapped) {
   var _sDefBase = sDef;
-  sDef = function(d) { _sDefBase(d); try { localStorage.setItem("ht_d_mt", String(Date.now())); } catch(e) {} };
+  sDef = function(d) { _sDefBase(d); try { localStorage.setItem("ht_d_mt", String(Date.now())); } catch(e) {} if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); };
   sDef.__mtWrapped = true;
+}
+// Republish the widget feed whenever the day record or a reminder time changes (completions, times).
+if (typeof sDay === "function" && !sDay.__wpWrapped) {
+  var _sDayBase = sDay;
+  sDay = function() { var r = _sDayBase.apply(this, arguments); if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); return r; };
+  sDay.__wpWrapped = true;
+}
+if (typeof setNotifTime === "function" && !setNotifTime.__wpWrapped) {
+  var _setNotifBase = setNotifTime;
+  setNotifTime = function() { var r = _setNotifBase.apply(this, arguments); if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); return r; };
+  setNotifTime.__wpWrapped = true;
 }
 
 // ---- App updates (no reinstall, no data loss) --------------------------------------------------
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-09-11.2";
+var APP_VERSION = "2026-09-11.3";
 var swReg = null;
 // Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
 // worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
@@ -82,6 +93,58 @@ function takbeerStreak() {
   }
   if (todayCounts) count++;
   return count;
+}
+
+// ---- Pehar home-screen widget (Scriptable) -----------------------------------------------------
+// Publishes today's timed Pehar to a Supabase row the Scriptable widget reads by token.
+var WIDGET_TOKEN_KEY = "ht_widget_token";
+function computeWidgetPayload() {
+  var key = dk(new Date()), day = gDay(key), dow = new Date().getDay(), items = [];
+  if (prayersOn()) PRAYERS.forEach(function(p) {
+    var t = getNotifTime("prayers", p);
+    if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true });
+  });
+  getCards().forEach(function(card) {
+    dayItemsForCard(card, day, dow).forEach(function(it) {
+      if (!it.time) return;
+      var end = timeToMin(it.time) + effectiveDur(card.id, it.n, it.oneday, day);
+      items.push({ n:it.n, t:it.time, end:minToHHMM(end), c:card.color, done:!!it.done });
+    });
+  });
+  items.sort(function(a, b) { return timeToMin(a.t) - timeToMin(b.t); });
+  var done = items.filter(function(i) { return i.done; }).length;
+  var dstr = "";
+  try { dstr = new Date().toLocaleDateString(undefined, { weekday:"short", day:"numeric", month:"short" }); } catch(e) {}
+  return { date:dstr, done:done, total:items.length, items:items };
+}
+function publishWidgetFeed() {
+  if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return;
+  sbClient.from("widget_feed").upsert(
+    { user_id:currentUser.id, payload:computeWidgetPayload(), updated_at:new Date().toISOString() },
+    { onConflict:"user_id" }
+  ).select("token").then(function(res) {
+    if (res.error) return;
+    if (res.data && res.data[0] && res.data[0].token) {
+      try { localStorage.setItem(WIDGET_TOKEN_KEY, res.data[0].token); } catch(e) {}
+      if (view === "prefs" && typeof render === "function") render();
+    }
+  });
+}
+var _widgetPubTimer = null;
+function scheduleWidgetPublish() {
+  if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return;
+  clearTimeout(_widgetPubTimer);
+  _widgetPubTimer = setTimeout(publishWidgetFeed, 1500);
+}
+// The tiny loader the user pastes into Scriptable. It fetches pehar-widget.js (so we can update the
+// widget later without anyone re-pasting) and runs it with their token baked in.
+function widgetLoaderText() {
+  var token = localStorage.getItem(WIDGET_TOKEN_KEY) || "(open this screen while signed in to get your token)";
+  return 'var TOKEN="' + token + '";\n'
+    + 'var SUPABASE_URL="' + SUPABASE_URL + '";\n'
+    + 'var ANON_KEY="' + SUPABASE_ANON_KEY + '";\n'
+    + 'const src=await new Request("' + location.origin + '/pehar-widget.js").loadString();\n'
+    + 'await eval(src);';
 }
 
 // Remove a one-day (today-only) item from the current day record (Task 9C). Base cards live at
@@ -1550,6 +1613,22 @@ function rPrefs() {
   h += '<button type="button" class="bt t-sm" data-a="doupdate"><i class="fas fa-rotate mr-1.5"></i>Check for updates</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Gets the latest features without removing the app from your home screen.</p></div>';
 
+  h += '<div class="cd"><div class="sec-t"><i class="fas fa-table-cells-large mr-1.5" style="color:var(--ac)"></i>Home screen widget</div>';
+  if (typeof currentUser !== "undefined" && currentUser) {
+    h += '<p class="t-xs mb-3" style="color:var(--mt)">Show today’s Pehar on your iPhone home screen, using the free Scriptable app.</p>';
+    h += '<button type="button" class="bt bta t-sm" data-a="copywidgetscript"><i class="fas fa-copy mr-1.5"></i>Copy widget script</button>';
+    h += '<ol class="sch-parsesteps" style="margin-top:11px">'
+      + '<li>Install <b>Scriptable</b> (free, from the App Store).</li>'
+      + '<li>Tap <b>Copy widget script</b> above.</li>'
+      + '<li>Open Scriptable, tap <b>+</b> for a new script, paste, and name it <b>Pehar</b>.</li>'
+      + '<li>Long-press your home screen, tap <b>+</b>, add a <b>Scriptable</b> widget (Large), then edit it and pick the <b>Pehar</b> script.</li>'
+      + '</ol>';
+    h += '<p class="sch-parsehint">Lock-screen widgets work too, but iOS shows them in white only. Anyone with the script can see your schedule, so keep it to your own devices.</p>';
+  } else {
+    h += '<p class="t-xs" style="color:var(--mt)">Connect Cloud Sync above first, then your widget script appears here.</p>';
+  }
+  h += '</div>';
+
   h += rFoot();
   return h + '</div>';
 }
@@ -2478,7 +2557,14 @@ document.getElementById("app").addEventListener("click", function(e) {
       render();
       return;
     }
-    if (a === "vprefs") { view = "prefs"; render(); window.scrollTo(0, 0); return; }
+    if (a === "vprefs") { view = "prefs"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
+    if (a === "copywidgetscript") {
+      if (!localStorage.getItem(WIDGET_TOKEN_KEY)) { publishWidgetFeed(); toast("Preparing your widget, tap Copy again in a moment"); return; }
+      var wscript = widgetLoaderText();
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(wscript).then(function() { toast("Widget script copied"); }, function() { copyImportFallback(wscript); });
+      else copyImportFallback(wscript);
+      return;
+    }
     if (a === "doupdate") {
       toast("Updating…");
       var reload = function() { location.reload(); };

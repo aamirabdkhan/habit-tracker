@@ -1,0 +1,20 @@
+/* Waqt design system — the single source of visual truth.
+   gold = identity (sundial) · green = done/prayer · warm near-black canvas.
+   Editorial serif (display) + Space Grotesk (body) + mono (technical dialect). */
+:root{
+  --bg:#0C0B09; --surface:#151310; --surface-2:#1D1A15;
+  --rule:rgba(236,231,218,.09); --rule-2:rgba(236,231,218,.16);
+  --ink:#ECE7DA; --ink-2:#9A9384; --ink-3:#5F5A4E;
+  --gold:#C9943E; --gold-dim:rgba(201,148,62,.14);
+  --green:#5FA46B; --green-dim:rgba(95,164,107,.14);
+  --amber:#D9A24B; --amber-dim:rgba(217,162,75,.14); --red:#C56B5B;
+  --sel-bg:rgba(201,148,62,.14); --sel-bd:var(--gold);
+
+  --serif:"DM Serif Display",Georgia,serif;
+  --sans:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  --r-sm:7px; --r-md:11px; --r-lg:14px;
+  --tab-h:84px;
+}

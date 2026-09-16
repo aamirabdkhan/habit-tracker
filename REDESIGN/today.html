@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Waqt — Today (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---- WAQT design tokens · Muslim-first QUIET PRECISION ----
+   gold = identity (sundial), green = prayer/done (semantic), warm near-black canvas,
+   hairline rules over cards, serif display + grotesk body + mono technical dialect. */
+:root{
+  --bg:#0C0B09; --surface:#151310; --surface-2:#1D1A15;
+  --rule:rgba(236,231,218,.09); --rule-2:rgba(236,231,218,.16);
+  --ink:#ECE7DA; --ink-2:#9A9384; --ink-3:#5F5A4E;
+  --gold:#C9943E; --gold-dim:rgba(201,148,62,.16);
+  --green:#5FA46B; --green-dim:rgba(95,164,107,.16);
+  --amber:#D9A24B; --red:#C56B5B;
+  --serif:"DM Serif Display",Georgia,serif;
+  --sans:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;
+  max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:84px}
+.wrap{padding:0 20px}
+.rule{height:1px;background:var(--rule);border:0}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
+
+/* ---- top: brand + day nav ---- */
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 6px}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-size:22px}
+.brand .sun{width:20px;height:20px;color:var(--gold)}
+.top .gear{background:none;border:none;color:var(--ink-2);cursor:pointer;padding:6px}
+.top .gear svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+/* ---- week strip ---- */
+.week{display:flex;gap:4px;padding:10px 20px 4px}
+.wd{flex:1;text-align:center;padding:8px 0;border-radius:9px;cursor:pointer}
+.wd .dow{font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink-3)}
+.wd .dn{font-family:var(--serif);font-size:18px;color:var(--ink-2);margin-top:3px}
+.wd.on{background:var(--surface)}
+.wd.on .dn{color:var(--ink)}
+.wd.on{box-shadow:inset 0 0 0 1px var(--rule-2)}
+.wd .prog{width:5px;height:5px;border-radius:50%;background:var(--green);margin:5px auto 0;opacity:.9}
+.wd .prog.none{background:var(--ink-3);opacity:.5}
+
+/* ---- up next: next-prayer + what follows, merged (glanceable, Muslim-first) ---- */
+.upnext{margin:16px 20px 0;border:1px solid var(--rule);border-radius:14px;padding:18px 18px 14px;
+  background:linear-gradient(180deg,rgba(201,148,62,.05),transparent)}
+.un-top{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.un-top .k{font-family:var(--mono);font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold)}
+.un-top .p{font-family:var(--serif);font-size:34px;line-height:1.05;margin-top:4px}
+.un-top .t{font-family:var(--mono);font-size:12px;color:var(--ink-2);margin-top:4px}
+.un-top .ring{width:60px;height:60px;flex:0 0 auto;position:relative}
+.un-top .ring svg{transform:rotate(-90deg)}
+.un-top .ring .pct{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--mono);font-size:14px;color:var(--ink)}
+.un-list{position:relative;padding-left:20px;margin-top:15px;border-top:1px solid var(--rule);padding-top:13px}
+.un-list::before{content:"";position:absolute;left:5px;top:20px;bottom:12px;width:1px;background:var(--rule-2)}
+.un-row{display:flex;align-items:center;gap:12px;padding:6px 0;position:relative;cursor:pointer}
+.un-dot{position:absolute;left:-18px;top:50%;margin-top:-4.5px;width:9px;height:9px;aspect-ratio:1;border-radius:50%;box-shadow:0 0 0 3px var(--bg)}
+.un-dot.un-pr{background:var(--green)}
+.un-dot.un-task{background:var(--gold)}
+.un-tm{font-family:var(--mono);font-size:12px;color:var(--ink-2);min-width:48px}
+.un-nm{flex:1;font-size:15px}
+.un-tag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.un-link{background:none;border:none;color:var(--gold);font-family:var(--mono);font-size:11px;letter-spacing:.1em;cursor:pointer;margin-top:8px;padding:4px 0}
+
+/* ---- summary numbers ---- */
+.summary{display:grid;grid-template-columns:1fr 1fr 1fr;margin:20px 0 4px}
+.sm{padding:0 14px;border-left:1px solid var(--rule)}
+.sm:first-child{padding-left:0;border-left:0}
+.sm .n{font-family:var(--serif);font-size:26px}
+.sm .n small{color:var(--ink-3)}
+.sm .l{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+/* ---- section head ---- */
+.sec{border-top:1px solid var(--rule);margin-top:22px;padding-top:18px}
+.sec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+.sec-num{font-family:var(--mono);font-size:16px;color:var(--ink-3);min-width:24px}
+.sec-name{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;flex:1}
+.sec-meta{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+
+/* ---- prayers (Muslim-first, first-class) ---- */
+.prayers{display:flex;gap:8px}
+.pr{flex:1;border:1px solid var(--rule);border-radius:11px;padding:12px 6px;text-align:center;cursor:pointer;position:relative}
+.pr .nm{font-size:13px;color:var(--ink)}
+.pr .tm{font-family:var(--mono);font-size:10px;color:var(--ink-3);margin-top:4px}
+.pr.done{background:var(--green-dim);border-color:rgba(95,164,107,.4)}
+.pr.done .nm{color:var(--green)}
+.pr.next{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.pr.next .nm{color:var(--gold)}
+.pr .chk{position:absolute;top:6px;right:7px;font-size:10px;color:var(--green)}
+.takbir{display:flex;align-items:center;justify-content:space-between;margin-top:14px;
+  border-top:1px dashed var(--rule);padding-top:14px}
+.takbir .tl{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.takbir .streak{font-family:var(--mono);font-size:12px;color:var(--gold)}
+.takbir .dots{display:flex;gap:5px;margin-top:8px}
+.tdot{width:14px;height:14px;border-radius:5px;border:1px solid var(--rule);display:grid;place-items:center;font-size:8px;color:var(--ink-3)}
+.tdot.on{background:var(--gold-dim);border-color:var(--gold);color:var(--gold)}
+
+/* ---- practice card ---- */
+.card{margin-top:14px}
+.card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.card-h .cn{font-size:14px;font-weight:600;display:flex;align-items:center;gap:9px}
+.card-h .cn .cdot{width:8px;height:8px;border-radius:50%}
+.card-h .cc{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.item{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--rule);cursor:pointer}
+.box{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--rule-2);flex:0 0 auto;display:grid;place-items:center}
+.box svg{width:11px;height:11px;stroke:var(--bg);fill:none;stroke-width:3}
+.item.done .box{background:var(--green);border-color:var(--green)}
+.item.done .nm{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--ink-3)}
+.item .nm{flex:1;font-size:15px}
+.item .track{font-family:var(--mono);font-size:10px;color:var(--gold);letter-spacing:.08em}
+.additem{display:flex;align-items:center;gap:10px;padding:11px 0 2px;border-top:1px solid var(--rule)}
+.additem input{flex:1;background:none;border:none;color:var(--ink);font-family:var(--sans);font-size:15px;outline:none}
+.additem input::placeholder{color:var(--ink-3)}
+.additem .plus{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.08em}
+.card-actions{display:flex;gap:8px;margin-top:12px}
+.ghost{flex:1;background:none;border:1px solid var(--rule);border-radius:9px;color:var(--ink-2);
+  font-family:var(--sans);font-size:12px;padding:9px 6px;cursor:pointer}
+
+/* ---- weight ---- */
+.weight{display:flex;align-items:center;justify-content:space-between}
+.weight .wv{font-family:var(--serif);font-size:24px}
+.weight .wv small{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.weight .wnote{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+/* ---- reflection ---- */
+.reflect{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--rule);
+  border-radius:12px;padding:15px 16px;margin-top:16px;cursor:pointer}
+.reflect .rl{font-family:var(--serif);font-size:17px}
+.reflect .rs{font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-top:2px}
+.reflect .rdot{width:9px;height:9px;border-radius:50%;background:var(--amber)}
+
+/* ---- bottom tabs (four modes) ---- */
+.tabs{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;
+  background:rgba(12,11,9,.94);backdrop-filter:blur(12px);border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(4,1fr);padding:10px 0 16px;z-index:8}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;
+  color:var(--ink-3);cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.06em}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+.tab.on{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <circle cx="12" cy="10" r="4"/><path d="M12 2v2M12 16v0M4 10H2M22 10h-2M6 4.5 5 3.5M18 4.5l1-1"/>
+      <path d="M8 20l4-3 4 3" stroke-linejoin="round"/></svg>
+    Waqt
+  </div>
+  <button class="gear" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+</div>
+
+<div class="week">
+  <div class="wd"><div class="dow">S</div><div class="dn">13</div><div class="prog"></div></div>
+  <div class="wd"><div class="dow">M</div><div class="dn">14</div><div class="prog"></div></div>
+  <div class="wd"><div class="dow">T</div><div class="dn">15</div><div class="prog none"></div></div>
+  <div class="wd on"><div class="dow">W</div><div class="dn">16</div><div class="prog"></div></div>
+  <div class="wd"><div class="dow">T</div><div class="dn">17</div></div>
+  <div class="wd"><div class="dow">F</div><div class="dn">18</div></div>
+  <div class="wd"><div class="dow">S</div><div class="dn">19</div></div>
+</div>
+
+<div class="upnext">
+  <div class="un-top">
+    <div class="l">
+      <div class="k">Next prayer</div>
+      <div class="p">Asr</div>
+      <div class="t">4:35 PM · in 1h 12m</div>
+    </div>
+    <div class="ring">
+      <svg width="60" height="60" viewBox="0 0 60 60">
+        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--rule-2)" stroke-width="4"/>
+        <circle cx="30" cy="30" r="26" fill="none" stroke="var(--green)" stroke-width="4"
+          stroke-linecap="round" stroke-dasharray="163" stroke-dashoffset="90"/>
+      </svg>
+      <div class="pct">45%</div>
+    </div>
+  </div>
+  <div class="un-list">
+    <div class="un-row"><span class="un-dot un-task"></span><span class="un-tm">5:30</span><span class="un-nm">Gym</span><span class="un-tag">45m</span></div>
+    <div class="un-row"><span class="un-dot un-pr"></span><span class="un-tm">7:25</span><span class="un-nm">Maghrib</span><span class="un-tag">prayer</span></div>
+    <div class="un-row"><span class="un-dot un-pr"></span><span class="un-tm">9:25</span><span class="un-nm">Isha</span><span class="un-tag">prayer</span></div>
+  </div>
+  <button class="un-link">Open Pehar →</button>
+</div>
+
+<div class="wrap">
+  <div class="summary">
+    <div class="sm"><div class="n">2<small>/5</small></div><div class="l">Prayers</div></div>
+    <div class="sm"><div class="n">2<small>/3</small></div><div class="l">Goals</div></div>
+    <div class="sm"><div class="n">81<small>kg</small></div><div class="l">Weight</div></div>
+  </div>
+
+  <!-- 01 PRAYERS -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">01</span><span class="sec-name">Prayers</span><span class="sec-meta">2 / 5</span></div>
+    <div class="prayers">
+      <div class="pr done"><span class="chk">✓</span><div class="nm">Fajr</div><div class="tm">5:30</div></div>
+      <div class="pr done"><span class="chk">✓</span><div class="nm">Dhuhr</div><div class="tm">1:10</div></div>
+      <div class="pr next"><div class="nm">Asr</div><div class="tm">4:35</div></div>
+      <div class="pr"><div class="nm">Maghrib</div><div class="tm">7:25</div></div>
+      <div class="pr"><div class="nm">Isha</div><div class="tm">9:25</div></div>
+    </div>
+    <div class="takbir">
+      <div>
+        <div class="tl">First Takbīr</div>
+        <div class="dots">
+          <span class="tdot on">✓</span><span class="tdot on">✓</span><span class="tdot"></span>
+          <span class="tdot"></span><span class="tdot"></span>
+        </div>
+      </div>
+      <div class="streak">🔥 12 / 40 days</div>
+    </div>
+  </div>
+
+  <!-- 02 PRACTICES -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">02</span><span class="sec-name">Practices</span><span class="sec-meta">2 / 3</span></div>
+
+    <div class="card">
+      <div class="card-h"><div class="cn"><span class="cdot" style="background:var(--green)"></span>Daily Goals</div><div class="cc">2/3</div></div>
+      <div class="item done"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="nm">Morning walk</span></div>
+      <div class="item done"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="nm">Read 10 pages</span></div>
+      <div class="item"><span class="box"></span><span class="nm">Sleep before 12</span></div>
+      <div class="additem"><input placeholder="Add for today…"><span class="plus">+ ADD</span></div>
+    </div>
+
+    <div class="card" style="margin-top:22px">
+      <div class="card-h"><div class="cn"><span class="cdot" style="background:var(--amber)"></span>Health</div><div class="cc">0/2</div></div>
+      <div class="item"><span class="box"></span><span class="nm">Exercise</span></div>
+      <div class="item"><span class="box"></span><span class="nm">2L water</span></div>
+      <div class="additem"><input placeholder="Add for today…"><span class="plus">+ ADD</span></div>
+    </div>
+
+    <div class="card-actions">
+      <button class="ghost">✦ Set up with AI</button>
+      <button class="ghost">⧉ Copy yesterday</button>
+    </div>
+  </div>
+
+  <!-- 03 WEIGHT -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">03</span><span class="sec-name">Weight</span></div>
+    <div class="weight">
+      <div class="wv">81.2 <small>kg</small></div>
+      <div class="wnote">logged today · −0.4 this week</div>
+    </div>
+  </div>
+
+  <!-- reflection -->
+  <div class="reflect">
+    <div>
+      <div class="rl">Reflect on today</div>
+      <div class="rs">5 quiet prompts · not done yet</div>
+    </div>
+    <span class="rdot"></span>
+  </div>
+</div>
+
+<nav class="tabs">
+  <button class="tab on"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>Today</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pehar</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Overview</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Template</button>
+</nav>
+
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Waqt — Overview (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C0B09; --surface:#151310; --surface-2:#1D1A15;
+  --rule:rgba(236,231,218,.09); --rule-2:rgba(236,231,218,.16);
+  --ink:#ECE7DA; --ink-2:#9A9384; --ink-3:#5F5A4E;
+  --gold:#C9943E; --gold-dim:rgba(201,148,62,.14);
+  --green:#5FA46B; --green-dim:rgba(95,164,107,.14);
+  --amber:#D9A24B; --amber-dim:rgba(217,162,75,.14); --red:#C56B5B;
+  --serif:"DM Serif Display",Georgia,serif;
+  --sans:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;
+  max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:84px}
+.wrap{padding:0 20px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-3)}
+
+/* top */
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 6px}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-size:22px}
+.brand .sun{width:20px;height:20px;color:var(--gold)}
+.top .gear{background:none;border:none;color:var(--ink-2);cursor:pointer;padding:6px}
+.top .gear svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+.head{font-family:var(--serif);font-size:34px;padding:8px 0 2px}
+.range{display:flex;gap:6px;margin-top:14px;border:1px solid var(--rule);border-radius:10px;padding:4px}
+.range button{flex:1;background:none;border:none;color:var(--ink-2);font-family:var(--mono);font-size:12px;
+  letter-spacing:.06em;padding:9px 0;border-radius:7px;cursor:pointer}
+.range button.on{background:var(--surface-2);color:var(--ink)}
+
+/* section head */
+.sec{border-top:1px solid var(--rule);margin-top:24px;padding-top:18px}
+.sec-h{display:flex;align-items:baseline;gap:14px;margin-bottom:16px}
+.sec-num{font-family:var(--mono);font-size:16px;color:var(--ink-3);min-width:24px}
+.sec-name{font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;flex:1}
+.sec-meta{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+/* patterns (the USP) */
+.pat{padding:16px 0;border-top:1px solid var(--rule)}
+.pat:first-of-type{border-top:0;padding-top:0}
+.pat .ins{font-family:var(--serif);font-size:19px;line-height:1.3}
+.pat .ev{display:flex;align-items:center;gap:12px;margin-top:12px}
+.proof{display:flex;gap:4px}
+.proof i{width:9px;height:9px;border-radius:50%;background:var(--ink-3);opacity:.4}
+.proof i.hit{background:var(--green);opacity:1}
+.proof i.hit.amber{background:var(--amber)}
+.pat .cnt{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.chip{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+  padding:4px 9px;border-radius:6px;margin-left:auto}
+.chip.strong{background:var(--green-dim);color:var(--green)}
+.chip.emerging{background:var(--amber-dim);color:var(--amber)}
+.watching{border-top:1px dashed var(--rule);margin-top:18px;padding-top:16px}
+.watching .wl{font-family:var(--mono);font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+.wrow{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:7px 0}
+.wrow .wt{font-size:14px;color:var(--ink-2)}
+.wrow .wn{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:0 0 auto}
+
+/* consistency dot rows */
+.crow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--rule)}
+.crow:first-of-type{border-top:0}
+.crow .cn{font-size:15px;min-width:104px}
+.dots7{display:flex;gap:6px;flex:1}
+.dots7 i{width:11px;height:11px;border-radius:50%;background:var(--ink-3);opacity:.35}
+.dots7 i.on{background:var(--green);opacity:1}
+/* prayers use the same green "done" as practices — sections label the difference, colour stays consistent */
+.crow .cpct{font-family:var(--mono);font-size:12px;color:var(--ink-2);min-width:38px;text-align:right}
+.crow .cstreak{font-family:var(--mono);font-size:11px;color:var(--gold);min-width:34px;text-align:right}
+.cmeta{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:2px}
+.pmeta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink-3);padding:9px 0 0}
+
+/* weight trend */
+.wt-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+.wt-v{font-family:var(--serif);font-size:28px}
+.wt-v small{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
+.wt-d{font-family:var(--mono);font-size:12px;color:var(--green)}
+.spark{width:100%;height:70px}
+
+/* bottom tabs */
+.tabs{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;
+  background:rgba(12,11,9,.94);backdrop-filter:blur(12px);border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(4,1fr);padding:10px 0 16px;z-index:8}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;
+  color:var(--ink-3);cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.06em}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+.tab.on{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <circle cx="12" cy="10" r="4"/><path d="M12 2v2M4 10H2M22 10h-2M6 4.5 5 3.5M18 4.5l1-1"/>
+      <path d="M8 20l4-3 4 3" stroke-linejoin="round"/></svg>
+    Waqt
+  </div>
+  <button class="gear" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+</div>
+
+<div class="wrap">
+  <div class="head">Overview</div>
+  <div class="range"><button class="on">Week</button><button>Month</button><button>Year</button></div>
+
+  <!-- 01 PATTERNS — the USP, honest about confidence -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">01</span><span class="sec-name">Patterns</span><span class="sec-meta">what the record is showing</span></div>
+
+    <div class="pat">
+      <div class="ins">You miss <b>Fajr</b> on nights you sleep past 1 AM.</div>
+      <div class="ev">
+        <div class="proof">
+          <i class="hit"></i><i class="hit"></i><i class="hit"></i><i class="hit"></i><i class="hit"></i>
+          <i class="hit"></i><i class="hit"></i><i class="hit"></i><i></i><i></i>
+        </div>
+        <span class="cnt">8 of 10 late nights</span>
+        <span class="chip strong">Strong</span>
+      </div>
+    </div>
+
+    <div class="pat">
+      <div class="ins">Your mood runs higher on days you <b>exercise</b>.</div>
+      <div class="ev">
+        <div class="proof">
+          <i class="hit amber"></i><i class="hit amber"></i><i class="hit amber"></i><i class="hit amber"></i>
+          <i class="hit amber"></i><i></i><i></i>
+        </div>
+        <span class="cnt">5 of 7 days</span>
+        <span class="chip emerging">Emerging</span>
+      </div>
+    </div>
+
+    <div class="watching">
+      <div class="wl">Still watching · not enough days yet</div>
+      <div class="wrow"><span class="wt">Reading may improve your sleep</span><span class="wn">4 days</span></div>
+      <div class="wrow"><span class="wt">Skipping Dhuhr ↔ lower evening mood</span><span class="wn">3 days</span></div>
+    </div>
+  </div>
+
+  <!-- 02 PRAYERS -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">02</span><span class="sec-name">Prayers</span><span class="sec-meta">last 7 days</span></div>
+    <div class="crow"><span class="cn">Fajr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥3</span></div>
+    <div class="crow"><span class="cn">Dhuhr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">100%</span><span class="cstreak">🔥7</span></div>
+    <div class="crow"><span class="cn">Asr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥2</span></div>
+    <div class="crow"><span class="cn">Maghrib</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥1</span></div>
+    <div class="crow"><span class="cn">Isha</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥4</span></div>
+    <div class="pmeta"><span>Best prayer · Dhuhr</span><span>Needs care · Isha</span></div>
+  </div>
+
+  <!-- 03 PRACTICES -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">03</span><span class="sec-name">Practices</span><span class="sec-meta">this month</span></div>
+    <div class="crow"><span class="cn">Morning walk</span><div class="dots7"><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div><span class="cpct">18/22</span><span class="cstreak">🔥4</span></div>
+    <div class="crow"><span class="cn">Read 10 pages</span><div class="dots7"><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i></div><span class="cpct">15/22</span><span class="cstreak">🔥2</span></div>
+    <div class="crow"><span class="cn">Exercise</span><div class="dots7"><i></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i></div><span class="cpct">9/22</span><span class="cstreak">—</span></div>
+    <div class="crow"><span class="cn">Sleep before 12</span><div class="dots7"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i></div><span class="cpct">17/22</span><span class="cstreak">🔥3</span></div>
+  </div>
+
+  <!-- 04 WEIGHT -->
+  <div class="sec">
+    <div class="sec-h"><span class="sec-num">04</span><span class="sec-name">Weight</span><span class="sec-meta">30 days</span></div>
+    <div class="wt-top"><div class="wt-v">81.2 <small>kg</small></div><div class="wt-d">−1.3 kg this month</div></div>
+    <svg class="spark" viewBox="0 0 320 70" preserveAspectRatio="none">
+      <polyline fill="none" stroke="var(--rule-2)" stroke-width="1" points="0,60 320,60"/>
+      <polyline fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+        points="0,14 45,20 90,16 135,30 180,26 225,40 270,44 320,52"/>
+      <circle cx="320" cy="52" r="3.5" fill="var(--gold)"/>
+    </svg>
+  </div>
+</div>
+
+<nav class="tabs">
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>Today</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pehar</button>
+  <button class="tab on"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Overview</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Template</button>
+</nav>
+
+</body>
+</html>

@@ -1,68 +1,88 @@
-// data/store.js — the SINGLE storage boundary. Views never touch localStorage;
-// they call these named functions. Today this is backed by an in-memory sample so
-// the UI can be built and previewed; the real localStorage implementation (reading
-// the production `ht_d` / `ht_<date>` schema — see schema.js) drops in behind these
-// exact signatures next, without touching any view.
+// data/store.js — the SINGLE storage boundary (clean v2 schema in localStorage).
+// Views call these named functions; nothing else touches localStorage.
+//
+// Shape:  localStorage["waqt.v2"] = { version:2, template, days:{ "YYYY-MM-DD": Day } }
+//   Day = { prayers:{name:true}, takbir:{prayer:true}, checks:{practiceName:true},
+//           water:int, weight:number|null, reading:{book:pages}, reflections:{} }
+// Checks are keyed by practice NAME so history survives any card re-grouping.
 
-/** Local date key YYYY-MM-DD (local parts, matching the production `dayKey`). */
+import { PRAYERS, hasLegacy, migrateLegacyDays } from './migrate.js';
+export { PRAYERS };
+
+const KEY = 'waqt.v2';
+
+/** Local date key YYYY-MM-DD (matches production dayKey). */
 export function todayKey(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-export const PRAYERS = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-
-// ---- sample data (temporary; replaced by localStorage-backed reads) --------------
-const template = {
-  cards: [
-    { id: 'goals', name: 'Daily Goals', color: 'var(--green)', items: [
-      { id: 'walk', name: 'Morning walk', tracked: true },
-      { id: 'read', name: 'Read 10 pages', tracked: true },
-      { id: 'sleep', name: 'Sleep before 12', tracked: true },
-    ] },
-    { id: 'health', name: 'Health', color: 'var(--amber)', items: [
-      { id: 'ex', name: 'Exercise', tracked: true },
-      { id: 'water', name: '2L water', tracked: false },
-    ] },
-  ],
-  modules: { prayers: true, pehar: true, weight: true, reflections: true },
-  takbirTargetDays: 40,
-};
-
-const days = {
-  [todayKey()]: {
-    prayers: { Fajr: true, Dhuhr: true, Asr: false, Maghrib: false, Isha: false },
+/**
+ * Fresh card seed — the recurring practices suggested from the user's history
+ * (one-off tasks like "SIR form submission" are intentionally excluded; they
+ * stay in history by name). Colours reuse the user's prior card palette.
+ * Editable later in the Template screen.
+ */
+function seedTemplate() {
+  const card = (id, name, color, items) => ({ id, name, color, items: items.map((n) => ({ name: n, tracked: true })) });
+  return {
+    cards: [
+      card('deeds', 'Adhkar & Deeds', '#b05a86', [
+        'Tahajjud', 'Fajr Adhkar', 'Maghrib Adhkar', 'Ruqyah Fajr', 'Ruqyah Maghrib',
+        'Surah Mulk', 'Surah Rahman', 'Surah Waqiyah',
+      ]),
+      card('study', 'Study', '#e0a33a', ['CEH', 'Flashcards + quizzes', 'Videos', 'CTF']),
+      card('health', 'Health', '#4090d6', [
+        'Exercise', 'Morning walk', 'No Nap', 'No Fap', 'No Porn', 'No sugar', 'No screen while eating',
+      ]),
+      card('routine', 'Meds & Routine', '#5FA46B', [
+        'Morning Medicine', 'Night Medicine', 'Breakfast', 'Lunch', 'Dinner', 'Sleep', 'Wind up the day',
+      ]),
+    ],
     prayerTimes: { Fajr: '5:30', Dhuhr: '1:10', Asr: '4:35', Maghrib: '7:25', Isha: '9:25' },
-    takbir: [true, true, false, false, false],
-    checks: { walk: true, read: true, sleep: false, ex: false, water: false },
-    weight: 81.2,
-    reflectionDone: false,
-  },
-};
-
-function blankDay() {
-  return { prayers: {}, prayerTimes: {}, takbir: [], checks: {}, weight: null, reflectionDone: false };
+    modules: { prayers: true, pehar: true, weight: true, reflections: true },
+    takbirTargetDays: 40,
+  };
 }
+
+const blankDay = () => ({ prayers: {}, takbir: {}, checks: {}, water: 0, weight: null, reading: {}, reflections: {} });
+
+// ---- load (with first-run migration) ----
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* fall through to rebuild */ }
+  const data = { version: 2, template: seedTemplate(), days: hasLegacy() ? migrateLegacyDays() : {} };
+  save(data);
+  return data;
+}
+function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* quota/private mode */ } }
+
+let data = load();
 
 // ---- read ----
-export const getTemplate = () => template;
+export const getTemplate = () => data.template;
 export function getDay(key) {
-  return days[key] || (days[key] = blankDay());
+  if (!data.days[key]) data.days[key] = blankDay();
+  return data.days[key];
 }
+/** All day keys that have any logged data (for Overview/History/engine). */
+export const loggedDayKeys = () => Object.keys(data.days).sort();
 
-// ---- write (mutate + persist; persistence is a no-op in the sample) ----
+// ---- write (mutate + persist; TODO: queue cloud sync here) ----
 export function togglePrayer(key, name) {
   const day = getDay(key);
-  day.prayers[name] = !day.prayers[name];
-  persist(key);
+  if (day.prayers[name]) delete day.prayers[name]; else day.prayers[name] = true;
+  save(data);
 }
-export function toggleCheck(key, itemId) {
+export function toggleCheck(key, name) {
   const day = getDay(key);
-  day.checks[itemId] = !day.checks[itemId];
-  persist(key);
+  if (day.checks[name]) delete day.checks[name]; else day.checks[name] = true;
+  save(data);
 }
-
-function persist(/* key */) {
-  // TODO(store): write days[key] to localStorage as `ht_<key>` + stamp `_mt`,
-  // then queue cloud sync (data/sync.js). No-op while sample-backed.
+export function toggleTakbir(key, name) {
+  const day = getDay(key);
+  if (day.takbir[name]) delete day.takbir[name]; else day.takbir[name] = true;
+  save(data);
 }

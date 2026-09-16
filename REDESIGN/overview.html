@@ -67,16 +67,15 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 .wrow .wn{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:0 0 auto}
 
 /* consistency dot rows */
-/* month strip: one thin cell per day, filled = done — scan a whole month at a glance */
-.mrow{padding:13px 0;border-top:1px solid var(--rule)}
+/* month strip: one thin cell per day, filled = done — single dense line, scan a whole month, minimal scroll */
+.mrow{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--rule)}
 .mrow:first-of-type{border-top:0}
-.mrow-h{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
-.mrow-h .cn{font-size:15px;flex:1}
-.mrow-h .cpct{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
-.mrow-h .cstreak{font-family:var(--mono);font-size:11px;color:var(--gold);min-width:30px;text-align:right}
-.strip{display:flex;gap:3px}
-.strip i{flex:1;height:24px;border-radius:3px;background:var(--ink-3);opacity:.22}
+.mrow .cn{font-size:14px;min-width:92px;flex:0 0 auto}
+.strip{display:flex;gap:2px;flex:1;min-width:0}
+.strip i{flex:1;height:20px;border-radius:2px;background:var(--ink-3);opacity:.2}
 .strip i.on{background:var(--green);opacity:1}
+.mrow .cpct{font-family:var(--mono);font-size:11px;color:var(--ink-2);min-width:62px;text-align:right;flex:0 0 auto}
+.mrow .cstreak{display:none}
 .pmeta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink-3);padding:9px 0 0}
 
 /* weight trend */
@@ -200,10 +199,9 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
     var on=bits.split("").filter(function(c){return c==="1";}).length;
     var pct=Math.round(on/bits.length*100), cells="";
     for(var i=0;i<bits.length;i++) cells+='<i class="'+(bits[i]==="1"?"on":"")+'"></i>';
-    return '<div class="mrow"><div class="mrow-h"><span class="cn">'+name+'</span>'
-      +'<span class="cpct">'+on+'/'+bits.length+' · '+pct+'%</span>'
-      +'<span class="cstreak">'+(streak>0?"🔥"+streak:"—")+'</span></div>'
-      +'<div class="strip">'+cells+'</div></div>';
+    return '<div class="mrow"><span class="cn">'+name+'</span>'
+      +'<div class="strip">'+cells+'</div>'
+      +'<span class="cpct">'+on+'/'+bits.length+'</span></div>';
   }
   document.getElementById("prayerStrips").innerHTML=prayers.map(function(p){return strip(p[0],p[1],p[2]);}).join("");
   document.getElementById("practiceStrips").innerHTML=practices.map(function(p){return strip(p[0],p[1],p[2]);}).join("");

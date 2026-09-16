@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Waqt — Template (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C0B09; --surface:#151310; --surface-2:#1D1A15;
+  --rule:rgba(236,231,218,.09); --rule-2:rgba(236,231,218,.16);
+  --ink:#ECE7DA; --ink-2:#9A9384; --ink-3:#5F5A4E;
+  --gold:#C9943E; --gold-dim:rgba(201,148,62,.14);
+  --green:#5FA46B; --amber:#D9A24B; --red:#C56B5B;
+  --serif:"DM Serif Display",Georgia,serif;
+  --sans:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;
+  max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:84px}
+.wrap{padding:0 20px}
+.top{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 6px}
+.brand{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-size:22px}
+.brand .sun{width:20px;height:20px;color:var(--gold)}
+.top .gear{background:none;border:none;color:var(--ink-2);cursor:pointer;padding:6px}
+.top .gear svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+.head{font-family:var(--serif);font-size:34px;padding:8px 0 0}
+.sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+
+.card{margin-top:26px}
+.card-h{display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+.card-h .cdot{width:9px;height:9px;border-radius:50%}
+.card-h .cname{font-size:15px;font-weight:600;flex:1}
+.card-h .ccount{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+
+.titem{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--rule);cursor:pointer}
+.titem .tn{font-size:16px;flex:1}
+.titem .tmeta{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.04em}
+.titem .chev{color:var(--ink-3);font-size:16px;transition:transform .2s}
+.titem.open .chev{transform:rotate(90deg)}
+.titem.open{border-bottom:0}
+
+.tcfg{border-bottom:1px solid var(--rule);padding:2px 0 16px 2px}
+.cfgrow{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-top:1px solid var(--rule)}
+.cfgrow:first-child{border-top:0}
+.cfgrow .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.cfgrow .v{font-size:15px;color:var(--ink);display:flex;align-items:center;gap:8px}
+.cfgrow .v .chev{color:var(--ink-3);font-size:14px}
+.switch{appearance:none;width:44px;height:26px;background:var(--surface-2);border:1px solid var(--rule);border-radius:13px;position:relative;cursor:pointer;flex:0 0 auto}
+.switch:checked{background:var(--green);border-color:var(--green)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s}
+.switch:checked::after{left:20px}
+.del{background:none;border:none;color:var(--red);font-family:var(--mono);font-size:12px;letter-spacing:.06em;cursor:pointer;padding:12px 0 0}
+
+.additem{display:flex;align-items:center;gap:10px;padding:13px 0;color:var(--ink-3);cursor:pointer}
+.additem input{flex:1;background:none;border:none;color:var(--ink);font-family:var(--sans);font-size:15px;outline:none}
+.additem input::placeholder{color:var(--ink-3)}
+.additem .plus{font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.08em}
+.newcard{width:100%;margin-top:26px;background:none;border:1px dashed var(--rule);border-radius:11px;color:var(--ink-2);
+  font-family:var(--mono);font-size:13px;letter-spacing:.06em;padding:15px;cursor:pointer}
+
+.tabs{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;
+  background:rgba(12,11,9,.94);backdrop-filter:blur(12px);border-top:1px solid var(--rule);
+  display:grid;grid-template-columns:repeat(4,1fr);padding:10px 0 16px;z-index:8}
+.tab{display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;
+  color:var(--ink-3);cursor:pointer;font-family:var(--mono);font-size:10px;letter-spacing:.06em}
+.tab svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.6}
+.tab.on{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">
+    <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <circle cx="12" cy="10" r="4"/><path d="M12 2v2M4 10H2M22 10h-2M6 4.5 5 3.5M18 4.5l1-1"/>
+      <path d="M8 20l4-3 4 3" stroke-linejoin="round"/></svg>
+    Waqt
+  </div>
+  <button class="gear" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></svg></button>
+</div>
+
+<div class="wrap">
+  <div class="head">Template</div>
+  <div class="sub">What you repeat</div>
+
+  <div class="card">
+    <div class="card-h"><span class="cdot" style="background:var(--green)"></span><span class="cname">Daily Goals</span><span class="ccount">3 practices</span></div>
+
+    <!-- one item expanded to show "object first, config on tap" -->
+    <div class="titem open"><span class="tn">Morning walk</span><span class="chev">›</span></div>
+    <div class="tcfg">
+      <div class="cfgrow"><span class="k">Repeat</span><span class="v">Every day <span class="chev">›</span></span></div>
+      <div class="cfgrow"><span class="k">Time</span><span class="v">07:30 <span class="chev">›</span></span></div>
+      <div class="cfgrow"><span class="k">Duration</span><span class="v">45 min <span class="chev">›</span></span></div>
+      <div class="cfgrow"><span class="k">Track in Overview</span><input type="checkbox" class="switch" checked></div>
+      <button class="del">Remove practice</button>
+    </div>
+
+    <div class="titem"><span class="tn">Read 10 pages</span><span class="tmeta">Daily · tracked</span><span class="chev">›</span></div>
+    <div class="titem"><span class="tn">Sleep before 12</span><span class="tmeta">Daily · tracked</span><span class="chev">›</span></div>
+    <div class="additem"><input placeholder="Add a practice…"><span class="plus">+ ADD</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><span class="cdot" style="background:var(--amber)"></span><span class="cname">Health</span><span class="ccount">2 practices</span></div>
+    <div class="titem"><span class="tn">Exercise</span><span class="tmeta">18:00 · Mon Wed Fri · tracked</span><span class="chev">›</span></div>
+    <div class="titem"><span class="tn">2L water</span><span class="tmeta">Daily · not tracked</span><span class="chev">›</span></div>
+    <div class="additem"><input placeholder="Add a practice…"><span class="plus">+ ADD</span></div>
+  </div>
+
+  <button class="newcard">+ New card</button>
+</div>
+
+<nav class="tabs">
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>Today</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pehar</button>
+  <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Overview</button>
+  <button class="tab on"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Template</button>
+</nav>
+
+</body>
+</html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Waqt — Settings (redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0C0B09; --surface:#151310; --surface-2:#1D1A15;
+  --rule:rgba(236,231,218,.09); --rule-2:rgba(236,231,218,.16);
+  --ink:#ECE7DA; --ink-2:#9A9384; --ink-3:#5F5A4E;
+  --gold:#C9943E; --green:#5FA46B; --red:#C56B5B;
+  --serif:"DM Serif Display",Georgia,serif;
+  --sans:"Space Grotesk",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45;
+  max-width:480px;margin:0 auto;min-height:100vh;padding-bottom:40px}
+.wrap{padding:0 20px}
+.bar{display:flex;align-items:center;gap:14px;padding:18px 20px 10px;border-bottom:1px solid var(--rule)}
+.bar .back{background:none;border:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:7px;font-size:15px}
+.bar .back svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.7}
+.bar .t{font-family:var(--serif);font-size:20px}
+
+.sgroup{margin-top:26px}
+.sgroup .gl{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.srow{display:flex;align-items:center;gap:12px;padding:15px 0;border-top:1px solid var(--rule);min-height:54px}
+.srow .sl{font-size:16px;flex:1}
+.srow .sl small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px;letter-spacing:.03em}
+.srow .sv{font-family:var(--mono);font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.srow .sv .chev{color:var(--ink-3);font-size:15px}
+.switch{appearance:none;width:44px;height:26px;background:var(--surface-2);border:1px solid var(--rule);border-radius:13px;position:relative;cursor:pointer;flex:0 0 auto}
+.switch:checked{background:var(--green);border-color:var(--green)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left .2s}
+.switch:checked::after{left:20px}
+
+.cloud{border:1px solid var(--rule);border-radius:12px;padding:16px;margin-top:8px}
+.cloud .ce{display:flex;align-items:center;gap:10px;font-size:15px}
+.cloud .ce .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.cloud .ce small{font-family:var(--mono);font-size:12px;color:var(--ink-3);margin-left:auto}
+.cloud .cb{display:flex;gap:10px;margin-top:14px}
+.cloud .cb button{flex:1;background:none;border:1px solid var(--rule);border-radius:8px;color:var(--ink-2);font-family:var(--mono);font-size:12px;padding:10px;cursor:pointer}
+.cloud .cb .signout{color:var(--red)}
+.setver{font-family:var(--mono);text-align:center;color:var(--ink-3);font-size:12px;margin-top:22px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+  <div class="t">Settings</div>
+</div>
+
+<div class="wrap">
+
+  <div class="sgroup">
+    <div class="gl">Prayer</div>
+    <div class="srow"><span class="sl">Prayer times</span><span class="sv">Auto · your location <span class="chev">›</span></span></div>
+    <div class="srow"><span class="sl">Calculation method</span><span class="sv">Hanafi <span class="chev">›</span></span></div>
+    <div class="srow"><span class="sl">First Takbīr tracker <small>40-day streak</small></span><input type="checkbox" class="switch" checked></div>
+  </div>
+
+  <div class="sgroup">
+    <div class="gl">Modules</div>
+    <div class="srow"><span class="sl">Prayers <small>Fajr → Isha on your day</small></span><input type="checkbox" class="switch" checked></div>
+    <div class="srow"><span class="sl">Pehar <small>day as a timeline</small></span><input type="checkbox" class="switch" checked></div>
+    <div class="srow"><span class="sl">Weight tracking</span><input type="checkbox" class="switch" checked></div>
+    <div class="srow"><span class="sl">Reflections <small>5 nightly prompts</small></span><input type="checkbox" class="switch" checked></div>
+  </div>
+
+  <div class="sgroup">
+    <div class="gl">Notifications</div>
+    <div class="srow"><span class="sl">Prayer reminders</span><input type="checkbox" class="switch" checked></div>
+    <div class="srow"><span class="sl">Remind 5 min early</span><input type="checkbox" class="switch" checked></div>
+    <div class="srow"><span class="sl">Evening reflection nudge</span><input type="checkbox" class="switch"></div>
+  </div>
+
+  <div class="sgroup">
+    <div class="gl">Data</div>
+    <div class="cloud">
+      <div class="ce"><span class="dot"></span>Cloud sync on<small>linuxaamir@gmail.com</small></div>
+      <div class="cb"><button>Sync now</button><button class="signout">Sign out</button></div>
+    </div>
+    <div class="srow"><span class="sl">Export all data</span><span class="sv">JSON <span class="chev">↓</span></span></div>
+    <div class="srow"><span class="sl">Import data</span><span class="sv">replaces all <span class="chev">↑</span></span></div>
+  </div>
+
+  <div class="sgroup">
+    <div class="gl">App</div>
+    <div class="srow"><span class="sl">Home-screen widget</span><span class="sv">Scriptable <span class="chev">›</span></span></div>
+    <div class="srow"><span class="sl">Check for updates</span><span class="sv"><span class="chev">⟳</span></span></div>
+    <div class="srow"><span class="sl">About Waqt</span><span class="sv"><span class="chev">›</span></span></div>
+  </div>
+
+  <div class="setver">Waqt · v 2026-09-16</div>
+</div>
+
+</body>
+</html>

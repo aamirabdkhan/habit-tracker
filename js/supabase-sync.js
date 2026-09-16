@@ -61,75 +61,28 @@ function mergeTemplate(local, remote, remoteUpdatedAt) {
     return normTemplate(local);
 }
 
-function mergeData(local, remote) {
+// Local-only bookkeeping + sync predicates.
+function localMtOf(key) { return parseInt(localStorage.getItem(key + "_mt") || "0", 10) || 0; }
+// Rows we sync: ht_* day/template records only — never the local "_mt" edit stamps or the migration flag.
+function isSyncableKey(k) { return !!k && k.indexOf("ht_") === 0 && k !== "ht_migrated_v3" && !/_mt$/.test(k); }
+
+// Last-write-wins for one day's record, by edit timestamp — mirrors mergeTemplate.
+// The OLD field-wise OR-merge could only ever flip a checkbox ON across devices: an un-check on one
+// device was silently reverted by the next sync from another device (water only ever went up, etc.).
+// LWW lets the most-recently-edited side win the whole day, so un-checks stick. localMt is this
+// device's last local edit of this key (set in app.js sDay); remoteUpdatedAt is the row's server time.
+// ponytail: whole-record LWW by wall clock. Concurrent same-day edits on two devices → the later
+//           writer wins the day and a field from the earlier edit can be lost. Fine for 1-2 personal
+//           devices; needs per-field timestamps (CRDT) only if real multi-device concurrency matters.
+function mergeData(local, remote, remoteUpdatedAt, localMt, key) {
     if (!local) return remote;
     if (!remote) return local;
-    var result = JSON.parse(JSON.stringify(local));
-    if (remote.habits) {
-        if (!result.habits) result.habits = {};
-        Object.keys(remote.habits).forEach(function(k) {
-            result.habits[k] = !!(result.habits[k] || remote.habits[k]);
-        });
+    var remoteTs = remoteUpdatedAt ? Date.parse(remoteUpdatedAt) : 0;
+    if (remoteTs && remoteTs > (localMt || 0)) {
+        if (key) { try { localStorage.setItem(key + "_mt", String(remoteTs)); } catch(e) {} }
+        return remote;
     }
-    if (remote.prayers) {
-        if (!result.prayers) result.prayers = {};
-        Object.keys(remote.prayers).forEach(function(k) {
-            result.prayers[k] = !!(result.prayers[k] || remote.prayers[k]);
-        });
-    }
-    if (remote.takbeer) {
-        if (!result.takbeer) result.takbeer = {};
-        Object.keys(remote.takbeer).forEach(function(k) {
-            result.takbeer[k] = !!(result.takbeer[k] || remote.takbeer[k]);
-        });
-    }
-    if (remote.extra) {
-        if (!result.extra) result.extra = {};
-        Object.keys(remote.extra).forEach(function(k) {
-            result.extra[k] = !!(result.extra[k] || remote.extra[k]);
-        });
-    }
-    if (remote.health) {
-        if (!result.health) result.health = {};
-        Object.keys(remote.health).forEach(function(k) {
-            result.health[k] = !!(result.health[k] || remote.health[k]);
-        });
-    }
-    if (remote.water) {
-        if (!result.water) result.water = [];
-        var maxLen = Math.max(result.water.length, remote.water.length);
-        var mergedWater = [];
-        for (var i = 0; i < maxLen; i++) {
-            mergedWater.push(!!(result.water[i] || remote.water[i]));
-        }
-        result.water = mergedWater;
-    }
-    if (remote.reading) {
-        if (!result.reading) result.reading = [];
-        remote.reading.forEach(function(remoteBook) {
-            var localBook = result.reading.find(function(b) { return b.n === remoteBook.n; });
-            if (localBook) {
-                localBook.t = Math.max(localBook.t || 0, remoteBook.t || 0);
-            } else {
-                result.reading.push(remoteBook);
-            }
-        });
-    }
-    if (remote.weight && !result.weight) {
-        result.weight = remote.weight;
-    }
-    if (remote.goalRef) {
-        if (!result.goalRef) result.goalRef = [];
-        remote.goalRef.forEach(function(remoteGoal) {
-            var localGoal = result.goalRef.find(function(g) { return g.name === remoteGoal.name; });
-            if (localGoal) {
-                if (!localGoal.text && remoteGoal.text) localGoal.text = remoteGoal.text;
-            } else {
-                result.goalRef.push(remoteGoal);
-            }
-        });
-    }
-    return result;
+    return local;
 }
 
 function subscribeRealtime() {
@@ -144,13 +97,15 @@ function subscribeRealtime() {
             table: 'user_data',
             filter: 'user_id=eq.' + currentUser.id
         }, function(payload) {
-            if (payload.new && payload.new.key) {
+            if (payload.new && payload.new.key && isSyncableKey(payload.new.key)) {
                 var key = payload.new.key;
                 var remoteVal = payload.new.value;
                 var localVal = null;
                 try { localVal = JSON.parse(localStorage.getItem(key)); } catch(e) {}
-                
-                var mergedVal = key === "ht_d" ? mergeTemplate(localVal, remoteVal, payload.new.updated_at) : mergeData(localVal, remoteVal);
+
+                var mergedVal = key === "ht_d"
+                    ? mergeTemplate(localVal, remoteVal, payload.new.updated_at)
+                    : mergeData(localVal, remoteVal, payload.new.updated_at, localMtOf(key), key);
                 var localStr = localStorage.getItem(key);
                 var mergedStr = JSON.stringify(mergedVal);
                 if (localStr !== mergedStr) {
@@ -179,18 +134,17 @@ function syncDown() {
         if (res.data && res.data.length > 0) {
             var anyChanged = false;
             var promises = res.data.map(function(row) {
+                if (!isSyncableKey(row.key)) return Promise.resolve(); // ignore _mt stamps / migration flag
                 var localVal = null;
                 var localRaw = localStorage.getItem(row.key);
                 try { localVal = JSON.parse(localRaw); } catch(e) {}
-                
+
                 var mergedVal = null;
                 if (localVal) {
                     if (row.key === "ht_d") {
                         mergedVal = mergeTemplate(localVal, row.value, row.updated_at);
-                    } else if (row.key.indexOf("ht_") === 0 && row.key !== "ht_migrated_v3") {
-                        mergedVal = mergeData(localVal, row.value);
                     } else {
-                        mergedVal = row.value;
+                        mergedVal = mergeData(localVal, row.value, row.updated_at, localMtOf(row.key), row.key);
                     }
                     var mergedStr = JSON.stringify(mergedVal);
                     if (mergedStr !== JSON.stringify(row.value)) {
@@ -250,7 +204,7 @@ function syncUpAll() {
     var keys = [];
     for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
-        if (k && k.indexOf("ht_") === 0) {
+        if (isSyncableKey(k)) {
             keys.push(k);
         }
     }
@@ -271,8 +225,8 @@ function syncUpAll() {
             if (remoteVal) {
                 if (k === "ht_d") {
                     mergedVal = mergeTemplate(localVal, remoteVal, remoteRow.updated_at);
-                } else if (k.indexOf("ht_") === 0 && k !== "ht_migrated_v3") {
-                    mergedVal = mergeData(localVal, remoteVal);
+                } else {
+                    mergedVal = mergeData(localVal, remoteVal, remoteRow.updated_at, localMtOf(k), k);
                 }
             }
             try { localStorage.setItem(k, JSON.stringify(mergedVal)); } catch(e) {}

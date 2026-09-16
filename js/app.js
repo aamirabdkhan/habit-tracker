@@ -146,7 +146,8 @@ function gDef() {
     };
 }
 function sDef(d) {
-    try { localStorage.setItem("ht_d", JSON.stringify(d)); } catch(e) {}
+    // stamp local template edit time so mergeTemplate's last-write-wins prefers this device's recent edits
+    try { localStorage.setItem("ht_d", JSON.stringify(d)); localStorage.setItem("ht_d_mt", String(Date.now())); } catch(e) {}
     clearTimeout(defT);
     defT = setTimeout(function() {
         if (typeof dbSave === "function") dbSave("ht_d", d);
@@ -253,11 +254,13 @@ function gDay(key) {
     } catch(e) {}
     return mkDay();
 }
-function sDay() { 
-    try { localStorage.setItem("ht_" + dk(cDate), JSON.stringify(cData)); } catch(e) {} 
+function sDay() {
+    var k = "ht_" + dk(cDate);
+    // stamp this device's edit time so cloud sync can do last-write-wins (see mergeData)
+    try { localStorage.setItem(k, JSON.stringify(cData)); localStorage.setItem(k + "_mt", String(Date.now())); } catch(e) {}
     clearTimeout(dbT);
     dbT = setTimeout(function() {
-        if (typeof dbSave === "function") dbSave("ht_" + dk(cDate), cData);
+        if (typeof dbSave === "function") dbSave(k, cData);
     }, 800);
 }
 function dSave() { clearTimeout(svT); svT = setTimeout(sDay, 400); }

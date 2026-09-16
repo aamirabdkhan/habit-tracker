@@ -67,16 +67,16 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 .wrow .wn{font-family:var(--mono);font-size:11px;color:var(--ink-3);flex:0 0 auto}
 
 /* consistency dot rows */
-.crow{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--rule)}
-.crow:first-of-type{border-top:0}
-.crow .cn{font-size:15px;min-width:104px}
-.dots7{display:flex;gap:6px;flex:1}
-.dots7 i{width:11px;height:11px;border-radius:50%;background:var(--ink-3);opacity:.35}
-.dots7 i.on{background:var(--green);opacity:1}
-/* prayers use the same green "done" as practices — sections label the difference, colour stays consistent */
-.crow .cpct{font-family:var(--mono);font-size:12px;color:var(--ink-2);min-width:38px;text-align:right}
-.crow .cstreak{font-family:var(--mono);font-size:11px;color:var(--gold);min-width:34px;text-align:right}
-.cmeta{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:2px}
+/* month strip: one thin cell per day, filled = done — scan a whole month at a glance */
+.mrow{padding:13px 0;border-top:1px solid var(--rule)}
+.mrow:first-of-type{border-top:0}
+.mrow-h{display:flex;align-items:baseline;gap:10px;margin-bottom:9px}
+.mrow-h .cn{font-size:15px;flex:1}
+.mrow-h .cpct{font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.mrow-h .cstreak{font-family:var(--mono);font-size:11px;color:var(--gold);min-width:30px;text-align:right}
+.strip{display:flex;gap:3px}
+.strip i{flex:1;height:24px;border-radius:3px;background:var(--ink-3);opacity:.22}
+.strip i.on{background:var(--green);opacity:1}
 .pmeta{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink-3);padding:9px 0 0}
 
 /* weight trend */
@@ -149,22 +149,15 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 
   <!-- 02 PRAYERS -->
   <div class="sec">
-    <div class="sec-h"><span class="sec-num">02</span><span class="sec-name">Prayers</span><span class="sec-meta">last 7 days</span></div>
-    <div class="crow"><span class="cn">Fajr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥3</span></div>
-    <div class="crow"><span class="cn">Dhuhr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">100%</span><span class="cstreak">🔥7</span></div>
-    <div class="crow"><span class="cn">Asr</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥2</span></div>
-    <div class="crow"><span class="cn">Maghrib</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥1</span></div>
-    <div class="crow"><span class="cn">Isha</span><div class="dots7"><i class="on g"></i><i class="on g"></i><i></i><i class="on g"></i><i class="on g"></i><i class="on g"></i><i class="on g"></i></div><span class="cpct">86%</span><span class="cstreak">🔥4</span></div>
+    <div class="sec-h"><span class="sec-num">02</span><span class="sec-name">Prayers</span><span class="sec-meta">September</span></div>
+    <div id="prayerStrips"></div>
     <div class="pmeta"><span>Best prayer · Dhuhr</span><span>Needs care · Isha</span></div>
   </div>
 
   <!-- 03 PRACTICES -->
   <div class="sec">
-    <div class="sec-h"><span class="sec-num">03</span><span class="sec-name">Practices</span><span class="sec-meta">this month</span></div>
-    <div class="crow"><span class="cn">Morning walk</span><div class="dots7"><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div><span class="cpct">18/22</span><span class="cstreak">🔥4</span></div>
-    <div class="crow"><span class="cn">Read 10 pages</span><div class="dots7"><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i></div><span class="cpct">15/22</span><span class="cstreak">🔥2</span></div>
-    <div class="crow"><span class="cn">Exercise</span><div class="dots7"><i></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i></div><span class="cpct">9/22</span><span class="cstreak">—</span></div>
-    <div class="crow"><span class="cn">Sleep before 12</span><div class="dots7"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i class="on"></i></div><span class="cpct">17/22</span><span class="cstreak">🔥3</span></div>
+    <div class="sec-h"><span class="sec-num">03</span><span class="sec-name">Practices</span><span class="sec-meta">September</span></div>
+    <div id="practiceStrips"></div>
   </div>
 
   <!-- 04 WEIGHT -->
@@ -186,6 +179,36 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
   <button class="tab on"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Overview</button>
   <button class="tab"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Template</button>
 </nav>
+
+<script>
+(function(){
+  // sample month data — filled cell = done that day (real app builds from ht_[date] records)
+  var prayers=[
+    ["Fajr","110111111011101111110111110111",3],
+    ["Dhuhr","111111111111111111111111111111",30],
+    ["Asr","111011110111111011110111111011",2],
+    ["Maghrib","111111011111110111111101111111",5],
+    ["Isha","110111110111011111101111101111",4]
+  ];
+  var practices=[
+    ["Morning walk","011011101101110111011011101101",4],
+    ["Read 10 pages","101101011011010110101101101011",2],
+    ["Exercise","001000100010001010001000100010",0],
+    ["Sleep before 12","111011101110111011101110111011",3]
+  ];
+  function strip(name,bits,streak){
+    var on=bits.split("").filter(function(c){return c==="1";}).length;
+    var pct=Math.round(on/bits.length*100), cells="";
+    for(var i=0;i<bits.length;i++) cells+='<i class="'+(bits[i]==="1"?"on":"")+'"></i>';
+    return '<div class="mrow"><div class="mrow-h"><span class="cn">'+name+'</span>'
+      +'<span class="cpct">'+on+'/'+bits.length+' · '+pct+'%</span>'
+      +'<span class="cstreak">'+(streak>0?"🔥"+streak:"—")+'</span></div>'
+      +'<div class="strip">'+cells+'</div></div>';
+  }
+  document.getElementById("prayerStrips").innerHTML=prayers.map(function(p){return strip(p[0],p[1],p[2]);}).join("");
+  document.getElementById("practiceStrips").innerHTML=practices.map(function(p){return strip(p[0],p[1],p[2]);}).join("");
+})();
+</script>
 
 </body>
 </html>

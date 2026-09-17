@@ -39,7 +39,7 @@ function seedTemplate() {
         'Morning Medicine', 'Night Medicine', 'Breakfast', 'Lunch', 'Dinner', 'Sleep', 'Wind up the day',
       ]),
     ],
-    prayerTimes: { Fajr: '5:30', Dhuhr: '1:10', Asr: '4:35', Maghrib: '7:25', Isha: '9:25' },
+    prayerTimes: { Fajr: '05:30', Dhuhr: '13:10', Asr: '16:35', Maghrib: '19:25', Isha: '21:25' },
     modules: { prayers: true, pehar: true, weight: true, reflections: true },
     takbirTargetDays: 40,
   };
@@ -107,4 +107,17 @@ export function setPracticeField(cardId, name, field, value) {
 export function addCard(name) {
   const n = (name || '').trim();
   if (n) { data.template.cards.push({ id: 'c_' + Math.random().toString(36).slice(2, 8), name: n, color: '#5FA46B', items: [] }); save(data); }
+}
+
+// ---- settings ----
+export function setPrayerTime(name, time) { data.template.prayerTimes[name] = time; save(data); }
+export function toggleModule(name) { data.template.modules[name] = !data.template.modules[name]; save(data); }
+export const getModules = () => data.template.modules;
+
+// ---- backup ----
+export const exportJSON = () => JSON.stringify(data, null, 2);
+export function importJSON(str) {
+  const o = JSON.parse(str);
+  if (!o || o.version !== 2 || typeof o.days !== 'object') throw new Error('Not a Waqt v2 backup.');
+  data = o; save(data);
 }

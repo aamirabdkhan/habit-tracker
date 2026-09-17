@@ -3,8 +3,11 @@
 import { icon, esc } from '../core/dom.js';
 import { set, get } from '../core/state.js';
 import { peekDay, getTemplate, togglePrayer, toggleCheck, toggleTakbir, PRAYERS } from '../data/store.js';
+import { clock } from '../features/pehar.js';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+/** "HH:MM" (24h) -> "h:mm am/pm" for display. */
+const t12 = (s) => { if (!s) return ''; const [h, m] = s.split(':').map(Number); return clock(h * 60 + (m || 0)); };
 
 function weekStrip(viewedKey) {
   const [y, m, d] = viewedKey.split('-').map(Number);
@@ -69,14 +72,14 @@ function upNext(times, day, nextPrayer, pct) {
   return `
   <div class="upnext">
     <div class="un-top">
-      <div><div class="k">Next prayer</div><div class="p">${nextPrayer}</div><div class="t">${esc(times[nextPrayer] || '')}</div></div>
+      <div><div class="k">Next prayer</div><div class="p">${nextPrayer}</div><div class="t">${t12(times[nextPrayer])}</div></div>
       <div class="ring"><svg width="60" height="60" viewBox="0 0 60 60">
         <circle cx="30" cy="30" r="26" fill="none" stroke="var(--rule-2)" stroke-width="4"/>
         <circle cx="30" cy="30" r="26" fill="none" stroke="var(--green)" stroke-width="4" stroke-linecap="round"
           stroke-dasharray="163" stroke-dashoffset="${off}"/></svg><div class="pct">${pct}%</div></div>
     </div>
     ${remaining.length ? `<div class="un-list">${remaining.map((p) =>
-      `<div class="un-row"><span class="un-dot un-pr"></span><span class="un-tm">${esc(times[p] || '')}</span><span class="un-nm">${p}</span><span class="un-tag">prayer</span></div>`
+      `<div class="un-row"><span class="un-dot un-pr"></span><span class="un-tm">${t12(times[p])}</span><span class="un-nm">${p}</span><span class="un-tag">prayer</span></div>`
     ).join('')}</div>` : ''}
     <button class="un-link" data-a="openPehar">Open Pehar →</button>
   </div>`;
@@ -86,7 +89,7 @@ function prayersSection(times, day, nextPrayer, done, tpl) {
   const cells = PRAYERS.map((p) => {
     const isDone = !!day.prayers[p], isNext = p === nextPrayer;
     return `<div class="pr ${isDone ? 'done' : ''} ${isNext ? 'next' : ''}" data-a="togglePrayer" data-name="${p}">
-      ${isDone ? '<span class="chk">✓</span>' : ''}<div class="nm">${p}</div><div class="tm">${esc(times[p] || '')}</div></div>`;
+      ${isDone ? '<span class="chk">✓</span>' : ''}<div class="nm">${p}</div><div class="tm">${t12(times[p])}</div></div>`;
   }).join('');
   const takbirDone = !!(day.takbir && day.takbir.Fajr);
   return `<div class="sec"><div class="sec-h"><span class="sec-num">01</span><span class="sec-name">Prayers</span><span class="sec-meta">${done} / ${PRAYERS.length}</span></div>
@@ -117,5 +120,5 @@ export const actions = {
   openPehar: () => set({ view: 'pehar' }),
   reflect: () => {/* TODO: reflection wizard */},
   new: () => {/* TODO: new-entry flow */},
-  menu: () => {/* TODO: drawer */},
+  menu: () => set({ view: 'settings' }),
 };

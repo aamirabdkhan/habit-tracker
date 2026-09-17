@@ -133,6 +133,20 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 .wt-d{font-family:var(--mono);font-size:12px;color:var(--green)}
 .spark{width:100%;height:70px}
 
+/* settings */
+.bar{display:flex;align-items:center;gap:14px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
+.bar .back{background:none;border:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:7px;font-size:15px}
+.bar .back svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7}
+.bar .t{font-family:var(--serif);font-size:20px}
+.sgroup{margin-top:26px}
+.sgroup .gl{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.srow{display:flex;align-items:center;gap:12px;padding:14px 0;border-top:1px solid var(--rule);min-height:54px}
+.srow .sl{font-size:16px;flex:1}
+.srow .sl small{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:3px;letter-spacing:.03em}
+.srow .sv{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.setbtn{width:100%;margin-top:12px;background:var(--surface);border:1px solid var(--rule);border-radius:9px;color:var(--ink);font-family:var(--sans);font-size:15px;padding:14px;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between}
+.setver{font-family:var(--mono);text-align:center;color:var(--ink-3);font-size:12px;margin:26px 0 10px}
+
 /* template */
 .sub-line{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
 .card-h2{display:flex;align-items:center;gap:10px;padding-bottom:8px;border-bottom:1px solid var(--rule);margin-bottom:2px}

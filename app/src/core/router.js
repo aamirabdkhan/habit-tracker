@@ -7,9 +7,9 @@ import * as today from '../ui/today.js';
 import * as overview from '../ui/overview.js';
 import * as pehar from '../ui/pehar.js';
 import * as template from '../ui/template.js';
+import * as settings from '../ui/settings.js';
 
-// Register views here as they are built (settings next).
-const views = { today, overview, pehar, template };
+const views = { today, overview, pehar, template, settings };
 
 export function startRouter() {
   const viewEl = document.getElementById('view');
@@ -40,6 +40,8 @@ export function startRouter() {
 function render(state) {
   const v = views[state.view] || views.today;
   document.getElementById('view').innerHTML = v.render(state);
-  document.getElementById('tabs').innerHTML = bottomTabs(state.view);
+  const tabs = document.getElementById('tabs');
+  tabs.hidden = (state.view === 'settings'); // Settings is a pushed screen, not a tab
+  tabs.innerHTML = bottomTabs(state.view);
   window.scrollTo(0, 0);
 }

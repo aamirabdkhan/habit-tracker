@@ -133,6 +133,34 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 .wt-d{font-family:var(--mono);font-size:12px;color:var(--green)}
 .spark{width:100%;height:70px}
 
+/* pehar */
+.daynav{display:flex;align-items:center;gap:12px;margin-top:6px}
+.daynav .nb{background:none;border:1px solid var(--rule);border-radius:8px;color:var(--ink-2);width:34px;height:32px;cursor:pointer}
+.daynav .dl{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.free{margin:18px 0 6px;border:1px solid var(--rule);border-radius:12px;padding:15px 16px;display:flex;align-items:baseline;gap:8px;background:linear-gradient(180deg,rgba(201,148,62,.04),transparent)}
+.free .num{font-family:var(--serif);font-size:26px;white-space:nowrap;flex:0 0 auto}
+.free .lab{font-size:14px;color:var(--ink-2)}
+.free .sub{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto}
+.tl{margin-top:20px}
+.trow{display:flex;margin-bottom:8px}
+.trow .tm{width:78px;flex:0 0 auto;font-family:var(--mono);font-size:12px;color:var(--ink-2);text-align:right;padding:15px 14px 0 0}
+.trow .tm small{display:block;color:var(--ink-3);font-size:10px;margin-top:2px}
+.blk{flex:1;min-width:0;border:1px solid var(--rule);border-left:3px solid var(--green);border-radius:10px;padding:13px 14px;display:flex;align-items:center;gap:12px;cursor:pointer}
+.blk .nm{font-size:15px;flex:1}
+.blk .box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--rule-2);flex:0 0 auto;display:grid;place-items:center}
+.blk .box svg{width:11px;height:11px;stroke:var(--bg);fill:none;stroke-width:3;opacity:0}
+.blk.done{background:var(--green-dim)}
+.blk.done .box{background:var(--green);border-color:var(--green)}
+.blk.done .box svg{opacity:1}
+.blk.done .nm{color:var(--ink-2)}
+.blk.free-blk{border:1px dashed var(--rule);border-left:1px dashed var(--rule);background:none;justify-content:space-between}
+.blk.free-blk .nm{font-family:var(--serif);font-style:italic;color:var(--ink-3);font-size:15px;flex:0 0 auto}
+.blk.free-blk .plan{font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.06em}
+.nowrow{display:flex;align-items:center;gap:10px;margin:4px 0 12px;padding-left:78px}
+.nowrow .line{flex:1;height:1px;background:var(--gold);opacity:.5}
+.nowrow .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.pehar-note{font-family:var(--mono);font-size:11px;color:var(--ink-3);text-align:center;margin-top:18px;line-height:1.5}
+
 /* bottom tabs */
 .tabs{position:fixed;left:0;right:0;bottom:0;max-width:480px;margin:0 auto;background:rgba(12,11,9,.94);
   backdrop-filter:blur(12px);border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(4,1fr);padding:10px 0 16px;z-index:8}

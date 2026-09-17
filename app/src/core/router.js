@@ -4,9 +4,10 @@
 import { get, set, subscribe } from './state.js';
 import { bottomTabs } from '../ui/components.js';
 import * as today from '../ui/today.js';
+import * as overview from '../ui/overview.js';
 
-// Register views here as they are built (pehar, overview, template, settings next).
-const views = { today };
+// Register views here as they are built (pehar, template, settings next).
+const views = { today, overview };
 
 export function startRouter() {
   const viewEl = document.getElementById('view');

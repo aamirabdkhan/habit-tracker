@@ -2,7 +2,7 @@
 // a glanceable "up next" peeks at the Pehar. Reads state + store, writes via store.
 import { icon, esc } from '../core/dom.js';
 import { set, get } from '../core/state.js';
-import { getDay, getTemplate, togglePrayer, toggleCheck, toggleTakbir, PRAYERS } from '../data/store.js';
+import { peekDay, getTemplate, togglePrayer, toggleCheck, toggleTakbir, PRAYERS } from '../data/store.js';
 
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -21,7 +21,7 @@ function weekStrip(viewedKey) {
 
 export function render(state) {
   const key = state.viewedDate;
-  const day = getDay(key);
+  const day = peekDay(key);
   const tpl = getTemplate();
   const times = tpl.prayerTimes || {};
 

@@ -63,6 +63,9 @@ let data = load();
 
 // ---- read ----
 export const getTemplate = () => data.template;
+/** Read-only: returns the day or a throwaway blank WITHOUT storing it (safe for rendering/analysis). */
+export function peekDay(key) { return data.days[key] || blankDay(); }
+/** Read-write: returns the stored day, creating it if needed (use only when about to mutate). */
 export function getDay(key) {
   if (!data.days[key]) data.days[key] = blankDay();
   return data.days[key];

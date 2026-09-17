@@ -24,17 +24,23 @@ export function dur(min) {
   return h && m ? `${h}h ${m}m` : h ? `${h}h` : `${m}m`;
 }
 
-/** Build the ordered timeline + total open minutes for a day. */
-export function buildPehar(day, times) {
-  const order = PRAYERS
-    .map((p) => ({ name: p, start: toMinutes(times[p], p === 'Fajr'), done: !!day.prayers[p] }))
-    .sort((a, b) => a.start - b.start);
+/** "14:30" (24h, from <input type=time>) -> minutes. */
+const toMinutes24 = (str) => { const [h, m] = String(str).split(':').map(Number); return h * 60 + (m || 0); };
+
+/**
+ * Build the ordered timeline + total open minutes.
+ * @param day  the day record  @param times  prayer times  @param tasks  timed practices [{name,time,dur?}]
+ */
+export function buildPehar(day, times, tasks = []) {
+  const events = PRAYERS.map((p) => ({ type: 'prayer', name: p, start: toMinutes(times[p], p === 'Fajr'), len: PRAYER_MIN, done: !!day.prayers[p] }));
+  tasks.forEach((t) => events.push({ type: 'task', name: t.name, start: toMinutes24(t.time), len: t.dur || 30, done: !!day.checks[t.name] }));
+  events.sort((a, b) => a.start - b.start);
 
   const blocks = []; let freeMin = 0;
-  order.forEach((pr, i) => {
-    const end = pr.start + PRAYER_MIN;
-    blocks.push({ type: 'prayer', name: pr.name, start: pr.start, end, done: pr.done });
-    const next = order[i + 1];
+  events.forEach((e, i) => {
+    const end = e.start + e.len;
+    blocks.push({ type: e.type, name: e.name, start: e.start, end, done: e.done });
+    const next = events[i + 1];
     if (next) {
       const gap = next.start - end;
       if (gap > 0) { blocks.push({ type: 'free', start: end, end: next.start, dur: gap }); freeMin += gap; }

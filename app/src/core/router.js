@@ -6,9 +6,10 @@ import { bottomTabs } from '../ui/components.js';
 import * as today from '../ui/today.js';
 import * as overview from '../ui/overview.js';
 import * as pehar from '../ui/pehar.js';
+import * as template from '../ui/template.js';
 
-// Register views here as they are built (template, settings next).
-const views = { today, overview, pehar };
+// Register views here as they are built (settings next).
+const views = { today, overview, pehar, template };
 
 export function startRouter() {
   const viewEl = document.getElementById('view');

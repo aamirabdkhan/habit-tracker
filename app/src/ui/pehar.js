@@ -1,7 +1,7 @@
 // View: Pehar — day timeline (prayers + open stretches) with the calm free-time reveal.
 import { icon } from '../core/dom.js';
 import { set, get } from '../core/state.js';
-import { peekDay, getTemplate, togglePrayer, todayKey, PRAYERS } from '../data/store.js';
+import { peekDay, getTemplate, togglePrayer, toggleCheck, todayKey, PRAYERS } from '../data/store.js';
 import { buildPehar, clock, dur } from '../features/pehar.js';
 
 function shiftDay(key, delta) {
@@ -18,7 +18,9 @@ function label(key) {
 export function render(state) {
   const key = state.viewedDate;
   const day = peekDay(key);
-  const { blocks, freeMin, stretches } = buildPehar(day, getTemplate().prayerTimes || {});
+  const tpl = getTemplate();
+  const tasks = tpl.cards.flatMap((c) => c.items.filter((it) => it.time).map((it) => ({ name: it.name, time: it.time })));
+  const { blocks, freeMin, stretches } = buildPehar(day, tpl.prayerTimes || {}, tasks);
   const isToday = key === todayKey();
   const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
 
@@ -27,9 +29,10 @@ export function render(state) {
     if (isToday && b.start <= nowMin && b.end > nowMin) {
       rows += `<div class="nowrow"><span class="lbl">Now ${clock(nowMin)}</span><span class="line"></span></div>`;
     }
-    if (b.type === 'prayer') {
+    if (b.type === 'prayer' || b.type === 'task') {
+      const act = b.type === 'prayer' ? 'togglePrayer' : 'toggleCheck';
       rows += `<div class="trow"><div class="tm">${clock(b.start)}</div>
-        <div class="blk ${b.done ? 'done' : ''}" data-a="togglePrayer" data-name="${b.name}">
+        <div class="blk ${b.type === 'task' ? 'task' : ''} ${b.done ? 'done' : ''}" data-a="${act}" data-name="${b.name}">
           <span class="box">${icon('check')}</span><span class="nm">${b.name}</span></div></div>`;
     } else {
       rows += `<div class="trow"><div class="tm">${clock(b.start)}<small>${dur(b.dur)}</small></div>
@@ -55,6 +58,7 @@ export function render(state) {
 
 export const actions = {
   togglePrayer: (d) => { togglePrayer(get().viewedDate, d.name); set({}); },
+  toggleCheck: (d) => { toggleCheck(get().viewedDate, d.name); set({}); },
   prev: () => set({ viewedDate: shiftDay(get().viewedDate, -1) }),
   next: () => set({ viewedDate: shiftDay(get().viewedDate, 1) }),
   settings: () => set({ view: 'settings' }),

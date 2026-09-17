@@ -89,3 +89,22 @@ export function toggleTakbir(key, name) {
   if (day.takbir[name]) delete day.takbir[name]; else day.takbir[name] = true;
   save(data);
 }
+
+// ---- template editing (Template screen) ----
+const findCard = (id) => data.template.cards.find((c) => c.id === id);
+export function addPractice(cardId, name) {
+  const c = findCard(cardId); const n = (name || '').trim();
+  if (c && n && !c.items.some((i) => i.name === n)) { c.items.push({ name: n, tracked: true }); save(data); }
+}
+export function removePractice(cardId, name) {
+  const c = findCard(cardId);
+  if (c) { c.items = c.items.filter((i) => i.name !== name); save(data); }
+}
+export function setPracticeField(cardId, name, field, value) {
+  const c = findCard(cardId); const it = c && c.items.find((i) => i.name === name);
+  if (it) { if (value === '' || value == null) delete it[field]; else it[field] = value; save(data); }
+}
+export function addCard(name) {
+  const n = (name || '').trim();
+  if (n) { data.template.cards.push({ id: 'c_' + Math.random().toString(36).slice(2, 8), name: n, color: '#5FA46B', items: [] }); save(data); }
+}

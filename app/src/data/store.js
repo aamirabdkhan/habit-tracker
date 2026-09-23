@@ -51,11 +51,11 @@ const blankDay = () => ({ prayers: {}, takbir: {}, checks: {}, water: 0, weight:
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) { const d = JSON.parse(raw); if (!d.mts) d.mts = {}; return d; }
   } catch { /* fall through to rebuild */ }
-  const data = { version: 2, template: seedTemplate(), days: hasLegacy() ? migrateLegacyDays() : {} };
-  save(data);
-  return data;
+  const d = { version: 2, template: seedTemplate(), days: hasLegacy() ? migrateLegacyDays() : {}, mts: {} };
+  save(d);
+  return d;
 }
 function save(d) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* quota/private mode */ } }
 
@@ -73,45 +73,48 @@ export function getDay(key) {
 /** All day keys that have any logged data (for Overview/History/engine). */
 export const loggedDayKeys = () => Object.keys(data.days).sort();
 
-// ---- write (mutate + persist; TODO: queue cloud sync here) ----
+// stamp a local edit time on a key ('template' or a date) for last-write-wins sync
+function touch(k) { data.mts[k] = Date.now(); }
+
+// ---- write (mutate + stamp + persist) ----
 export function togglePrayer(key, name) {
   const day = getDay(key);
   if (day.prayers[name]) delete day.prayers[name]; else day.prayers[name] = true;
-  save(data);
+  touch(key); save(data);
 }
 export function toggleCheck(key, name) {
   const day = getDay(key);
   if (day.checks[name]) delete day.checks[name]; else day.checks[name] = true;
-  save(data);
+  touch(key); save(data);
 }
 export function toggleTakbir(key, name) {
   const day = getDay(key);
   if (day.takbir[name]) delete day.takbir[name]; else day.takbir[name] = true;
-  save(data);
+  touch(key); save(data);
 }
 
 // ---- template editing (Template screen) ----
 const findCard = (id) => data.template.cards.find((c) => c.id === id);
 export function addPractice(cardId, name) {
   const c = findCard(cardId); const n = (name || '').trim();
-  if (c && n && !c.items.some((i) => i.name === n)) { c.items.push({ name: n, tracked: true }); save(data); }
+  if (c && n && !c.items.some((i) => i.name === n)) { c.items.push({ name: n, tracked: true }); touch('template'); save(data); }
 }
 export function removePractice(cardId, name) {
   const c = findCard(cardId);
-  if (c) { c.items = c.items.filter((i) => i.name !== name); save(data); }
+  if (c) { c.items = c.items.filter((i) => i.name !== name); touch('template'); save(data); }
 }
 export function setPracticeField(cardId, name, field, value) {
   const c = findCard(cardId); const it = c && c.items.find((i) => i.name === name);
-  if (it) { if (value === '' || value == null) delete it[field]; else it[field] = value; save(data); }
+  if (it) { if (value === '' || value == null) delete it[field]; else it[field] = value; touch('template'); save(data); }
 }
 export function addCard(name) {
   const n = (name || '').trim();
-  if (n) { data.template.cards.push({ id: 'c_' + Math.random().toString(36).slice(2, 8), name: n, color: '#5FA46B', items: [] }); save(data); }
+  if (n) { data.template.cards.push({ id: 'c_' + Math.random().toString(36).slice(2, 8), name: n, color: '#5FA46B', items: [] }); touch('template'); save(data); }
 }
 
 // ---- settings ----
-export function setPrayerTime(name, time) { data.template.prayerTimes[name] = time; save(data); }
-export function toggleModule(name) { data.template.modules[name] = !data.template.modules[name]; save(data); }
+export function setPrayerTime(name, time) { data.template.prayerTimes[name] = time; touch('template'); save(data); }
+export function toggleModule(name) { data.template.modules[name] = !data.template.modules[name]; touch('template'); save(data); }
 export const getModules = () => data.template.modules;
 
 // ---- backup ----
@@ -119,5 +122,22 @@ export const exportJSON = () => JSON.stringify(data, null, 2);
 export function importJSON(str) {
   const o = JSON.parse(str);
   if (!o || o.version !== 2 || typeof o.days !== 'object') throw new Error('Not a Waqt v2 backup.');
-  data = o; save(data);
+  data = o; if (!data.mts) data.mts = {};
+  Object.keys(data.days).forEach((k) => touch(k)); touch('template'); save(data);
 }
+
+// ---- sync support (per-key last-write-wins; template + each day is a row) ----
+/** Rows to push to the cloud, each with this device's last local edit time. */
+export function syncRows() {
+  const rows = [{ k: 'template', v: data.template, mt: data.mts.template || 0 }];
+  Object.keys(data.days).forEach((d) => rows.push({ k: d, v: data.days[d], mt: data.mts[d] || 0 }));
+  return rows;
+}
+/** Apply a remote row iff it's newer than our local edit of that key. Returns true if local changed. */
+export function applyRemote(k, v, remoteUpdatedAt) {
+  const remoteTs = remoteUpdatedAt ? Date.parse(remoteUpdatedAt) : 0;
+  if (!remoteTs || remoteTs <= (data.mts[k] || 0)) return false;
+  if (k === 'template') data.template = v; else data.days[k] = v;
+  data.mts[k] = remoteTs; save(data); return true;
+}
+export const localMt = (k) => (data.mts[k] || 0);

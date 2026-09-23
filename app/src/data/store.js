@@ -6,7 +6,7 @@
 //           water:int, weight:number|null, reading:{book:pages}, reflections:{} }
 // Checks are keyed by practice NAME so history survives any card re-grouping.
 
-import { PRAYERS, hasLegacy, migrateLegacyDays } from './migrate.js';
+import { PRAYERS, hasLegacy, migrateLegacyDays, looksLegacy, migrateExportObject } from './migrate.js';
 export { PRAYERS };
 
 const KEY = 'waqt.v2';
@@ -127,8 +127,14 @@ export function setOnboarded() { data.onboarded = true; save(data); }
 export const exportJSON = () => JSON.stringify(data, null, 2);
 export function importJSON(str) {
   const o = JSON.parse(str);
-  if (!o || o.version !== 2 || typeof o.days !== 'object') throw new Error('Not a Waqt v2 backup.');
-  data = o; if (!data.mts) data.mts = {};
+  if (o && o.version === 2 && typeof o.days === 'object') {
+    data = o; if (!data.mts) data.mts = {}; // a Waqt v2 backup
+  } else if (looksLegacy(o)) {
+    // an old-format export from the live app — migrate it in (history by name; fresh cards)
+    data = { version: 2, template: seedTemplate(), days: migrateExportObject(o), mts: {}, onboarded: true };
+  } else {
+    throw new Error('Not a Waqt backup.');
+  }
   Object.keys(data.days).forEach((k) => touch(k)); touch('template'); save(data);
 }
 

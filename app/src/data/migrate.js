@@ -56,3 +56,13 @@ export function migrateLegacyDays() {
   }
   return days;
 }
+
+/** Is this parsed object an OLD-format export ({ ht_d, ht_<date>, … })? */
+export const looksLegacy = (o) => !!o && (o.ht_d !== undefined || Object.keys(o).some((k) => DAY_RE.test(k)));
+
+/** Convert an old-format export object into clean v2 days (for Import). */
+export function migrateExportObject(o) {
+  const days = {};
+  Object.keys(o).forEach((k) => { if (DAY_RE.test(k)) { try { days[k.slice(3)] = cleanDay(o[k]); } catch { /* */ } } });
+  return days;
+}

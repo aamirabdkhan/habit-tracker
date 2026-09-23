@@ -8,8 +8,9 @@ import * as overview from '../ui/overview.js';
 import * as pehar from '../ui/pehar.js';
 import * as template from '../ui/template.js';
 import * as settings from '../ui/settings.js';
+import * as onboarding from '../ui/onboarding.js';
 
-const views = { today, overview, pehar, template, settings };
+const views = { today, overview, pehar, template, settings, onboarding };
 
 export function startRouter() {
   const viewEl = document.getElementById('view');
@@ -41,7 +42,7 @@ function render(state) {
   const v = views[state.view] || views.today;
   document.getElementById('view').innerHTML = v.render(state);
   const tabs = document.getElementById('tabs');
-  tabs.hidden = (state.view === 'settings'); // Settings is a pushed screen, not a tab
+  tabs.hidden = (state.view === 'settings' || state.view === 'onboarding'); // pushed/full screens, not tabs
   tabs.innerHTML = bottomTabs(state.view);
   window.scrollTo(0, 0);
 }

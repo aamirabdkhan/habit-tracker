@@ -133,6 +133,19 @@ body{font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45
 .wt-d{font-family:var(--mono);font-size:12px;color:var(--green)}
 .spark{width:100%;height:70px}
 
+/* onboarding */
+.ob{padding:0 22px 40px;min-height:100vh;display:flex;flex-direction:column}
+.ob-top{padding:26px 0 0}
+.ob-hero{margin-top:44px}
+.ob-title{font-family:var(--serif);font-size:42px;line-height:1.06}
+.ob-sub{font-size:15px;color:var(--ink-2);line-height:1.55;margin-top:16px;max-width:340px}
+.ob-times{margin-top:40px;flex:1}
+.ob-times .gl{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.ob-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--rule)}
+.ob-p{font-size:16px}
+.ob-hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-top:14px}
+.ob-begin{width:100%;margin-top:26px;background:#EFE9DC;color:#14140F;border:none;border-radius:10px;font-family:var(--sans);font-size:16px;font-weight:500;padding:16px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer}
+
 /* settings */
 .bar{display:flex;align-items:center;gap:14px;padding:18px 20px 14px;border-bottom:1px solid var(--rule)}
 .bar .back{background:none;border:none;color:var(--ink);cursor:pointer;display:flex;align-items:center;gap:7px;font-size:15px}

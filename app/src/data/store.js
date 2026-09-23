@@ -51,9 +51,11 @@ const blankDay = () => ({ prayers: {}, takbir: {}, checks: {}, water: 0, weight:
 function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) { const d = JSON.parse(raw); if (!d.mts) d.mts = {}; return d; }
+    if (raw) { const d = JSON.parse(raw); if (!d.mts) d.mts = {}; if (d.onboarded === undefined) d.onboarded = true; return d; }
   } catch { /* fall through to rebuild */ }
-  const d = { version: 2, template: seedTemplate(), days: hasLegacy() ? migrateLegacyDays() : {}, mts: {} };
+  // fresh install: onboard. migrated-from-legacy: treat as already onboarded.
+  const legacy = hasLegacy();
+  const d = { version: 2, template: seedTemplate(), days: legacy ? migrateLegacyDays() : {}, mts: {}, onboarded: legacy };
   save(d);
   return d;
 }
@@ -116,6 +118,10 @@ export function addCard(name) {
 export function setPrayerTime(name, time) { data.template.prayerTimes[name] = time; touch('template'); save(data); }
 export function toggleModule(name) { data.template.modules[name] = !data.template.modules[name]; touch('template'); save(data); }
 export const getModules = () => data.template.modules;
+
+// ---- onboarding ----
+export const isOnboarded = () => !!data.onboarded;
+export function setOnboarded() { data.onboarded = true; save(data); }
 
 // ---- backup ----
 export const exportJSON = () => JSON.stringify(data, null, 2);

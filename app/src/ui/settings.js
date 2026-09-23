@@ -5,9 +5,21 @@ import { icon, esc } from '../core/dom.js';
 import { set } from '../core/state.js';
 import { getTemplate, getModules, setPrayerTime, toggleModule, exportJSON, importJSON, todayKey, PRAYERS } from '../data/store.js';
 import { currentUser, signIn, signUp, signOut, syncNow } from '../data/sync.js';
+import { pushState, subscribePush, unsubscribePush, syncPrayerReminders } from '../features/notifications.js';
+import { getWidgetToken } from '../features/widget.js';
 
 const APP_VERSION = '2026-09-23.1';
 const msg = (t) => { const el = document.getElementById('cs-msg'); if (el) el.textContent = t; };
+
+let notif = null; // cached push state; refreshed lazily when Settings renders
+function remindersRow() {
+  if (!currentUser()) return `<div class="srow"><span class="sl">Prayer reminders<small>log in to cloud sync to enable</small></span><span class="sv">—</span></div>`;
+  if (notif === null) pushState().then((s) => { notif = s; set({}); });
+  if (notif === 'unsupported') return `<div class="srow"><span class="sl">Prayer reminders</span><span class="sv">not supported here</span></div>`;
+  if (notif === 'denied') return `<div class="srow"><span class="sl">Prayer reminders<small>blocked — allow notifications in browser settings</small></span><span class="sv">blocked</span></div>`;
+  if (notif === 'subscribed') return `<button class="setbtn" data-a="disableNotif">Prayer reminders · on <span>Turn off</span></button>`;
+  return `<button class="setbtn" data-a="enableNotif">Enable prayer reminders <span>→</span></button>`;
+}
 
 function cloudSection() {
   const u = currentUser();
@@ -54,8 +66,14 @@ export function render() {
       <button class="setbtn" data-a="importPick">Import data <span>↑</span></button>
       <input type="file" id="waqt-import" accept="application/json" hidden data-a="importFile">
     </div>
+    <div class="sgroup"><div class="gl">Reminders</div>${remindersRow()}</div>
+
+    <div class="sgroup"><div class="gl">Widget</div>
+      <button class="setbtn" data-a="setupWidget">Set up home-screen widget <span>›</span></button>
+      <div class="ob-hint" style="margin-top:8px">Shows today's Pehar via the free Scriptable app on iPhone.</div>
+    </div>
+
     <div class="sgroup"><div class="gl">App</div>
-      <div class="srow"><span class="sl">Notifications<small>arrives with the next update</small></span><span class="sv">off</span></div>
       <div class="srow"><span class="sl">Version</span><span class="sv">${APP_VERSION}</span></div>
     </div>
     <div class="setver">Waqt · a record of a quieter mind</div>
@@ -64,7 +82,14 @@ export function render() {
 
 export const actions = {
   back: () => set({ view: 'today' }),
-  setPrayerTime: (d, el) => { setPrayerTime(d.name, el.value); },
+  setPrayerTime: (d, el) => { setPrayerTime(d.name, el.value); syncPrayerReminders(); },
+  enableNotif: async () => { try { await subscribePush(); notif = 'subscribed'; set({}); } catch (e) { alert(e.message); } },
+  disableNotif: async () => { await unsubscribePush(); notif = 'not-subscribed'; set({}); },
+  setupWidget: async () => {
+    const t = await getWidgetToken();
+    if (!t) { alert('Log in to cloud sync first.'); return; }
+    window.prompt('Widget token — paste this into your Scriptable “Waqt Pehar” script (TOKEN):', t);
+  },
   toggleModule: (d, el) => { toggleModule(d.name); el.blur(); },
   export: () => {
     const blob = new Blob([exportJSON()], { type: 'application/json' });

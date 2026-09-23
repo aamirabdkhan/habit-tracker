@@ -14,6 +14,11 @@ const PREFIX = 'w2:';
 
 let sb = null, user = null, channel = null;
 export const currentUser = () => user;
+export const client = () => sb;
+
+// let features (notifications, widget) react to sign-in/out
+const authCbs = new Set();
+export const onAuth = (cb) => { authCbs.add(cb); return () => authCbs.delete(cb); };
 
 export function initSync() {
   if (sb || !window.supabase) return;
@@ -23,6 +28,7 @@ export function initSync() {
     set({}); // refresh Settings' cloud section
     if (user) { subscribeRealtime(); syncDown().then(syncUp); }
     else if (channel) { sb.removeChannel(channel); channel = null; }
+    authCbs.forEach((cb) => cb(user));
   });
 }
 

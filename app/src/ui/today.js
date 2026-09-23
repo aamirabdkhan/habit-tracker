@@ -57,11 +57,6 @@ export function render(state) {
 
     ${prayersSection(times, day, nextPrayer, prayersDone, tpl)}
     ${practicesSection(day, tpl, goalsDone, items.length)}
-
-    <div class="reflect" data-a="reflect">
-      <div><div class="rl">Reflect on today</div><div class="rs">5 quiet prompts · ${Object.keys(day.reflections || {}).length ? 'done' : 'not done yet'}</div></div>
-      <span class="rdot" ${Object.keys(day.reflections || {}).length ? 'hidden' : ''}></span>
-    </div>
   </div>`;
 }
 
@@ -118,7 +113,6 @@ export const actions = {
   toggleCheck: (d) => { toggleCheck(get().viewedDate, d.name); set({}); },
   toggleTakbir: (d) => { toggleTakbir(get().viewedDate, d.name); set({}); },
   openPehar: () => set({ view: 'pehar' }),
-  reflect: () => {/* TODO: reflection wizard */},
-  new: () => {/* TODO: new-entry flow */},
+  new: () => {/* TODO: quick-add flow */},
   menu: () => set({ view: 'settings' }),
 };

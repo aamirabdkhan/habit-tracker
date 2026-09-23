@@ -1,0 +1,17 @@
+{
+  "name": "Waqt",
+  "short_name": "Waqt",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0C0B09",
+  "theme_color": "#0C0B09",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%230C0B09'/%3E%3Ccircle cx='256' cy='214' r='90' fill='none' stroke='%23C9943E' stroke-width='26'/%3E%3Ccircle cx='256' cy='214' r='15' fill='%23C9943E'/%3E%3Cg stroke='%23C9943E' stroke-width='22' stroke-linecap='round'%3E%3Cline x1='256' y1='118' x2='256' y2='74'/%3E%3Cline x1='352' y1='214' x2='396' y2='214'/%3E%3Cline x1='160' y1='214' x2='116' y2='214'/%3E%3Cline x1='324' y1='146' x2='356' y2='114'/%3E%3Cline x1='188' y1='146' x2='156' y2='114'/%3E%3C/g%3E%3Cpath d='M256 300 L224 384 L256 366 L288 384 Z' fill='%23C9943E'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

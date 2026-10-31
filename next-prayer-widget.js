@@ -1,0 +1,220 @@
+// Next prayer widget for Scriptable — renders active countdown and 5 daily prayer dots.
+// This file is fetched and run by a small loader pasted into Scriptable (get it from
+// Waqt -> Settings -> Home screen widget). The loader sets TOKEN, SUPABASE_URL and ANON_KEY
+// as globals, then runs this. Home-screen widgets are full colour; lock-screen widgets are
+// monochrome (an iOS rule).
+(async () => {
+  const GOLD = "#C9943E";
+  const TEXT = "#E8E2D9";
+  const MUTED = "#7A756E";
+  const BG = "#0C0C0C";
+  const CARD_BG = "#1A1A1A";
+  const LINE = "#2A2725";
+  const SAGE = "#7B9E6B";
+  const COPPER = "#B87333";
+  const DANGER = "#B84C4C";
+
+  async function getFeed() {
+    try {
+      if (typeof SUPABASE_URL === "undefined" || typeof ANON_KEY === "undefined" || typeof TOKEN === "undefined") {
+        return { error: true };
+      }
+      const r = new Request(SUPABASE_URL + "/rest/v1/rpc/get_widget_feed");
+      r.method = "POST";
+      r.headers = { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY, "Content-Type": "application/json" };
+      r.body = JSON.stringify({ p_token: TOKEN });
+      return (await r.loadJSON()) || {};
+    } catch (e) {
+      return { error: true };
+    }
+  }
+
+  function monoFont(size, weight) {
+    const bold = weight === "bold" || weight === "600" || weight === "700";
+    try {
+      return new Font(bold ? "Menlo-Bold" : "Menlo", size);
+    } catch (e) {
+      try {
+        return bold ? Font.boldMonospacedSystemFont(size) : Font.regularMonospacedSystemFont(size);
+      } catch (e2) {
+        return bold ? Font.boldSystemFont(size) : Font.systemFont(size);
+      }
+    }
+  }
+
+  function serifFont(size, bold) {
+    try {
+      return new Font(bold ? "Georgia-Bold" : "Georgia", size);
+    } catch (e) {
+      try {
+        return bold ? Font.boldSerifSystemFont(size) : Font.regularSerifSystemFont(size);
+      } catch (e2) {
+        return bold ? Font.boldSystemFont(size) : Font.systemFont(size);
+      }
+    }
+  }
+
+  const feed = await getFeed();
+  const nextPrayer = (feed && feed.nextPrayer) || (feed && feed.stats && feed.stats.next) || null;
+
+  const DEFAULT_PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  const rawPrayers = (feed && Array.isArray(feed.prayers) && feed.prayers.length > 0)
+    ? feed.prayers
+    : DEFAULT_PRAYERS.map((name) => ({ name, done: false, time: "" }));
+
+  let nextIdx = -1;
+  if (nextPrayer && nextPrayer.name) {
+    nextIdx = rawPrayers.findIndex(
+      (p) => (p.name || "").toLowerCase() === nextPrayer.name.toLowerCase()
+    );
+  }
+
+  const prayers = rawPrayers.map((p, idx) => {
+    const isDone = !!p.done || (nextIdx >= 0 && idx < nextIdx);
+    const isNext = (nextIdx >= 0 && idx === nextIdx) || (!isDone && nextPrayer && (p.name || "").toLowerCase() === (nextPrayer.name || "").toLowerCase());
+    return {
+      name: p.name || DEFAULT_PRAYERS[idx] || "Prayer",
+      done: isDone,
+      next: isNext,
+      time: p.time || ""
+    };
+  });
+
+  const fam = (typeof config !== "undefined" && config.widgetFamily) || "medium";
+  const isLock = fam.indexOf("accessory") === 0;
+  const lock = isLock;
+
+  const w = new ListWidget();
+
+  if (isLock) {
+    // iOS lock-screen accessory widget: monochrome
+    const prayerName = nextPrayer && nextPrayer.name ? nextPrayer.name : (feed.error ? "Open Waqt" : "Done");
+    let countdownStr = "";
+    if (nextPrayer && nextPrayer.in) {
+      const inClean = String(nextPrayer.in).replace(/^in\s+/, "");
+      countdownStr = `in ${inClean}`;
+    }
+
+    if (fam === "accessoryInline") {
+      w.addText(`Next: ${prayerName}${countdownStr ? " " + countdownStr : ""}`);
+    } else if (fam === "accessoryCircular") {
+      const a = w.addText(prayerName.slice(0, 4));
+      a.font = Font.boldSystemFont(12);
+      a.centerAlignText();
+      const b = w.addText(nextPrayer && nextPrayer.in ? String(nextPrayer.in).replace(/^in\s+/, "") : "Done");
+      b.font = Font.systemFont(9);
+      b.centerAlignText();
+    } else {
+      // accessoryRectangular
+      const h = w.addText("NEXT PRAYER");
+      h.font = Font.boldSystemFont(9);
+      h.textOpacity = 0.7;
+      w.addSpacer(2);
+      const t = w.addText(prayerName);
+      t.font = Font.boldSystemFont(16);
+      if (countdownStr) {
+        const c = w.addText(countdownStr);
+        c.font = Font.systemFont(11);
+        c.textOpacity = 0.75;
+      }
+    }
+  } else {
+    // Home-screen medium widget: full colour
+    w.backgroundColor = new Color(BG);
+    w.setPadding(16, 18, 14, 18);
+
+    // Eyebrow
+    const eyebrow = w.addText("NEXT PRAYER");
+    eyebrow.font = monoFont(10, "medium");
+    eyebrow.textColor = new Color(MUTED);
+
+    w.addSpacer(10);
+
+    // Prayer Top: Big prayer name + countdown
+    const prayerTop = w.addStack();
+    prayerTop.centerAlignContent();
+
+    const prayerNameStr = nextPrayer && nextPrayer.name ? nextPrayer.name : (feed.error ? "Open Waqt" : "Completed");
+    const nameLabel = prayerTop.addText(prayerNameStr);
+    nameLabel.font = serifFont(36, true);
+    nameLabel.textColor = new Color(TEXT);
+
+    prayerTop.addSpacer();
+
+    let countStr = "";
+    if (nextPrayer && nextPrayer.in) {
+      const rawIn = String(nextPrayer.in);
+      countStr = rawIn.startsWith("in ") ? rawIn : `in ${rawIn}`;
+    } else if (!nextPrayer) {
+      countStr = feed.error ? "to sync" : "for today";
+    }
+
+    if (countStr) {
+      const countLabel = prayerTop.addText(countStr);
+      countLabel.font = monoFont(13, "bold");
+      countLabel.textColor = new Color(GOLD);
+    }
+
+    w.addSpacer();
+
+    // Prayers dots row: done=filled (SAGE), next=ring (GOLD), later=muted (MUTED)
+    const prayersStack = w.addStack();
+    prayersStack.centerAlignContent();
+
+    for (let i = 0; i < prayers.length; i++) {
+      const p = prayers[i];
+      const col = prayersStack.addStack();
+      col.layoutVertically();
+      col.centerAlignContent();
+
+      // Uniform dot wrap stack to center dot horizontally and vertically
+      const dotWrap = col.addStack();
+      dotWrap.size = new Size(14, 14);
+      dotWrap.centerAlignContent();
+
+      const dot = dotWrap.addStack();
+      if (p.done) {
+        dot.size = new Size(10, 10);
+        dot.cornerRadius = 5;
+        dot.backgroundColor = new Color(SAGE);
+      } else if (p.next) {
+        dot.size = new Size(12, 12);
+        dot.cornerRadius = 6;
+        dot.borderWidth = 2;
+        dot.borderColor = new Color(GOLD);
+      } else {
+        dot.size = new Size(10, 10);
+        dot.cornerRadius = 5;
+        dot.borderWidth = 1;
+        dot.borderColor = new Color(MUTED);
+      }
+
+      col.addSpacer(6);
+
+      const lbl = col.addText(p.name);
+      lbl.font = monoFont(9, p.next ? "bold" : "regular");
+      lbl.textColor = p.next ? new Color(GOLD) : new Color(MUTED);
+      lbl.centerAlignText();
+
+      if (i < prayers.length - 1) {
+        prayersStack.addSpacer();
+      }
+    }
+  }
+
+  if (typeof Script !== "undefined") {
+    Script.setWidget(w);
+    Script.complete();
+  }
+  if (typeof config === "undefined" || !config.runsInWidget) {
+    if (lock && w.presentAccessoryRectangular) {
+      w.presentAccessoryRectangular();
+    } else if (fam === "large") {
+      w.presentLarge();
+    } else if (fam === "small") {
+      w.presentSmall();
+    } else {
+      w.presentMedium();
+    }
+  }
+})();

@@ -432,7 +432,13 @@ body::before{display:none!important}
 .sch-ovsteps{margin:0 0 14px;padding:0 0 0 18px;font-size:13px;line-height:1.7;color:var(--stext,var(--fg))}
 
 /* Bottom tab bar (replaces the old top .sch-nav segment tabs) */
-.waqt-tabs{position:sticky;bottom:12px;z-index:30;display:flex;justify-content:space-around;gap:4px;margin:18px auto calc(8px + env(safe-area-inset-bottom));padding:6px;max-width:540px;background:var(--cd,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.waqt-tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));z-index:50;display:flex;justify-content:space-around;gap:4px;width:calc(100% - 28px);max-width:520px;padding:6px;background:var(--cd,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+/* clear the fixed bar so the last content isn't hidden behind it */
+.sch-view{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+/* multi-time slot row: pills + Add-time flow cleanly to the right of the TIME label */
+.sch-slotrow{align-items:flex-start}
+.sch-slots{display:flex;flex-wrap:wrap;align-items:center;gap:8px;flex:1;min-width:0}
+.sch-slotrow .sch-editlbl{margin-top:9px}
 .waqt-tab{min-width:56px;padding:7px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--smut,#7A756E);background:transparent;border:0;border-radius:16px;cursor:pointer;font:600 10px/1 'Space Grotesk',sans-serif;transition:.15s}
 .waqt-tab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .waqt-tab.on{color:var(--stext,#E8E2D9);background:var(--acd,rgba(201,148,62,.12))}

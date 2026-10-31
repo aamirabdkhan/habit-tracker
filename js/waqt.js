@@ -1557,7 +1557,6 @@ function peharDemoHTML(withPrayers) {
 function rTemplate() {
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vprefs" aria-label="Settings"><i class="fas fa-gear"></i></button><p class="sch-eyebrow">PLAN</p><h1 class="sch-dayname sch-datefull">Your plan</h1><p class="sch-sub">set a time and repeat days once, it repeats every day</p></header>';
-  h += renderNav("settings");
   h += '<div class="al"></div>';
   if (prayersOn()) h += renderPrayersCard();
   h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">YOUR PLAN</p>';
@@ -1572,7 +1571,6 @@ function rTemplate() {
 function rPrefs() {
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vset" aria-label="Back to your plan"><i class="fas fa-xmark"></i></button><p class="sch-eyebrow">SETTINGS</p><h1 class="sch-dayname sch-datefull">Settings</h1></header>';
-  h += renderNav("settings");
   h += '<div class="al"></div>';
 
   h += '<div class="cd" style="margin-top:22px"><div class="sec-t">What you track</div>';
@@ -1835,7 +1833,6 @@ function rOverview() {
   h += '<div class="flx aic jcc gap-3" style="margin-top:12px"><button type="button" class="dnb" data-a="omp" aria-label="Previous month"><i class="fas fa-chevron-left t-xs"></i></button>';
   h += '<button type="button" class="dnb" data-a="omn" aria-label="Next month"><i class="fas fa-chevron-right t-xs"></i></button></div></header>';
 
-  h += renderNav("overview");
   h += '<div class="al"></div>';
   h += renderOverviewStats({ tracked: tracked, avgPrayer: avgPrayer, avgTasks: avgTasks, lastW: lastW, wChange: wChange, bestStreak: bestStreak });
   h += renderHeatmapCard(md);
@@ -1889,12 +1886,29 @@ render = function() {
   if (shouldShowOnboarding()) { document.getElementById("content").innerHTML = rOnboarding(); return; }
   var h;
   if (view === "daily") h = rSchedule();
+  else if (view === "pehar") h = rPehar();
   else if (view === "settings") h = rTemplate();
   else if (view === "overview") h = rOverview();
   else if (view === "prefs") h = rPrefs();
   else { originalRender(); return; }
-  document.getElementById("content").innerHTML = h + renderHelpOverlay() + renderOvStatsModal();
+  document.getElementById("content").innerHTML = h + renderTabBar(view) + renderHelpOverlay() + renderOvStatsModal();
 };
+
+// Bottom tab bar — replaces the old top segment nav (renderNav). Maps the 5 spec
+// tabs to the real view names. Inline-SVG line icons only (no emoji / FontAwesome).
+function renderTabBar(active) {
+  var tabs = [
+    ["overview", "Overview", "M4 6h6v6H4zM14 6h6v6h-6zM4 16h6v4H4zM14 16h6v4h-6z"],
+    ["daily",    "Today",    "M5 5h14v14H5z M9 12l2 2 4-4"],
+    ["pehar",    "Pehar",    "M12 4v8l5 3 M12 21a9 9 0 1 1 0-18"],
+    ["settings", "Template", "M4 5h16M4 10h16M4 15h10"],
+    ["prefs",    "Settings", "M12 9a3 3 0 1 0 0 6 M12 3v2M12 19v2M5 12H3M21 12h-2"]
+  ];
+  return '<nav class="waqt-tabs" aria-label="Main navigation">' + tabs.map(function(x) {
+    return '<button type="button" class="waqt-tab' + (active === x[0] ? " on" : "") + '" data-a="tab" data-tab="' + x[0] + '">'
+      + '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="' + x[2] + '"/></svg><span>' + x[1] + '</span></button>';
+  }).join("") + '</nav>';
+}
 
 // Prayers are one muted green (spec: prayer nodes are green, not a rainbow).
 var PRAYER_GREEN = "#82a06e";
@@ -2287,7 +2301,6 @@ function rSchedule() {
   h += '</div>';
   h += '</header>';
 
-  h += renderNav("daily");
   h += '<div class="al"></div>';
   h += renderWeekStrip(key);
 
@@ -2327,8 +2340,35 @@ function rSchedule() {
   h += renderPrayersDayCard();
   h += cardItems.map(function(ci) { return renderCard(ci.card, ci.items); }).join('');
 
-  // timeline spine — last block (only when the Pehar is turned on in Settings)
-  if (peharOn()) {
+  h += '</div>';
+  return h;
+}
+
+// Pehar is its own tab (split out of rSchedule). Renders the timeline rail only,
+// with a day stepper + week strip so you can move between days here too. Opens
+// scrolled to "now" (handled by the tab click handler).
+function rPehar() {
+  var key = dk(cDate);
+  cData = gDay(key);
+  if (!cData.onedayTimes) cData.onedayTimes = {};
+  if (!cData.onedayDur) cData.onedayDur = {};
+  var dow = dowOf(key);
+  var td = isT(cDate);
+  var cards = getCards();
+  var timeline = insertOpenBlocks(buildTimeline(cards, cData, dow));
+  var nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+
+  var h = '<div class="sch-view">';
+  h += '<header class="sch-mast t-ctr"><p class="sch-eyebrow">PEHAR</p>';
+  h += '<h1 class="sch-dayname sch-datefull">' + esc(typeof fLong === "function" ? fLong(cDate) : cDate.toDateString()) + '</h1>';
+  h += '<div class="flx aic jcc gap-3" style="margin-top:14px">';
+  h += '<button type="button" class="dnb" data-a="prevday" aria-label="Previous day"><i class="fas fa-chevron-left t-xs"></i></button>';
+  if (!td) h += '<button type="button" class="bt t-xs" data-a="today">Today</button>';
+  h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
+  h += '</div></header>';
+  h += '<div class="al"></div>';
+  h += renderWeekStrip(key);
+
   h += '<div class="sch-peharhead">';
   h += '<button type="button" class="sch-copyy sch-phleft" data-a="setupwithai"><i class="fas fa-wand-magic-sparkles"></i> Set up with AI</button>';
   h += '<p class="sch-anylbl sch-phtitle">PEHAR</p>';
@@ -2373,7 +2413,6 @@ function rSchedule() {
     + '<button class="bt t-sm" data-a="setupwithai" style="background:var(--ac);border-color:var(--ac);color:#1a1206;font-weight:600"><i class="fas fa-wand-magic-sparkles mr-1.5"></i>Set up with AI</button>'
     + '<button class="bt t-sm" data-a="vset"><i class="fas fa-plus mr-1.5"></i>Add goals</button>'
     + '</div></div>';
-  }
 
   h += '</div>';
   return h;
@@ -2558,6 +2597,14 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     if (a === "vprefs") { view = "prefs"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
+    if (a === "tab") {
+      view = t.dataset.tab;
+      if (view === "prefs" && typeof publishWidgetFeed === "function") publishWidgetFeed();
+      render();
+      if (view === "pehar") { var nb = document.querySelector(".sch-rail .now"); if (nb) nb.scrollIntoView({ block: "center" }); else window.scrollTo(0, 0); }
+      else window.scrollTo(0, 0);
+      return;
+    }
     if (a === "copywidgetscript") {
       if (!localStorage.getItem(WIDGET_TOKEN_KEY)) { publishWidgetFeed(); toast("Preparing your widget, tap Copy again in a moment"); return; }
       var wscript = widgetLoaderText();

@@ -185,6 +185,7 @@ function removeOnedayItem(field, name) {
   else if (cData.cards && cData.cards[field]) { delete cData.cards[field][name]; }
   if (cData.onedayTimes) delete cData.onedayTimes[field + "::" + name];
   if (cData.onedayPriority) delete cData.onedayPriority[field + "::" + name];
+  setItemSlots(field, name, []);
   sDay();
 }
 function addOnedayItem(day, cardId, name, time, dur, priorityCreatedOn) {
@@ -288,6 +289,7 @@ function getItemSlots(field, name) {
   return time ? [{ time:time, days:getItemDays(field, name) || undefined }] : [];
 }
 function setItemSlots(field, name, slots) {
+  // Slots MVP registers reminders/notifications only for first slot; per-slot delivery is out of scope.
   var clean = (Array.isArray(slots) ? slots : []).filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, days:Array.isArray(slot.days) ? slot.days : undefined }; });
   var map = getSlotsMap(), key = notifKey(field, name);
   if (clean.length <= 1) delete map[key]; else map[key] = clean;
@@ -314,6 +316,9 @@ function _slotsSelfCheck() {
     console.assert(getItemSlots("habits", "CEH").length === 2, "two-slot roundtrip failed");
     setItemSlots("habits", "CEH", [{ time:"07:00" }]);
     console.assert(!getSlotsMap()["habits::CEH"], "one slot must use legacy storage");
+    setItemSlots("habits", "CEH", [{ time:"07:00" }, { time:"19:00" }]);
+    setItemSlots("habits", "CEH", []);
+    console.assert(getItemSlots("habits", "CEH").length === 0, "cleared item must not retain slots");
     console.log("slots self-check complete");
   } finally {
     setNotifTime = originalSet;
@@ -687,6 +692,7 @@ function removeCardItem(cardId, name) {
   }
   setNotifTime(cardId, name, ""); // already clears any reminder_times row unconditionally (Task: task notifications)
   setItemDays(cardId, name, null);
+  setItemSlots(cardId, name, []);
   setItemBell(cardId, name, false); // drop stale bell state so a reused name doesn't inherit it
   setOptional(cardId, name, false);
   return true;
@@ -829,11 +835,11 @@ function nextReminderFire(reminder, fromDateISO) {
   // {day:15} means fifteenth of every month; {month:3,day:15} / date means yearly date.
   if (!(month >= 1 && month <= 12)) {
     var monthly = reminderISO(from[0], from[1], Math.min(day, reminderDaysInMonth(from[0], from[1])));
-    if (monthly < fromDateISO) { var nextMonth = new Date(fromDateISO + "T00:00:00"); nextMonth.setMonth(nextMonth.getMonth() + 1); monthly = reminderISO(nextMonth.getFullYear(), nextMonth.getMonth() + 1, Math.min(day, reminderDaysInMonth(nextMonth.getFullYear(), nextMonth.getMonth() + 1))); }
+    if (monthly <= fromDateISO) { var nextYear = from[0], nextMonth = from[1] + 1; if (nextMonth > 12) { nextYear++; nextMonth = 1; } monthly = reminderISO(nextYear, nextMonth, Math.min(day, reminderDaysInMonth(nextYear, nextMonth))); }
     return monthly;
   }
   var year = from[0], candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month)));
-  if (candidate < fromDateISO) { year++; candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month))); }
+  if (candidate <= fromDateISO) { year++; candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month))); }
   return candidate;
 }
 function isReminderDue(reminder, todayISO) { return !!(reminder && reminder.nextFire && !reminder.snoozedUntil && reminder.nextFire <= todayISO); }
@@ -864,6 +870,9 @@ function _remindersSelfCheck() {
     saveReminders([{id:"check", name:"Check", schedule:interval.schedule, nextFire:"2026-10-31"}]);
     completeReminder("check", "2026-10-31");
     console.assert(getReminders()[0].lastDone === "2026-10-31" && getReminders()[0].nextFire === "2027-01-31", "complete re-arms");
+    saveReminders([{id:"fixed", name:"Fixed", schedule:{kind:"fixed", day:31}, nextFire:"2026-10-31"}]);
+    completeReminder("fixed", "2026-10-31");
+    console.assert(getReminders()[0].nextFire === "2026-11-30" && !isReminderDue(getReminders()[0], "2026-10-31"), "fixed completion must advance beyond done date");
     console.log("REMINDERSCHECK PASS");
   } catch(e) { console.log("REMINDERSCHECK FAIL: " + e.message); }
   finally { if (saved === null) localStorage.removeItem(REMINDERS_KEY); else localStorage.setItem(REMINDERS_KEY, saved); }
@@ -2923,7 +2932,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       rebuildImportPreview(); render(); return;
     }
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
-    if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false)); localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
+    if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false)); localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
     if (a === "importapply") { if (!importPreview) return; applyImportSchedule(importPreview, false); importPreview = null; importDraft = ""; importError = ""; aiStep = 0; parseText = ""; parseUnread = []; render(); toast("Schedule imported"); return; }
     // ---- "Type your day" parser (Feature 1/2/4/5) ----
     if (a === "parsecardchip") { parseCardId = t.dataset.c; render(); return; }
@@ -3194,7 +3203,9 @@ document.getElementById("app").addEventListener("click", function(e) {
     var dow = +dayBtn.dataset.dow, di = set.indexOf(dow);
     if (di === -1) set.push(dow); else set.splice(di, 1);
     set.sort(function(x, y) { return x - y; });
-    setItemDays(wrap.dataset.field, wrap.dataset.name, set);
+    var slotItems = getItemSlots(wrap.dataset.field, wrap.dataset.name);
+    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot) { return { time:slot.time, days:set.length === 7 ? undefined : set }; }));
+    else setItemDays(wrap.dataset.field, wrap.dataset.name, set);
     render();
   }
 });

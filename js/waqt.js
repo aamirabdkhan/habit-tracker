@@ -154,9 +154,10 @@ function removeOnedayItem(field, name) {
   if (isBaseCard(field)) { delete cData[field][name]; }
   else if (cData.cards && cData.cards[field]) { delete cData.cards[field][name]; }
   if (cData.onedayTimes) delete cData.onedayTimes[field + "::" + name];
+  if (cData.onedayPriority) delete cData.onedayPriority[field + "::" + name];
   sDay();
 }
-function addOnedayItem(day, cardId, name, time, dur) {
+function addOnedayItem(day, cardId, name, time, dur, priorityCreatedOn) {
   if (isBaseCard(cardId)) day[cardId][name] = false;
   else { if (!day.cards) day.cards = {}; if (!day.cards[cardId]) day.cards[cardId] = {}; day.cards[cardId][name] = false; }
   if (time) {
@@ -164,10 +165,58 @@ function addOnedayItem(day, cardId, name, time, dur) {
     day.onedayTimes[cardId + "::" + name] = time;
     day.onedayDur[cardId + "::" + name] = dur > 0 ? dur : 30;
   }
+  if (priorityCreatedOn) { if (!day.onedayPriority) day.onedayPriority = {}; day.onedayPriority[cardId + "::" + name] = priorityCreatedOn; }
 }
 function hasDayItem(day, cardId, name) {
   return isBaseCard(cardId) ? !!(day[cardId] && Object.prototype.hasOwnProperty.call(day[cardId], name)) : !!(day.cards && day.cards[cardId] && Object.prototype.hasOwnProperty.call(day.cards[cardId], name));
 }
+function priorityAge(createdOn, todayKey) {
+  var from = Date.parse(String(createdOn || "").slice(0, 10) + "T00:00:00Z"), to = Date.parse(String(todayKey || "").slice(0, 10) + "T00:00:00Z");
+  return isNaN(from) || isNaN(to) ? 0 : Math.max(0, Math.floor((to - from) / 86400000));
+}
+function priorityKeyParts(key) { var at = key.indexOf("::"); return at === -1 ? null : { cardId:key.slice(0, at), name:key.slice(at + 2) }; }
+function carryPriorityItems(previous, today, todayKey) {
+  var added = 0;
+  if (Array.isArray(previous.oneDay) || Array.isArray(today.oneDay)) {
+    if (!today.oneDay) today.oneDay = [];
+    (previous.oneDay || []).forEach(function(item) { if (item.priority && !item.done && !today.oneDay.some(function(existing) { return existing.id === item.id; })) { today.oneDay.push({ id:item.id, name:item.name, cardId:item.cardId, priority:true, createdOn:item.createdOn, done:false }); added++; } });
+    return added;
+  }
+  Object.keys(previous.onedayPriority || {}).forEach(function(key) {
+    var parts = priorityKeyParts(key), createdOn = previous.onedayPriority[key], previousMap;
+    if (!parts || !createdOn || !hasDayItem(previous, parts.cardId, parts.name) || hasDayItem(today, parts.cardId, parts.name)) return;
+    previousMap = isBaseCard(parts.cardId) ? previous[parts.cardId] : previous.cards && previous.cards[parts.cardId];
+    if (previousMap && previousMap[parts.name]) return;
+    addOnedayItem(today, parts.cardId, parts.name, (previous.onedayTimes || {})[key] || "", (previous.onedayDur || {})[key] || 30, createdOn); added++;
+  });
+  return added;
+}
+function priorityItemsForDay(day, todayKey) {
+  if (Array.isArray(day.oneDay)) return day.oneDay.filter(function(item) { return item.priority && !item.done; }).map(function(item) { return Object.assign({}, item, { age:priorityAge(item.createdOn, todayKey) }); });
+  return Object.keys(day.onedayPriority || {}).reduce(function(items, key) {
+    var parts = priorityKeyParts(key), createdOn = day.onedayPriority[key], doneMap;
+    if (!parts || !createdOn || !hasDayItem(day, parts.cardId, parts.name)) return items;
+    doneMap = isBaseCard(parts.cardId) ? day[parts.cardId] : day.cards && day.cards[parts.cardId];
+    if (!doneMap || !doneMap[parts.name]) items.push({ cardId:parts.cardId, name:parts.name, createdOn:createdOn, age:priorityAge(createdOn, todayKey) });
+    return items;
+  }, []);
+}
+function toggleOnedayPriority(cardId, name) {
+  if (!hasDayItem(cData, cardId, name)) return false;
+  var key = cardId + "::" + name;
+  if (!cData.onedayPriority) cData.onedayPriority = {};
+  if (cData.onedayPriority[key]) { delete cData.onedayPriority[key]; sDay(); return false; }
+  cData.onedayPriority[key] = dk(cDate); sDay(); return true;
+}
+function _prioritySelfCheck() {
+  if (location.hash !== "#prioritycheck") return;
+  console.assert(priorityAge("2026-10-27", "2026-10-31") === 4, "priority age");
+  var previous = { oneDay:[{ id:"p1", name:"Scooty", priority:true, createdOn:"2026-10-27", done:false }, { id:"p2", name:"Done", priority:true, createdOn:"2026-10-27", done:true }, { id:"p3", name:"Normal", priority:false, createdOn:"2026-10-27", done:false }] };
+  var today = { oneDay:[] };
+  console.assert(carryPriorityItems(previous, today, "2026-10-31") === 1 && today.oneDay.length === 1 && today.oneDay[0].name === "Scooty", "priority carry");
+  console.log("priority self-check complete");
+}
+_prioritySelfCheck();
 function copyYesterdayOneday(day, key) {
   var yesterday = new Date(key + "T00:00:00"); yesterday.setDate(yesterday.getDate() - 1);
   var prev = gDay(dk(yesterday)), copied = 0, cards = getCards();
@@ -2242,6 +2291,7 @@ function dayItemsForCard(card, day, dow) {
   var doneMap = isBaseCard(card.id) ? day[card.id] : ((day.cards && day.cards[card.id]) || {});
   var tplNames = templateNamesFor(card.id);
   var onedayTimes = day.onedayTimes || {};
+  var onedayPriority = day.onedayPriority || {};
   var out = [];
   Object.keys(doneMap || {}).forEach(function(name) {
     var isTpl = tplNames.indexOf(name) !== -1;
@@ -2251,8 +2301,8 @@ function dayItemsForCard(card, day, dow) {
       else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false, optional:isOptional(card.id, name) }); }
       return;
     }
-    var t = onedayTimes[card.id + "::" + name] || "";
-    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true, optional:false, okey:t ? occurrenceKey(card.id, name, t) : "" });
+    var key = card.id + "::" + name, t = onedayTimes[key] || "", createdOn = onedayPriority[key] || "";
+    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true, priority:!!createdOn, priorityCreatedOn:createdOn, optional:false, okey:t ? occurrenceKey(card.id, name, t) : "" });
   });
   return out;
 }
@@ -2341,8 +2391,8 @@ function renderCard(card, items) {
         h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
         h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(card.color) + '">';
         h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
-        h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + '</span>';
-        if (it.oneday) h += '<button type="button" class="sch-edit" data-a="oddel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Remove ' + esA(it.n) + '"><i class="fas fa-xmark"></i></button>';
+        h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (it.priority && isT(cDate) ? ' <span class="sch-priorityage">' + (priorityAge(it.priorityCreatedOn, dk(cDate)) ? priorityAge(it.priorityCreatedOn, dk(cDate)) + 'd late' : 'today') + '</span>' : '') + '</span>';
+        if (it.oneday) h += '<button type="button" class="sch-edit' + (it.priority ? ' on' : '') + '" data-a="odpriority" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="' + (it.priority ? 'Remove priority from ' : 'Prioritize ') + esA(it.n) + '"><i class="fas fa-star"></i></button><button type="button" class="sch-edit" data-a="oddel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Remove ' + esA(it.n) + '"><i class="fas fa-xmark"></i></button>';
         h += '</div>';
         h += '</div>';
       });
@@ -2454,6 +2504,7 @@ function renderWeekStrip(selKey) {
 function rSchedule() {
   var key = dk(cDate);
   cData = gDay(key);
+  if (key === dk(new Date())) { var previousDate = new Date(key + "T00:00:00"); previousDate.setDate(previousDate.getDate() - 1); if (carryPriorityItems(gDay(dk(previousDate)), cData, key)) sDay(); }
   if (!cData.onedayTimes) cData.onedayTimes = {};
   if (!cData.onedayDur) cData.onedayDur = {};
   var dow = dowOf(key);
@@ -2549,6 +2600,7 @@ function rSchedule() {
 function rPehar() {
   var key = dk(cDate);
   cData = gDay(key);
+  if (key === dk(new Date())) { var previousDate = new Date(key + "T00:00:00"); previousDate.setDate(previousDate.getDate() - 1); if (carryPriorityItems(gDay(dk(previousDate)), cData, key)) sDay(); }
   if (!cData.onedayTimes) cData.onedayTimes = {};
   if (!cData.onedayDur) cData.onedayDur = {};
   var dow = dowOf(key);
@@ -3078,6 +3130,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "onbfinish") { finishOnboarding(); return; }
     // One-day (today-only) item removal (Task 9C) — the delete affordance on "today"-tagged rows.
     if (a === "oddel") { removeOnedayItem(t.dataset.f, t.dataset.k); schEdit = null; render(); toast("Removed"); return; }
+    if (a === "odpriority") { var isPriority = toggleOnedayPriority(t.dataset.f, t.dataset.k); render(); toast(isPriority ? "Priority" : "Priority removed"); return; }
     // One-day (today-only) add, per card — stores into the day record only.
     if (a === "odaddsave")    {
       var cid = t.dataset.c, nameInp = document.getElementById("od-name-" + cid);

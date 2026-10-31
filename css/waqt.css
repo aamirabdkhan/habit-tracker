@@ -265,6 +265,7 @@ body::before{display:none!important}
 .sch-inlineadd .sch-addname{margin-bottom:0;flex:1;font-size:14px}
 .sch-inlineadd .sch-addgo{margin-left:0;flex-shrink:0;display:inline-flex;align-items:center}
 .sch-todaytag{font-family:var(--smono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--smut);border:1px solid var(--line);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.sch-priorityage{font-family:var(--smono);font-size:9px;letter-spacing:.06em;color:#e0a35c;background:rgba(184,115,51,.14);border:1px solid rgba(184,115,51,.55);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}.sch-edit.on{color:#e0a35c;opacity:1}
 
 /* prayers fallback strip */
 .sch-prayerstrip{margin-top:14px;padding:14px 16px;background:rgba(130,160,110,.08);border:1px solid rgba(130,160,110,.28);border-radius:14px}

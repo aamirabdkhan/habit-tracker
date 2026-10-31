@@ -99,7 +99,7 @@ function takbeerStreak() {
 // Publishes today's timed Pehar to a Supabase row the Scriptable widget reads by token.
 var WIDGET_TOKEN_KEY = "ht_widget_token";
 function computeWidgetPayload() {
-  var key = dk(new Date()), day = gDay(key), dow = new Date().getDay(), items = [];
+  var now = new Date(), key = dk(now), day = gDay(key), dow = now.getDay(), items = [];
   if (prayersOn()) PRAYERS.forEach(function(p) {
     var t = getNotifTime("prayers", p);
     if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true });
@@ -114,8 +114,38 @@ function computeWidgetPayload() {
   items.sort(function(a, b) { return timeToMin(a.t) - timeToMin(b.t); });
   var done = items.filter(function(i) { return i.done; }).length;
   var dstr = "";
-  try { dstr = new Date().toLocaleDateString(undefined, { weekday:"short", day:"numeric", month:"short" }); } catch(e) {}
-  return { date:dstr, done:done, total:items.length, items:items };
+  try { dstr = now.toLocaleDateString(undefined, { weekday:"short", day:"numeric", month:"short" }); } catch(e) {}
+
+  var cards = getCards(), counts = [], cardLabels = { habits:"DAILY", extra:"EXTRA", health:"HEALTHY" };
+  if (prayersOn()) {
+    var prayersDone = 0;
+    PRAYERS.forEach(function(p) { if (day.prayers && day.prayers[p]) prayersDone++; });
+    counts.push({ label:"PRAYERS", done:prayersDone, total:PRAYERS.length });
+  }
+  cards.forEach(function(card) {
+    var label = cardLabels[card.id];
+    if (!label) return;
+    var score = scoreItems(dayItemsForCard(card, day, dow));
+    counts.push({ label:label, done:score.done, total:score.total });
+  });
+  var priority = priorityItemsForDay(day, key).map(function(item) { return { name:item.name, age:item.age }; });
+  var commitments = scoreItems(priority);
+  if (commitments.total) counts.push({ label:"COMMITMENTS", done:commitments.done, total:commitments.total });
+
+  var nextPrayer = null;
+  if (prayersOn()) {
+    var prayerTimes = {};
+    PRAYERS.forEach(function(p) { prayerTimes[p] = getNotifTime("prayers", p) || ""; });
+    var next = computeNextPrayer(now.getHours() * 60 + now.getMinutes(), prayerTimes);
+    if (next) nextPrayer = { name:next.name, in:fmtHM(next.mins) };
+  }
+  return {
+    date:dstr, done:done, total:items.length, items:items,
+    stats:{ percent:dScore(key), counts:counts, next:nextPrayer },
+    priority:priority,
+    prayers:prayersOn() ? PRAYERS.map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "" }; }) : [],
+    nextPrayer:nextPrayer
+  };
 }
 function publishWidgetFeed() {
   if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return;

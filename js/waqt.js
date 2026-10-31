@@ -4283,4 +4283,22 @@ window.schPeharTick = setInterval(function() {
   if (view === "daily" && isT(cDate) && !shouldShowOnboarding()) render();
 }, 60000);
 
+// ---- sync self-check (Task 8): the new synced keys + day-record fields round-trip. Run at
+// #synccheck. Slots live in htn_slots (device-local by the MVP decision — single device), so they
+// are intentionally NOT syncable; everything a second device needs rides the ht_* keys below. ----
+(function() {
+  if (location.hash !== "#synccheck") return;
+  if (typeof isSyncableKey !== "function" || typeof mergeData !== "function") { console.warn("sync self-check: sync layer not loaded"); return; }
+  console.assert(isSyncableKey("ht_optional") === true, "ht_optional must sync");
+  console.assert(isSyncableKey("ht_reminders") === true, "ht_reminders must sync");
+  console.assert(isSyncableKey("ht_optional_mt") === false, "_mt keys must not sync");
+  console.assert(isSyncableKey("htn_slots") === false, "slots are device-local by design (MVP)");
+  // whole-value LWW keeps the newer side intact, so a day record's new fields (onedayPriority,
+  // occurrences) are never dropped by the merge.
+  var localDay = { habits:{ A:true }, onedayPriority:{ "habits::X":"2026-10-30" } };
+  var merged = mergeData(localDay, { habits:{ A:false } }, "2020-01-01T00:00:00Z", Date.now(), "ht_2026-10-31");
+  console.assert(merged.onedayPriority && merged.onedayPriority["habits::X"] === "2026-10-30", "day-record new fields preserved through merge");
+  console.log("sync self-check complete");
+})();
+
 render();

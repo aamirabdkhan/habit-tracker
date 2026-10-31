@@ -251,11 +251,13 @@ body::before{display:none!important}
 .sch-cardbarfill{height:100%;width:100%;background:var(--kc);border-radius:2px;transform-origin:left;transition:transform .3s ease}
 .sch-cardnothing{font-size:13px;color:var(--smut);margin:2px 0}
 .sch-cardnothing i{font-size:11px;margin:0 2px}
-.sch-tlrow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 2px}
-.sch-tlrow-lbl{font-size:11px;color:var(--smut);width:100%;margin-bottom:1px}
-.sch-tlink{appearance:none;border:1px solid var(--kc,var(--line));background:transparent;color:var(--kc,var(--ink));font-size:12.5px;font-weight:600;padding:4px 9px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
-.sch-tlink i{font-size:10px}
-@media (prefers-reduced-motion:reduce){.sch-tlink:active{transform:none!important}}
+.pehar-disclosure{margin-top:10px;border-top:1px solid var(--line)}
+.pehar-disclosure>button{appearance:none;display:flex;align-items:center;gap:6px;width:100%;padding:8px 0;color:var(--smut);background:none;border:0;font:10px var(--smono);letter-spacing:.12em;text-align:left;cursor:pointer}
+.pehar-disclosure>button svg{width:10px;height:7px;fill:none;stroke:currentColor;stroke-width:1.5;transition:transform .15s}
+.pehar-disclosure.open>button svg{transform:rotate(180deg)}
+.pehar-pill-row{display:flex;gap:7px;align-items:center;padding:7px 0;border-left:2px solid var(--kc);flex-wrap:wrap}
+.pehar-pill-row b{flex:1;min-width:80px;padding-left:8px;font-size:13px;font-weight:600}
+.pehar-pill-row button{appearance:none;color:var(--stext);background:var(--ink2);border:1px solid var(--line);border-radius:999px;padding:3px 7px;font:11px var(--smono);cursor:pointer}
 .sch-addbtn-sm{margin-top:8px;padding:10px}
 .sch-odform{margin-top:10px;padding:0}
 /* Persistent inline add row on each Plan card: name box + Add, side by side, always visible. */

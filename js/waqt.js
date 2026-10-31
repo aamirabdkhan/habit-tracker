@@ -2144,7 +2144,7 @@ function dayItemsForCard(card, day, dow) {
       return;
     }
     var t = onedayTimes[card.id + "::" + name] || "";
-    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true });
+    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true, okey:t ? occurrenceKey(card.id, name, t) : "" });
   });
   return out;
 }
@@ -2180,6 +2180,41 @@ function buildTimeline(cards, day, dow) {
   return items;
 }
 
+// Cards keep timed work in this compact disclosure; timeline remains its only completion surface.
+var expandedPeharCards = {};
+function renderTimedDisclosure(card, dow) {
+  var groups = {}, order = [], count = 0;
+  (card.items || []).forEach(function(it) {
+    var slots = it.time ? [{ time:it.time, okey:it.okey }] : (Array.isArray(it.slots) ? it.slots.filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }) : slotsForDay(card.id, it.n, dow));
+    slots.forEach(function(slot) {
+      if (!slot.time) return;
+      if (!groups[it.n]) { groups[it.n] = []; order.push(it.n); }
+      groups[it.n].push({ time:slot.time, okey:slot.okey || it.okey || occurrenceKey(card.id, it.n, slot.time) });
+      count++;
+    });
+  });
+  if (!count) return "";
+  var toggle = '<button type="button" data-a="pehartoggle" data-c="' + esA(card.id) + '" aria-expanded="' + (expandedPeharCards[card.id] ? "true" : "false") + '">ON PEHAR · ' + count + '<svg viewBox="0 0 12 8" aria-hidden="true"><path d="M1 1l5 5 5-5"></path></svg></button>';
+  if (!expandedPeharCards[card.id]) return '<div class="pehar-disclosure">' + toggle + '</div>';
+  var h = '<div class="pehar-disclosure open">' + toggle;
+  order.forEach(function(name) {
+    h += '<div class="pehar-pill-row" style="--kc:' + esA(card.color) + '"><b>' + esc(name) + '</b>';
+    groups[name].forEach(function(slot) { h += '<button type="button" data-a="gototimeline" data-block="' + esA(slot.okey) + '">' + esc(slot.time) + '</button>'; });
+    h += '</div>';
+  });
+  return h + '</div>';
+}
+
+function _declutterSelfCheck() {
+  if (location.hash !== "#decluttercheck") return;
+  var c = { id:"habits", color:"#5A8FA8", items:[{ n:"CEH", slots:[{ time:"06:25" }, { time:"20:00" }] }] };
+  var h = renderTimedDisclosure(c, 1);
+  console.assert(h.indexOf("ON PEHAR · 2") !== -1, "count");
+  console.assert(h.indexOf("sch-tlink") === -1, "chip wall removed");
+  console.log("declutter self-check complete");
+}
+_declutterSelfCheck();
+
 // One stacked card block: header + progress bar + untimed rows + add-for-today.
 function renderCard(card, items) {
   var done = 0, total = items.length;
@@ -2205,16 +2240,7 @@ function renderCard(card, items) {
         h += '</div>';
       });
     }
-    // Timed items are checkable only on the timeline (Task 14 #3) — here they're just
-    // tappable name-links that jump to + flash their timeline block (Task 14 #2).
-    if (timed.length) {
-      h += '<div class="sch-tlrow">';
-      if (untimed.length) h += '<span class="sch-tlrow-lbl">on Pehar:</span>';
-      timed.forEach(function(it) {
-        h += '<button type="button" class="sch-tlink" style="--kc:' + esA(card.color) + '" data-a="gototimeline" data-block="' + esA(it.okey || (card.id + "::" + it.n)) + '"><i class="fas fa-arrow-up"></i>' + esc(it.n) + '</button>';
-      });
-      h += '</div>';
-    }
+    h += renderTimedDisclosure({ id:card.id, color:card.color, items:timed }, dowOf(dk(cDate)));
   }
   // Persistent inline add on Today too (same convenience as the Plan cards): name-only, adds a
   // one-day item and stays focused for the next. No toggle-open form.
@@ -2240,7 +2266,7 @@ function renderGapQuickAdd(cards) {
 // Fallback strip shown only while no prayer has a time yet.
 function renderPrayersDayCard() {
   if (!prayersOn()) return "";
-  var items = PRAYERS.map(function(p){ return { n:p, done:!!cData.prayers[p], time:getNotifTime("prayers", p) || "" }; });
+  var items = PRAYERS.map(function(p){ return { n:p, done:!!cData.prayers[p], time:getNotifTime("prayers", p) || "", okey:"prayers::" + p }; });
   var done = items.filter(function(it){ return it.done; }).length, total = items.length;
   var pct = Math.round(done / total * 100), kc = PRAYER_GREEN;
   var untimed = items.filter(function(it){ return !it.time; });
@@ -2255,12 +2281,7 @@ function renderPrayersDayCard() {
     h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
     h += '<span class="sch-name">' + esc(it.n) + '</span></div></div>';
   });
-  if (timed.length) {
-    h += '<div class="sch-tlrow">';
-    if (untimed.length) h += '<span class="sch-tlrow-lbl">on Pehar:</span>';
-    timed.forEach(function(it){ h += '<button type="button" class="sch-tlink" style="--kc:' + kc + '" data-a="gototimeline" data-block="' + esA("prayers::" + it.n) + '"><i class="fas fa-arrow-up"></i>' + esc(it.n) + '</button>'; });
-    h += '</div>';
-  }
+  h += renderTimedDisclosure({ id:"prayers", color:kc, items:timed }, dowOf(dk(cDate)));
   if (!timed.length) h += '<p style="font-size:11px;color:var(--mt);margin:8px 0 0">Set prayer times in Template to place them on your Pehar.</p>';
   h += renderTakbeerTracker();
   return h + '</div>';
@@ -2579,9 +2600,10 @@ function _timelineSelfCheck() {
   var gestMixed = /<div class="sch-gest" data-gest="complete"[^>]*data-k="__sc_untimed2__"[^>]*style="--kc:/.test(htmlMixed);
   console.assert(gestMixed, "(a) the .sch-gest wrapper around an untimed row's complete action must carry --kc (card color)");
 
-  // (b) all-timed card renders a gototimeline link, no checkbox, for that item.
-  var linkA = hostA.querySelector('.sch-tlink[data-a="gototimeline"][data-block="' + CSS.escape(habitsCard.id + "::__sc_alltimed__") + '"]');
-  console.assert(!!linkA, "(b) an all-timed card item must render a gototimeline link", htmlAllTimed);
+  // (b) all-timed card renders its collapsed disclosure, no checkbox or chip wall.
+  var disclosureA = hostA.querySelector('.pehar-disclosure [data-a="pehartoggle"][data-c="' + CSS.escape(habitsCard.id) + '"]');
+  console.assert(!!disclosureA && disclosureA.textContent.indexOf("ON PEHAR · 1") !== -1, "(b) an all-timed card must render its Pehar disclosure", htmlAllTimed);
+  console.assert(htmlAllTimed.indexOf("sch-tlink") === -1, "(b) the old chip wall must not render", htmlAllTimed);
   console.assert(!hostA.querySelector('[data-a="schtog"][data-k="__sc_alltimed__"]'), "(b) an all-timed card item must NOT render a checkbox");
 
   // (c) the gototimeline handler's lookup (.sch-block[data-block="…"]) locates the right block.
@@ -2891,7 +2913,11 @@ document.getElementById("app").addEventListener("click", function(e) {
     // ---- Item editor (Task 12): duration presets, overview-stats switch ----
     if (a === "weighttoggle") { setWeightOn(!weightOn()); render(); return; }
     if (a === "takbeertoggle") { setTakbeerOn(!takbeerOn()); render(); return; }
-    if (a === "pehartoggle") { setPeharOn(!peharOn()); render(); return; }
+    if (a === "pehartoggle") {
+      if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
+      else setPeharOn(!peharOn());
+      render(); return;
+    }
     if (a === "prayerstoggle") {
       var wasPrayersOn = prayersOn();
       setPrayersOn(!wasPrayersOn);

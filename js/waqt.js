@@ -193,6 +193,49 @@ function setItemDays(field, name, daysArr) {
   if (!daysArr || daysArr.length === 7) delete map[key]; else map[key] = daysArr;
   saveDaysMap(map);
 }
+var NOTIF_SLOTS_KEY = "htn_slots";
+function getSlotsMap() { try { return JSON.parse(localStorage.getItem(NOTIF_SLOTS_KEY)) || {}; } catch(e) { return {}; } }
+function saveSlotsMap(map) { localStorage.setItem(NOTIF_SLOTS_KEY, JSON.stringify(map)); }
+function validSlotTime(time) { return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time); }
+function getItemSlots(field, name) {
+  var slots = getSlotsMap()[notifKey(field, name)];
+  if (Array.isArray(slots)) return slots.filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, days:Array.isArray(slot.days) ? slot.days : undefined }; });
+  var time = getNotifTime(field, name);
+  return time ? [{ time:time, days:getItemDays(field, name) || undefined }] : [];
+}
+function setItemSlots(field, name, slots) {
+  var clean = (Array.isArray(slots) ? slots : []).filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, days:Array.isArray(slot.days) ? slot.days : undefined }; });
+  var map = getSlotsMap(), key = notifKey(field, name);
+  if (clean.length <= 1) delete map[key]; else map[key] = clean;
+  saveSlotsMap(map);
+  setNotifTime(field, name, clean.length ? clean[0].time : "");
+  setItemDays(field, name, clean.length ? (clean[0].days || null) : null);
+}
+function slotsForDay(field, name, dow) { return getItemSlots(field, name).filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }); }
+function occurrenceKey(cardId, name, time) { return cardId + "::" + name + "::" + time; }
+function _slotsSelfCheck() {
+  if (location.hash !== "#slotscheck") return;
+  var savedTimes = localStorage.getItem("htn_times"), savedDays = localStorage.getItem(NOTIF_DAYS_KEY), savedSlots = localStorage.getItem(NOTIF_SLOTS_KEY), originalSet = setNotifTime;
+  setNotifTime = function(field, name, time) { var map = getNotifTimesMap(), key = notifKey(field, name); if (time) map[key] = time; else delete map[key]; saveNotifTimesMap(map); };
+  try {
+    localStorage.removeItem(NOTIF_SLOTS_KEY); localStorage.setItem("htn_times", JSON.stringify({ "habits::CEH":"06:25" })); localStorage.setItem(NOTIF_DAYS_KEY, JSON.stringify({ "habits::CEH":[1,3] }));
+    var legacy = getItemSlots("habits", "CEH");
+    console.assert(JSON.stringify(legacy) === JSON.stringify([{ time:"06:25", days:[1,3] }]), "legacy slot fallback failed", legacy);
+    console.assert(slotsForDay("habits", "CEH", 1).length === 1 && slotsForDay("habits", "CEH", 2).length === 0, "slot day filter failed");
+    console.assert(occurrenceKey("habits", "CEH", "06:25") === "habits::CEH::06:25", "occurrence key failed");
+    setItemSlots("habits", "CEH", [{ time:"06:25", days:[1] }, { time:"18:25" }]);
+    console.assert(getItemSlots("habits", "CEH").length === 2, "two-slot roundtrip failed");
+    setItemSlots("habits", "CEH", [{ time:"07:00" }]);
+    console.assert(!getSlotsMap()["habits::CEH"], "one slot must use legacy storage");
+    console.log("slots self-check complete");
+  } finally {
+    setNotifTime = originalSet;
+    if (savedTimes === null) localStorage.removeItem("htn_times"); else localStorage.setItem("htn_times", savedTimes);
+    if (savedDays === null) localStorage.removeItem(NOTIF_DAYS_KEY); else localStorage.setItem(NOTIF_DAYS_KEY, savedDays);
+    if (savedSlots === null) localStorage.removeItem(NOTIF_SLOTS_KEY); else localStorage.setItem(NOTIF_SLOTS_KEY, savedSlots);
+  }
+}
+_slotsSelfCheck();
 
 // Wrap gDay: drop day-scoped items on days they're not scheduled for.
 var originalGDay = gDay;
@@ -201,8 +244,8 @@ gDay = function(key) {
   var dow = new Date(key + "T00:00:00").getDay();
   ["habits", "extra", "health"].forEach(function(field) {
     Object.keys(d[field]).forEach(function(name) {
-      var days = getItemDays(field, name);
-      if (days && days.indexOf(dow) === -1) delete d[field][name];
+      var slots = getItemSlots(field, name), days = getItemDays(field, name);
+      if ((slots.length && !slotsForDay(field, name, dow).length) || (!slots.length && days && days.indexOf(dow) === -1)) delete d[field][name];
     });
   });
   if (Array.isArray(d.goalRef)) d.goalRef = d.goalRef.filter(function(gr) { return gr.name in d.habits; });
@@ -695,7 +738,20 @@ function importItem(value, prayer) {
   if (value.time !== undefined && (typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time))) return null;
   if (value.duration !== undefined && (typeof value.duration !== "number" || !isFinite(value.duration) || value.duration <= 0)) return null;
   var days = importDays(value.days); if (days === false) return null;
-  var out = { name:value.name.trim(), time:value.time || "", duration:value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration), days:days };
+  var slots = null;
+  if (value.slots !== undefined) {
+    if (!Array.isArray(value.slots)) return null;
+    slots = [];
+    for (var i = 0; i < value.slots.length; i++) {
+      var slot = value.slots[i], slotDays;
+      if (!slot || typeof slot !== "object" || Array.isArray(slot) || !validSlotTime(slot.time)) return null;
+      slotDays = importDays(slot.days); if (slotDays === false) return null;
+      slots.push({ time:slot.time, days:slotDays || undefined });
+    }
+  }
+  var first = slots && slots[0];
+  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration), days:days === null && first ? (first.days || null) : days };
+  if (slots) out.slots = slots;
   // Fix 4: optional per-item change note ("split around Asr", "moved 21:30->22:00"). Optional by
   // design — absence must never fail validation, so older payloads keep importing unchanged.
   if (typeof value.note === "string" && value.note.trim()) out.note = value.note.trim();
@@ -901,7 +957,13 @@ function applyImportSchedule(preview, rawTimes) {
   // times through the local map directly and must stay entirely offline, same reasoning as
   // #setupcheck's raw NOTIF_TIMES_KEY restore (see its comment above). Real applies (importapply
   // click handler calls this with rawTimes=false) do want reminder_times kept in step.
-  function applyValues(id, item) { writeImportTime(id, item.name, item.time, rawTimes); setItemDur(id, item.name, item.duration); setItemDays(id, item.name, item.days); if (!rawTimes) syncItemReminder(id, item.name); }
+  function applyValues(id, item) {
+    if (item.slots && item.slots.length > 1) {
+      if (rawTimes) { var slotMap = getSlotsMap(); slotMap[notifKey(id, item.name)] = item.slots; saveSlotsMap(slotMap); writeImportTime(id, item.name, item.slots[0].time, true); setItemDays(id, item.name, item.slots[0].days || null); }
+      else setItemSlots(id, item.name, item.slots);
+    } else { writeImportTime(id, item.name, item.time, rawTimes); setItemDays(id, item.name, item.days); }
+    setItemDur(id, item.name, item.duration); if (!rawTimes) syncItemReminder(id, item.name);
+  }
   preview.rows.forEach(function(row) {
     if (row.kind === "newprayer" || (row.kind === "prayer" && row.choice === "import")) {
       writeImportTime("prayers", row.name, row.incoming.time, rawTimes);
@@ -935,7 +997,7 @@ function importPrompt() {
   var instruction = "Create a recurring weekly plan. " + (prayers ? "Anchor the day around the prayer times; " : "") + "do not overlap blocks. Place study, exercise, and commitments where I describe them; apply day-of-week scoping when I say on Saturday/Sunday. Assign realistic durations so each item is a block. Timed items render on a visual timeline called the Pehar, from dawn to night; briefly show me how my day will flow."
     + "\n\nRULES, follow these exactly:"
     + "\n1. USE THE CARDS IN MY CURRENT PROFILE BELOW. Put each activity on the card it fits. Only invent a new card when nothing fits at all, and never leave a card I already have empty in order to invent one. 5 cards maximum in total, including Daily Goals."
-    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday."
+    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. For several times use slots:[{time,days?}]; never duplicate the activity."
     + "\n3. DO NOT RENAME my activities (no \"CEH Morning\"/\"CEH Afternoon\"). The app adds a -2 suffix itself when the same name repeats."
     + (prayers ? "\n4. You MAY split a block that runs across a prayer into two pieces, and it helps. THE PIECES MUST ADD UP TO THE DURATION I ASKED FOR. If a 120m block loses 35m to a prayer, the second piece runs 35m longer, it does not disappear. Keep the same name for both pieces." : "\n4. Never shorten a block below the duration I asked for.")
     + "\n5. REPORT EVERY CHANGE. Any block you split, move, shorten or merge gets a short \"note\" on that item saying what you did and why. Put an overall summary of how the day flows in a top-level \"notes\" string."
@@ -2029,14 +2091,21 @@ function templateNamesFor(cardId) { return cardTemplateArr(cardId).map(itemName)
 // editor (schedit for Daily, tpledit for Template) — same toggle-off code path as the pencil.
 function itemEditorHTML(field, name, closeAction) {
   var isPrayer = field === "prayers";
-  var t = getNotifTime(field, name), days = getItemDays(field, name);
+  var t = getNotifTime(field, name), days = getItemDays(field, name), slots = isPrayer ? [] : getItemSlots(field, name);
   var mode = tplRepeatMode[field + "::" + name] || (days ? "custom" : "every");
   var h = '<div class="sch-editor">';
   // TIME. Setting a time on a non-prayer item turns its reminder on automatically (see the
   // .sch-timeinp change handler) — there is no bell to toggle, because "timed but silent" was
   // a distinction nobody asked for. Duration is no longer editable here either: it defaults to
   // 30 (35 for prayers) and a typed or imported time RANGE still sets it.
-  h += '<div class="sch-editrow"><span class="sch-editlbl">Time</span><label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-timeinp" data-field="' + esA(field) + '" data-name="' + esA(name) + '" value="' + esA(t) + '"></label></div>';
+  h += '<div class="sch-editrow sch-slotrow"><span class="sch-editlbl">Time</span><span class="sch-slots">';
+  if (isPrayer) h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-timeinp" data-field="' + esA(field) + '" data-name="' + esA(name) + '" value="' + esA(t) + '"></label>';
+  else {
+    if (!slots.length) slots = [{ time:"" }];
+    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"></label>'; });
+    h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button>';
+  }
+  h += '</span></div>';
   if (!isPrayer) {
     // REPEAT — seven single-letter pills, always shown. All seven lit = every day (setItemDays
     // stores that as absent, so "every day" and a 7-day list are the same thing). The Every/Custom
@@ -2050,7 +2119,7 @@ function itemEditorHTML(field, name, closeAction) {
     // (data-a="ovstatsedit"), next to the consequence, instead of as noise during task creation.
   }
   h += '<div class="sch-editrow sch-editfoot">';
-  h += '<button class="sch-savebtn" data-a="' + closeAction + '" data-f="' + esA(field) + '" data-k="' + esA(name) + '"><i class="fas fa-check"></i> Save</button>';
+  h += '<button class="sch-savebtn" data-a="' + (isPrayer ? closeAction : "slotsave") + '" data-close="' + closeAction + '" data-f="' + esA(field) + '" data-k="' + esA(name) + '"><i class="fas fa-check"></i> Save</button>';
   if (!isPrayer) h += '<button class="sch-del" data-a="schdel" data-f="' + esA(field) + '" data-k="' + esA(name) + '"><i class="fas fa-trash-can"></i> Delete</button>';
   h += '</div>';
   return h + '</div>';
@@ -2069,11 +2138,13 @@ function dayItemsForCard(card, day, dow) {
   Object.keys(doneMap || {}).forEach(function(name) {
     var isTpl = tplNames.indexOf(name) !== -1;
     if (isTpl) {
-      var days = getItemDays(card.id, name);
-      if (days && days.indexOf(dow) === -1) return;
+      var slots = getItemSlots(card.id, name), todaySlots = slotsForDay(card.id, name, dow);
+      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, oneday:false, okey:occurrenceKey(card.id, name, slot.time) }); });
+      else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false }); }
+      return;
     }
-    var t = isTpl ? (getNotifTime(card.id, name) || "") : (onedayTimes[card.id + "::" + name] || "");
-    out.push({ n:name, done:!!doneMap[name], time:t, oneday:!isTpl });
+    var t = onedayTimes[card.id + "::" + name] || "";
+    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true });
   });
   return out;
 }
@@ -2093,7 +2164,7 @@ function buildTimeline(cards, day, dow) {
     dayItemsForCard(card, day, dow).forEach(function(it, ii) {
       if (it.time) {
         var dur2 = effectiveDur(card.id, it.n, it.oneday, day), start2 = timeToMin(it.time);
-        items.push({ id:card.id, name:it.n, t:it.time, kc:card.color, done:it.done, isPrayer:false, oneday:it.oneday, cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
+        items.push({ id:card.id, name:it.n, t:it.time, kc:card.color, done:it.done, isPrayer:false, oneday:it.oneday, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
       }
     });
   });
@@ -2140,7 +2211,7 @@ function renderCard(card, items) {
       h += '<div class="sch-tlrow">';
       if (untimed.length) h += '<span class="sch-tlrow-lbl">on Pehar:</span>';
       timed.forEach(function(it) {
-        h += '<button type="button" class="sch-tlink" style="--kc:' + esA(card.color) + '" data-a="gototimeline" data-block="' + esA(card.id + "::" + it.n) + '"><i class="fas fa-arrow-up"></i>' + esc(it.n) + '</button>';
+        h += '<button type="button" class="sch-tlink" style="--kc:' + esA(card.color) + '" data-a="gototimeline" data-block="' + esA(it.okey || (card.id + "::" + it.n)) + '"><i class="fas fa-arrow-up"></i>' + esc(it.n) + '</button>';
       });
       h += '</div>';
     }
@@ -2388,7 +2459,7 @@ function rPehar() {
         if (schQuickGap && schQuickGap.start === item.start) h += renderGapQuickAdd(cards);
         return;
       }
-      var ekey = item.id + "::" + item.name;
+      var ekey = item.okey || (item.id + "::" + item.name);
       h += '<div class="sch-block' + (item.done ? ' checked' : '') + (isNow ? ' now' : '') + (item.isPrayer ? ' prayer' : '') + '" data-block="' + esA(ekey) + '" style="--kc:' + item.kc + '">';
       h += '<div class="sch-time">' + prettyTime(item.t) + '<small>' + fmtDur(item.dur) + '</small></div>';
       h += '<div class="sch-node"><i></i></div>';
@@ -2722,6 +2793,23 @@ document.getElementById("app").addEventListener("click", function(e) {
         setTimeout(function() { tgt.classList.remove("sch-flash"); }, 2000);
       }
       return;
+    }
+    if (a === "slotadd") {
+      var addButton = t, slotLabel = document.createElement("label");
+      slotLabel.className = "sch-timepill";
+      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp">';
+      addButton.parentNode.insertBefore(slotLabel, addButton);
+      slotLabel.querySelector("input").focus();
+      return;
+    }
+    if (a === "slotsave") {
+      var editor = t.closest(".sch-editor"), selectedDays = Array.prototype.slice.call(editor.querySelectorAll(".sch-day.on")).map(function(btn) { return +btn.dataset.dow; });
+      var savedSlots = Array.prototype.slice.call(editor.querySelectorAll(".sch-slotinp")).filter(function(inp) { return !!inp.value; }).map(function(inp) { return { time:inp.value, days:selectedDays.length === 7 ? undefined : selectedDays }; });
+      setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
+      setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
+      syncItemReminder(t.dataset.f, t.dataset.k);
+      if (t.dataset.close === "schedit") schEdit = null; else tplItemEdit = null;
+      delete tplRepeatMode[t.dataset.f + "::" + t.dataset.k]; render(); return;
     }
     if (a === "schtog") {
       // A completed swipe-right gesture already toggled + rendered this row; the

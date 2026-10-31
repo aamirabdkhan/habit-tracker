@@ -330,6 +330,11 @@ body::before{display:none!important}
 .sch-planrow{display:flex;align-items:center;gap:8px;padding:8px 2px}
 .sch-planinfo{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
 .sch-summary{font-family:var(--smono);font-size:11px;color:var(--smut)}
+.sch-optionaltag,.sch-opttoggle,.ov-count{font-family:var(--smono);font-size:10px;color:var(--smut)}
+.sch-optionaltag{display:inline-block;margin-left:5px;padding:1px 5px;border:1px solid var(--line);border-radius:999px;vertical-align:middle;text-transform:uppercase;letter-spacing:.05em}
+.sch-opttoggle{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 8px;cursor:pointer}
+.sch-opttoggle.on{border-color:var(--smut);color:var(--stext)}
+.ov-count{margin:7px 0 0}
 
 /* view nav */
 .sch-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:28px}

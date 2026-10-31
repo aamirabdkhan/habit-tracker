@@ -193,6 +193,11 @@ function setItemDays(field, name, daysArr) {
   if (!daysArr || daysArr.length === 7) delete map[key]; else map[key] = daysArr;
   saveDaysMap(map);
 }
+var OPTIONAL_KEY = "ht_optional";
+function getOptionalMap() { try { return JSON.parse(localStorage.getItem(OPTIONAL_KEY)) || {}; } catch(e) { return {}; } }
+function saveOptionalMap(map) { localStorage.setItem(OPTIONAL_KEY, JSON.stringify(map)); }
+function isOptional(field, name) { return !!getOptionalMap()[notifKey(field, name)]; }
+function setOptional(field, name, on) { var map = getOptionalMap(), key = notifKey(field, name); if (on) map[key] = true; else delete map[key]; saveOptionalMap(map); }
 var NOTIF_SLOTS_KEY = "htn_slots";
 function getSlotsMap() { try { return JSON.parse(localStorage.getItem(NOTIF_SLOTS_KEY)) || {}; } catch(e) { return {}; } }
 function saveSlotsMap(map) { localStorage.setItem(NOTIF_SLOTS_KEY, JSON.stringify(map)); }
@@ -213,6 +218,9 @@ function setItemSlots(field, name, slots) {
 }
 function slotsForDay(field, name, dow) { return getItemSlots(field, name).filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }); }
 function occurrenceKey(cardId, name, time) { return cardId + "::" + name + "::" + time; }
+function isDailyRecurring(field, name) { var slots = getItemSlots(field, name), days; if (slots.length) return slots.every(function(slot) { return !slot.days || slot.days.length === 7; }); days = getItemDays(field, name); return !days || days.length === 7; }
+function eligibleHeatmapItem(field, name) { return !isOptional(field, name) && isDailyRecurring(field, name); }
+function scoreItems(items) { return items.reduce(function(score, item) { if (item.optional) return score; score.total++; if (item.done) score.done++; return score; }, { done:0, total:0 }); }
 function _slotsSelfCheck() {
   if (location.hash !== "#slotscheck") return;
   var savedTimes = localStorage.getItem("htn_times"), savedDays = localStorage.getItem(NOTIF_DAYS_KEY), savedSlots = localStorage.getItem(NOTIF_SLOTS_KEY), originalSet = setNotifTime;
@@ -457,7 +465,7 @@ function cardTemplateArr(id) {
 function cardItemsFor(id) {
   return cardTemplateArr(id).map(function(x) {
     var n = itemName(x);
-    return { n:n, time:getNotifTime(id, n) || "", days:getItemDays(id, n) };
+    return { n:n, time:getNotifTime(id, n) || "", days:getItemDays(id, n), optional:isOptional(id, n) };
   });
 }
 
@@ -499,10 +507,10 @@ function gDayCards(key) {
     var items;
     if (card.id === "habits" || card.id === "extra" || card.id === "health") {
       var f = card.id === "extra" ? "extra" : card.id === "health" ? "health" : "habits";
-      items = card.items.map(function(it) { return { n:it.n, done:!!day[f][it.n], time:it.time, days:it.days }; });
+      items = card.items.map(function(it) { return { n:it.n, done:!!day[f][it.n], time:it.time, days:it.days, optional:it.optional }; });
     } else {
       var doneMap = (day.cards && day.cards[card.id]) || {};
-      items = card.items.map(function(it) { return { n:it.n, done:!!doneMap[it.n], time:it.time, days:it.days }; });
+      items = card.items.map(function(it) { return { n:it.n, done:!!doneMap[it.n], time:it.time, days:it.days, optional:it.optional }; });
     }
     return { card:card, items:items };
   });
@@ -519,7 +527,7 @@ dScore = function(key) {
   if (prayersOn()) PRAYERS.forEach(function(p) { if (day.prayers[p]) pd++; });
   var doneTasks = 0, totalTasks = 0;
   gDayCards(key).forEach(function(row) {
-    row.items.forEach(function(it) { totalTasks++; if (it.done) doneTasks++; });
+    var score = scoreItems(row.items); doneTasks += score.done; totalTasks += score.total;
   });
   var total = (prayersOn() ? 5 : 0) + totalTasks;
   return total ? Math.round((pd + doneTasks) / total * 100) : 0;
@@ -601,6 +609,7 @@ function removeCardItem(cardId, name) {
   setNotifTime(cardId, name, ""); // already clears any reminder_times row unconditionally (Task: task notifications)
   setItemDays(cardId, name, null);
   setItemBell(cardId, name, false); // drop stale bell state so a reused name doesn't inherit it
+  setOptional(cardId, name, false);
   return true;
 }
 
@@ -737,6 +746,7 @@ function importItem(value, prayer) {
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.name !== "string" || !value.name.trim()) return null;
   if (value.time !== undefined && (typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time))) return null;
   if (value.duration !== undefined && (typeof value.duration !== "number" || !isFinite(value.duration) || value.duration <= 0)) return null;
+  if (value.optional !== undefined && typeof value.optional !== "boolean") return null;
   var days = importDays(value.days); if (days === false) return null;
   var slots = null;
   if (value.slots !== undefined) {
@@ -750,7 +760,7 @@ function importItem(value, prayer) {
     }
   }
   var first = slots && slots[0];
-  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration), days:days === null && first ? (first.days || null) : days };
+  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration), days:days === null && first ? (first.days || null) : days, optional:!!value.optional };
   if (slots) out.slots = slots;
   // Fix 4: optional per-item change note ("split around Asr", "moved 21:30->22:00"). Optional by
   // design — absence must never fail validation, so older payloads keep importing unchanged.
@@ -814,10 +824,10 @@ function parseImportSchedule(text) {
 function cleanScheduleSnapshot() {
   var out = { version:1 };
   if (prayersOn()) { out.prayers = {}; PRAYERS.forEach(function(name) { out.prayers[name] = { time:getNotifTime("prayers", name) || "", duration:effectiveDur("prayers", name, false) }; }); }
-  out.cards = getCards().map(function(card) { return { name:card.name, items:card.items.map(function(it) { var x = { name:it.n }; var time = getNotifTime(card.id, it.n); if (time) x.time = time; x.duration = effectiveDur(card.id, it.n, false); var days = getItemDays(card.id, it.n); if (days) x.days = days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); return x; }) }; });
+  out.cards = getCards().map(function(card) { return { name:card.name, items:card.items.map(function(it) { var x = { name:it.n }; var time = getNotifTime(card.id, it.n); if (time) x.time = time; x.duration = effectiveDur(card.id, it.n, false); var days = getItemDays(card.id, it.n); if (days) x.days = days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); if (isOptional(card.id, it.n)) x.optional = true; return x; }) }; });
   return out;
 }
-function importSame(a, b) { return a.time === b.time && a.duration === b.duration && JSON.stringify(a.days || null) === JSON.stringify(b.days || null); }
+function importSame(a, b) { return a.time === b.time && a.duration === b.duration && !!a.optional === !!b.optional && JSON.stringify(a.days || null) === JSON.stringify(b.days || null); }
 
 // ---- Fix 1: card routing -------------------------------------------------
 // Guess an incoming item's home card by matching words in its name against the user's REAL card
@@ -945,7 +955,7 @@ function buildImportPreview(data) {
       }
       var existing = target.newCard ? null : cardTemplateArr(target.id).filter(function(x) { return itemName(x) === incoming.name; })[0];
       if (!existing) { rows.push({ kind:"newitem", cardName:target.name, targetId:target.id, incoming:incoming, sourceName:group.name }); addItems++; }
-      else { var mine = { time:getNotifTime(target.id, incoming.name) || "", duration:effectiveDur(target.id, incoming.name, false), days:getItemDays(target.id, incoming.name) }; if (!importSame(mine, incoming)) rows.push({ kind:"item", cardName:target.name, targetId:target.id, name:incoming.name, incoming:incoming, mine:mine, choice:"mine" }); }
+      else { var mine = { time:getNotifTime(target.id, incoming.name) || "", duration:effectiveDur(target.id, incoming.name, false), days:getItemDays(target.id, incoming.name), optional:isOptional(target.id, incoming.name) }; if (!importSame(mine, incoming)) rows.push({ kind:"item", cardName:target.name, targetId:target.id, name:incoming.name, incoming:incoming, mine:mine, choice:"mine" }); }
     });
   });
   markImportOverlaps(rows);
@@ -962,7 +972,7 @@ function applyImportSchedule(preview, rawTimes) {
       if (rawTimes) { var slotMap = getSlotsMap(); slotMap[notifKey(id, item.name)] = item.slots; saveSlotsMap(slotMap); writeImportTime(id, item.name, item.slots[0].time, true); setItemDays(id, item.name, item.slots[0].days || null); }
       else setItemSlots(id, item.name, item.slots);
     } else { writeImportTime(id, item.name, item.time, rawTimes); setItemDays(id, item.name, item.days); }
-    setItemDur(id, item.name, item.duration); if (!rawTimes) syncItemReminder(id, item.name);
+    setItemDur(id, item.name, item.duration); setOptional(id, item.name, item.optional); if (!rawTimes) syncItemReminder(id, item.name);
   }
   preview.rows.forEach(function(row) {
     if (row.kind === "newprayer" || (row.kind === "prayer" && row.choice === "import")) {
@@ -1478,7 +1488,7 @@ function renderPlanCard(card) {
       h += '<div class="sch-planitem"><div class="sch-gest" data-gest="delete" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '">';
       h += '<button type="button" class="sch-gest-action sch-gest-delete" data-a="gestdel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Delete ' + esA(it.n) + '"><i class="fas fa-trash-can"></i></button>';
       h += '<div class="sch-planrow sch-gest-row">';
-      h += '<div class="sch-planinfo"><span class="sch-title">' + esc(it.n) + '</span><span class="sch-summary">' + scheduleSummary(it.time, it.days) + '</span></div>';
+      h += '<div class="sch-planinfo"><span class="sch-title">' + esc(it.n) + (isOptional(card.id, it.n) ? ' <span class="sch-optionaltag">optional</span>' : '') + '</span><span class="sch-summary">' + scheduleSummary(it.time, it.days) + '</span></div>';
       h += '<button class="sch-edit" data-a="tpledit" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Edit ' + esA(it.n) + '"><i class="fas fa-pen"></i></button>';
       h += '<button class="sch-edit sch-rowdel" data-a="gestdel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Delete ' + esA(it.n) + '"><i class="fas fa-trash-can"></i></button>';
       h += '</div></div>';
@@ -1720,7 +1730,7 @@ function streakFromBoolArray(arr) {
 // % of card items done for one gDayCards(key)-shaped result, or null if there are no items that day.
 function avgTasksForDay(dayCardsResult) {
   var total = 0, done = 0;
-  dayCardsResult.forEach(function(row) { row.items.forEach(function(it) { total++; if (it.done) done++; }); });
+  dayCardsResult.forEach(function(row) { var score = scoreItems(row.items); total += score.total; done += score.done; });
   return total ? done / total * 100 : null;
 }
 
@@ -1802,7 +1812,9 @@ function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, pray
 function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
   var days = md.length, slides = [];
   cardsMeta.forEach(function(card) {
-    var items = card.items.filter(function(it) { return getItemShow(card.id, it.n); });
+    var selected = card.items.filter(function(it) { return getItemShow(card.id, it.n) && !isOptional(card.id, it.n); });
+    var items = selected.filter(function(it) { return eligibleHeatmapItem(card.id, it.n); });
+    var countItems = selected.filter(function(it) { return !isDailyRecurring(card.id, it.n); });
     // A card with nothing tracked still renders. The old early-return made the whole card vanish,
     // which also took away the only route back in to re-enable anything on it.
     var chunks = items.length ? chunkArr(items, 5) : [[]];
@@ -1814,7 +1826,7 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
       // The picker is a modal now (renderOvStatsModal), opened by the pencil — the inline panel
       // was cramped and ugly. Nothing else renders here.
       if (!itemChunk.length) {
-        h += '<p class="sch-cardnothing">Nothing tracked on this card. Tap the pencil to choose items.</p>';
+        h += countItems.length ? countItems.map(function(it) { var arr = (cardDayItems[card.id] || {})[it.n] || []; return '<p class="ov-count">' + esc(it.n) + ': ' + arr.filter(Boolean).length + ' times done</p>'; }).join('') : '<p class="sch-cardnothing">Nothing tracked on this card. Tap the pencil to choose items.</p>';
       } else {
         h += '<div class="sch-ovrow"><div class="sch-ovrowlbl"></div><div class="phg" style="--cols:' + days + '">';
         for (var d = 0; d < days; d++) h += '<div class="phn">' + (((d + 1) % 5 === 1) || d === 0 ? (d + 1) : '') + '</div>';
@@ -1833,6 +1845,7 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
           legend += '<div class="sch-ovlegenditem"><span>' + esc(it.n) + '</span><strong style="color:' + esA(card.color) + '"><i class="fas fa-fire" style="margin-right:4px"></i>' + st.current + ' · best ' + st.best + '</strong></div>';
         });
         h += '<div class="sch-ovlegend">' + legend + '</div>';
+        if (countItems.length) h += countItems.map(function(it) { var arr = (cardDayItems[card.id] || {})[it.n] || []; return '<p class="ov-count">' + esc(it.n) + ': ' + arr.filter(Boolean).length + ' times done</p>'; }).join('');
       }
       h += '</div>';
       slides.push(h);
@@ -1870,7 +1883,7 @@ function rOverview() {
     dc.forEach(function(row) {
       row.items.forEach(function(it) {
         if (!cardDayItems[row.card.id][it.n]) cardDayItems[row.card.id][it.n] = [];
-        cardDayItems[row.card.id][it.n].push(!!it.done);
+        cardDayItems[row.card.id][it.n].push(!it.optional && !!it.done);
       });
     });
   });
@@ -1941,6 +1954,21 @@ function _overviewSelfCheck() {
   console.log("overview self-check complete");
 }
 _overviewSelfCheck();
+
+function _calculatorsSelfCheck() {
+  if (location.hash !== "#calculatorscheck") return;
+  var slots = getItemSlots, days = getItemDays;
+  try {
+    var s = scoreItems([{done:true}, {done:false, optional:true}]);
+    console.assert(s.done === 1 && s.total === 1, "optional excluded", s);
+    getItemSlots = function(field, name) { return name === "weekly" ? [{time:"06:00", days:[1]}] : [{time:"06:00"}]; };
+    getItemDays = function() { return null; };
+    console.assert(isDailyRecurring("habits", "daily"), "daily");
+    console.assert(!isDailyRecurring("habits", "weekly"), "weekly");
+    console.log("calculators self-check complete");
+  } finally { getItemSlots = slots; getItemDays = days; }
+}
+_calculatorsSelfCheck();
 
 // ---- Daily view IS the timeline ----
 var originalRender = render;
@@ -2115,6 +2143,7 @@ function itemEditorHTML(field, name, closeAction) {
     h += '<div class="sch-days sch-daysrow" data-field="' + esA(field) + '" data-name="' + esA(name) + '">';
     DOW_LBL.forEach(function(lbl, d) { var on = !days || days.indexOf(d) !== -1; h += '<button type="button" class="sch-day' + (on ? ' on' : '') + '" data-dow="' + d + '" aria-label="' + esA(DOW_FULL[d]) + '">' + lbl + '</button>'; });
     h += '</div></div>';
+    h += '<div class="sch-editrow"><span class="sch-editlbl">Optional</span><button type="button" class="sch-opttoggle' + (isOptional(field, name) ? ' on' : '') + '" data-a="optionaltoggle" data-f="' + esA(field) + '" data-k="' + esA(name) + '" aria-pressed="' + (isOptional(field, name) ? 'true' : 'false') + '">' + (isOptional(field, name) ? 'Optional' : 'Required') + '</button></div>';
     // Which items count toward the Overview grids is now chosen ON the Overview heatmap
     // (data-a="ovstatsedit"), next to the consequence, instead of as noise during task creation.
   }
@@ -2139,12 +2168,12 @@ function dayItemsForCard(card, day, dow) {
     var isTpl = tplNames.indexOf(name) !== -1;
     if (isTpl) {
       var slots = getItemSlots(card.id, name), todaySlots = slotsForDay(card.id, name, dow);
-      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, oneday:false, okey:occurrenceKey(card.id, name, slot.time) }); });
-      else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false }); }
+      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, oneday:false, optional:isOptional(card.id, name), okey:occurrenceKey(card.id, name, slot.time) }); });
+      else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false, optional:isOptional(card.id, name) }); }
       return;
     }
     var t = onedayTimes[card.id + "::" + name] || "";
-    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true, okey:t ? occurrenceKey(card.id, name, t) : "" });
+    out.push({ n:name, done:!!doneMap[name], time:t, oneday:true, optional:false, okey:t ? occurrenceKey(card.id, name, t) : "" });
   });
   return out;
 }
@@ -2164,7 +2193,7 @@ function buildTimeline(cards, day, dow) {
     dayItemsForCard(card, day, dow).forEach(function(it, ii) {
       if (it.time) {
         var dur2 = effectiveDur(card.id, it.n, it.oneday, day), start2 = timeToMin(it.time);
-        items.push({ id:card.id, name:it.n, t:it.time, kc:card.color, done:it.done, isPrayer:false, oneday:it.oneday, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
+        items.push({ id:card.id, name:it.n, t:it.time, kc:card.color, done:it.done, isPrayer:false, oneday:it.oneday, optional:it.optional, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
       }
     });
   });
@@ -2188,8 +2217,8 @@ function renderTimedDisclosure(card, dow) {
     var slots = it.time ? [{ time:it.time, okey:it.okey }] : (Array.isArray(it.slots) ? it.slots.filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }) : slotsForDay(card.id, it.n, dow));
     slots.forEach(function(slot) {
       if (!slot.time) return;
-      if (!groups[it.n]) { groups[it.n] = []; order.push(it.n); }
-      groups[it.n].push({ time:slot.time, okey:slot.okey || it.okey || occurrenceKey(card.id, it.n, slot.time) });
+      if (!groups[it.n]) { groups[it.n] = { slots:[], optional:!!it.optional }; order.push(it.n); }
+      groups[it.n].slots.push({ time:slot.time, okey:slot.okey || it.okey || occurrenceKey(card.id, it.n, slot.time) });
       count++;
     });
   });
@@ -2198,8 +2227,8 @@ function renderTimedDisclosure(card, dow) {
   if (!expandedPeharCards[card.id]) return '<div class="pehar-disclosure">' + toggle + '</div>';
   var h = '<div class="pehar-disclosure open">' + toggle;
   order.forEach(function(name) {
-    h += '<div class="pehar-pill-row" style="--kc:' + esA(card.color) + '"><b>' + esc(name) + '</b>';
-    groups[name].forEach(function(slot) { h += '<button type="button" data-a="gototimeline" data-block="' + esA(slot.okey) + '">' + esc(slot.time) + '</button>'; });
+    h += '<div class="pehar-pill-row" style="--kc:' + esA(card.color) + '"><b>' + esc(name) + (groups[name].optional ? ' <span class="sch-optionaltag">optional</span>' : '') + '</b>';
+    groups[name].slots.forEach(function(slot) { h += '<button type="button" data-a="gototimeline" data-block="' + esA(slot.okey) + '">' + esc(slot.time) + '</button>'; });
     h += '</div>';
   });
   return h + '</div>';
@@ -2217,8 +2246,7 @@ _declutterSelfCheck();
 
 // One stacked card block: header + progress bar + untimed rows + add-for-today.
 function renderCard(card, items) {
-  var done = 0, total = items.length;
-  items.forEach(function(it) { if (it.done) done++; });
+  var score = scoreItems(items), done = score.done, total = score.total;
   var pct = total ? Math.round(done / total * 100) : 0;
   var untimed = items.filter(function(it) { return !it.time; });
   var timed = items.filter(function(it) { return !!it.time; });
@@ -2234,7 +2262,7 @@ function renderCard(card, items) {
         h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
         h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(card.color) + '">';
         h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
-        h += '<span class="sch-name">' + esc(it.n) + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + '</span>';
+        h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + '</span>';
         if (it.oneday) h += '<button type="button" class="sch-edit" data-a="oddel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Remove ' + esA(it.n) + '"><i class="fas fa-xmark"></i></button>';
         h += '</div>';
         h += '</div>';
@@ -2360,7 +2388,7 @@ function rSchedule() {
   // counts: Prayers x/5 + Tasks x/y (all card items across all cards)
   var pd = 0; if (prayersOn()) PRAYERS.forEach(function(p) { if (cData.prayers[p]) pd++; });
   var doneTasks = 0, totalTasks = 0;
-  cardItems.forEach(function(ci) { totalTasks += ci.items.length; ci.items.forEach(function(it) { if (it.done) doneTasks++; }); });
+  cardItems.forEach(function(ci) { var score = scoreItems(ci.items); totalTasks += score.total; doneTasks += score.done; });
   var done = pd + doneTasks, total = (prayersOn() ? 5 : 0) + totalTasks, pct = total ? Math.round(done / total * 100) : 0;
   var C = 169.646, off = C * (1 - pct / 100);
 
@@ -2403,8 +2431,7 @@ function rSchedule() {
   h += '</svg><div class="sch-pct">' + pct + '%</div></div><div class="sch-statcols">';
   if (prayersOn()) h += '<div class="sch-statcol" data-cardchip="prayers" data-done="' + pd + '" data-total="5"><span class="sch-statnum">' + pd + '/5</span><span class="sch-statlbl">Prayers</span></div>';
   cardItems.forEach(function(ci) {
-    var d = 0, t = ci.items.length;
-    ci.items.forEach(function(it) { if (it.done) d++; });
+    var cardScore = scoreItems(ci.items), d = cardScore.done, t = cardScore.total;
     var label = ci.card.name.split(' ')[0];
     h += '<div class="sch-statcol" data-cardchip="' + esA(ci.card.id) + '" data-done="' + d + '" data-total="' + t + '"><span class="sch-statnum">' + d + '/' + t + '</span><span class="sch-statlbl">' + esc(label) + '</span></div>';
   });
@@ -2487,7 +2514,7 @@ function rPehar() {
       h += '<div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" style="--kc:' + item.kc + '">';
       h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
       h += '<div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '">';
-      h += '<p class="sch-title">' + esc(item.name) + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
+      h += '<p class="sch-title">' + esc(item.name) + (item.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
       if (!item.oneday) h += '<button class="sch-edit" data-a="schedit" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '"><i class="fas fa-pen"></i></button>';
       else h += '<button class="sch-edit" data-a="oddel" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" aria-label="Remove ' + esA(item.name) + '"><i class="fas fa-xmark"></i></button>';
       h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
@@ -2833,6 +2860,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (t.dataset.close === "schedit") schEdit = null; else tplItemEdit = null;
       delete tplRepeatMode[t.dataset.f + "::" + t.dataset.k]; render(); return;
     }
+    if (a === "optionaltoggle") { setOptional(t.dataset.f, t.dataset.k, !isOptional(t.dataset.f, t.dataset.k)); render(); return; }
     if (a === "schtog") {
       // A completed swipe-right gesture already toggled + rendered this row; the
       // browser's post-touch synthetic click would otherwise flip it right back.

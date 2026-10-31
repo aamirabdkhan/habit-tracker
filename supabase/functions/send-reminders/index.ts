@@ -52,6 +52,13 @@ function isDueInWindow(reminderTime: string, nowMinutes: number, windowMinutes: 
   return t >= windowStart && t < windowStart + windowMinutes;
 }
 
+// Custom reminders are synced as user_data.value under ht_reminders, not reminder_times.
+// Interval reminders re-arm only in the client when completed; calendar reminders can safely fire
+// here whenever their persisted nextFire is today.
+export function isDateReminderDue(reminder: any, isoDate: string): boolean {
+  return !!(reminder && reminder.schedule?.kind === "fixed" && reminder.nextFire === isoDate && !reminder.snoozedUntil);
+}
+
 Deno.serve(async (_req: Request) => {
   const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
   const now = new Date();
@@ -68,6 +75,13 @@ Deno.serve(async (_req: Request) => {
     .select("*")
     .in("user_id", userIds);
   if (remErr) return new Response(JSON.stringify({ error: remErr.message }), { status: 500 });
+
+  const { data: reminderData, error: dataErr } = await supabase
+    .from("user_data")
+    .select("user_id, value")
+    .in("user_id", userIds)
+    .eq("key", "ht_reminders");
+  if (dataErr) return new Response(JSON.stringify({ error: dataErr.message }), { status: 500 });
 
   const subsByUser = new Map<string, any[]>();
   for (const s of subs as any[]) {
@@ -129,6 +143,45 @@ Deno.serve(async (_req: Request) => {
 
       await supabase.from("reminder_sent_log").upsert(
         { user_id: userId, field: reminder.field, name: reminder.name, sent_date: today },
+        { onConflict: "user_id,field,name,sent_date" }
+      );
+    }
+
+    const customRow = ((reminderData || []) as any[]).find((row) => row.user_id === userId);
+    const customReminders = Array.isArray(customRow?.value) ? customRow.value : [];
+    for (const reminder of customReminders) {
+      if (!isDateReminderDue(reminder, today)) continue;
+      const reminderKey = "date:" + String(reminder.id || reminder.name);
+      const { data: already } = await supabase
+        .from("reminder_sent_log")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("field", "reminders")
+        .eq("name", reminderKey)
+        .eq("sent_date", today)
+        .maybeSingle();
+      if (already) continue;
+
+      const payload = JSON.stringify({
+        title: "Habit Tracker Reminder",
+        body: reminder.name,
+        field: "reminders",
+        name: reminder.id || reminder.name,
+      });
+      for (const sub of userSubs) {
+        try {
+          await webpush.sendNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload
+          );
+          sentCount++;
+        } catch (err: any) {
+          if (err?.statusCode === 404 || err?.statusCode === 410) deadEndpoints.push(sub.endpoint);
+          else console.error("Push send error:", err);
+        }
+      }
+      await supabase.from("reminder_sent_log").upsert(
+        { user_id: userId, field: "reminders", name: reminderKey, sent_date: today },
         { onConflict: "user_id,field,name,sent_date" }
       );
     }

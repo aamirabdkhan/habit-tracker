@@ -731,6 +731,67 @@ function _templateSelfCheck() {
 _templateSelfCheck();
 
 // ============================================================
+// CUSTOM REMINDERS — independent of habits, streaks, and heatmaps.
+// Stored under ht_ so existing Cloud Sync predicate picks it up.
+// ============================================================
+var REMINDERS_KEY = "ht_reminders";
+function getReminders() { try { var rows = JSON.parse(localStorage.getItem(REMINDERS_KEY)); return Array.isArray(rows) ? rows : []; } catch(e) { return []; } }
+function saveReminders(rows) { localStorage.setItem(REMINDERS_KEY, JSON.stringify(rows)); localStorage.setItem(REMINDERS_KEY + "_mt", String(Date.now())); if (typeof dbSave === "function") dbSave(REMINDERS_KEY, rows); if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); }
+function reminderDaysInMonth(year, month) { return new Date(year, month, 0).getDate(); }
+function reminderISO(year, month, day) { return year + "-" + String(month).padStart(2, "0") + "-" + String(day).padStart(2, "0"); }
+function reminderAddMonths(fromDateISO, every) { var p = fromDateISO.split("-").map(Number), total = (p[1] - 1) + every, year = p[0] + Math.floor(total / 12), month = total % 12 + 1; return reminderISO(year, month, Math.min(p[2], reminderDaysInMonth(year, month))); }
+function nextReminderFire(reminder, fromDateISO) {
+  var s = reminder && reminder.schedule || {}, every = Math.max(1, Math.round(+s.every || 1));
+  if (s.kind === "interval") { if (s.unit === "months") return reminderAddMonths(fromDateISO, every); var d = new Date(fromDateISO + "T00:00:00"); d.setDate(d.getDate() + (s.unit === "weeks" ? every * 7 : every)); return dk(d); }
+  if (s.kind !== "fixed") return "";
+  var from = fromDateISO.split("-").map(Number), month = +s.month, day = +s.day;
+  if (typeof s.date === "string") { var bits = s.date.match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/); if (bits) { month = +bits[1]; day = +bits[2]; } }
+  if (!(day >= 1)) return "";
+  // {day:15} means fifteenth of every month; {month:3,day:15} / date means yearly date.
+  if (!(month >= 1 && month <= 12)) {
+    var monthly = reminderISO(from[0], from[1], Math.min(day, reminderDaysInMonth(from[0], from[1])));
+    if (monthly < fromDateISO) { var nextMonth = new Date(fromDateISO + "T00:00:00"); nextMonth.setMonth(nextMonth.getMonth() + 1); monthly = reminderISO(nextMonth.getFullYear(), nextMonth.getMonth() + 1, Math.min(day, reminderDaysInMonth(nextMonth.getFullYear(), nextMonth.getMonth() + 1))); }
+    return monthly;
+  }
+  var year = from[0], candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month)));
+  if (candidate < fromDateISO) { year++; candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month))); }
+  return candidate;
+}
+function isReminderDue(reminder, todayISO) { return !!(reminder && reminder.nextFire && !reminder.snoozedUntil && reminder.nextFire <= todayISO); }
+function completeReminder(id, doneDateISO) { var rows = getReminders().map(function(r) { if (r.id === id) { r.lastDone = doneDateISO; r.nextFire = nextReminderFire(r, doneDateISO); } return r; }); saveReminders(rows); }
+function reminderScheduleLabel(reminder) { var s = reminder.schedule || {}; return s.kind === "interval" ? "Every " + s.every + " " + s.unit : "On " + (reminder.nextFire || s.date || "a date"); }
+function renderReminders(todayISO) {
+  var rows = getReminders().slice().sort(function(a, b) { return (isReminderDue(b, todayISO) - isReminderDue(a, todayISO)) || String(a.nextFire || "").localeCompare(String(b.nextFire || "")); }), due = rows.filter(function(r) { return isReminderDue(r, todayISO); }).length;
+  var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders' + (due ? ' <span class="bdg" style="background:var(--acd);color:var(--ac)">' + due + ' due</span>' : '') + '</h2><button type="button" class="bt t-xs" data-a="reminderadd">Add</button></div>';
+  if (!rows.length) h += '<p class="sch-empty">No reminders yet.</p>';
+  rows.forEach(function(r) { var isDue = isReminderDue(r, todayISO); h += '<div class="sch-card" style="margin-top:8px"><div class="flx aic jcsb gap-2"><div><p class="sch-title">' + esc(r.name) + (isDue ? ' <span class="bdg" style="background:var(--acd);color:var(--ac)">DUE</span>' : '') + '</p>' + (r.note ? '<p class="t-xs" style="margin:4px 0 0">' + esc(r.note) + '</p>' : '') + '<p class="t-xs" style="margin:4px 0 0">' + esc(reminderScheduleLabel(r)) + '</p></div>' + (isDue ? '<button type="button" class="bt t-xs" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button>' : '') + '</div></div>'; });
+  return h + '</section>';
+}
+function addReminderFromPrompt(todayISO) {
+  var name = prompt("Reminder name"); if (!name || !name.trim()) return;
+  var when = prompt("When? Example: 3 months, 2 weeks, or 2026-12-15", "3 months"); if (!when) return;
+  var interval = when.trim().toLowerCase().match(/^(\d+)\s*(days?|weeks?|months?)$/), schedule;
+  if (interval) schedule = { kind:"interval", every:+interval[1], unit:interval[2].replace(/s$/, "") + "s" }; else if (/^\d{4}-\d{2}-\d{2}$/.test(when.trim())) schedule = { kind:"fixed", date:when.trim() }; else { toast("Use days, weeks, months, or YYYY-MM-DD"); return; }
+  var r = { id:"rem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), name:name.trim(), schedule:schedule }; r.nextFire = nextReminderFire(r, todayISO); saveReminders(getReminders().concat([r]));
+}
+// ---- self-check (run with page open at #reminderscheck) ----
+function _remindersSelfCheck() {
+  if (location.hash !== "#reminderscheck") return;
+  var saved = localStorage.getItem(REMINDERS_KEY);
+  try {
+    var interval = { id:"check", schedule:{kind:"interval", unit:"months", every:3}, lastDone:"2026-01-31" };
+    console.assert(nextReminderFire(interval, "2026-01-31") === "2026-04-30", "month re-arm");
+    console.assert(isReminderDue({nextFire:"2026-10-31"}, "2026-10-31"), "due");
+    saveReminders([{id:"check", name:"Check", schedule:interval.schedule, nextFire:"2026-10-31"}]);
+    completeReminder("check", "2026-10-31");
+    console.assert(getReminders()[0].lastDone === "2026-10-31" && getReminders()[0].nextFire === "2027-01-31", "complete re-arms");
+    console.log("REMINDERSCHECK PASS");
+  } catch(e) { console.log("REMINDERSCHECK FAIL: " + e.message); }
+  finally { if (saved === null) localStorage.removeItem(REMINDERS_KEY); else localStorage.setItem(REMINDERS_KEY, saved); }
+}
+_remindersSelfCheck();
+
+// ============================================================
 // SCHEDULE IMPORT — public, clean JSON interchange. This never exposes the
 // app's storage keys; the translator below is the single bridge back to them.
 // ============================================================
@@ -818,6 +879,18 @@ function parseImportSchedule(text) {
     for (var j = 0; j < card.items.length; j++) { var item = importItem(card.items[j], false); if (!item) return { error:"Each item needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
     dedupItemNames(clean.items);
     out.cards.push(clean);
+  }
+  if (raw.reminders !== undefined) {
+    if (!Array.isArray(raw.reminders)) return { error:"Reminders must be an array." };
+    out.reminders = [];
+    for (var k = 0; k < raw.reminders.length; k++) {
+      var reminder = raw.reminders[k], schedule;
+      if (!reminder || typeof reminder !== "object" || Array.isArray(reminder) || typeof reminder.name !== "string" || !reminder.name.trim()) return { error:"Each reminder needs a name." };
+      if (typeof reminder.every === "number" && isFinite(reminder.every) && reminder.every > 0 && ["days", "weeks", "months"].indexOf(reminder.unit) !== -1) schedule = { kind:"interval", every:Math.round(reminder.every), unit:reminder.unit };
+      else if (typeof reminder.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(reminder.date)) schedule = { kind:"fixed", date:reminder.date };
+      else return { error:"Reminder needs every + unit, or a YYYY-MM-DD date." };
+      out.reminders.push({ name:reminder.name.trim(), note:typeof reminder.note === "string" ? reminder.note.trim() : "", schedule:schedule });
+    }
   }
   return { value:out };
 }
@@ -997,10 +1070,16 @@ function applyImportSchedule(preview, rawTimes) {
       else if (row && row.kind === "item" && row.choice === "import") applyValues(target.id, item);
     });
   });
+  if (preview.data.reminders && !rawTimes) {
+    var today = dk(new Date()), existing = getReminders(), byName = {};
+    existing.forEach(function(r, i) { byName[r.name.toLowerCase()] = i; });
+    preview.data.reminders.forEach(function(incoming) { var r = { id:"rem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), name:incoming.name, note:incoming.note || "", schedule:incoming.schedule }; r.nextFire = nextReminderFire(r, today); var old = byName[r.name.toLowerCase()]; if (old === undefined) { byName[r.name.toLowerCase()] = existing.length; existing.push(r); } else existing[old] = r; });
+    saveReminders(existing);
+  }
 }
 function importPrompt() {
   var prayers = prayersOn();
-  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Study","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}]}';
+  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Study","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[{"name":"Service scooty","every":3,"unit":"months"}]}';
   // Fix 3 — every rule below exists because live testing caught the AI breaking it: inventing
   // cards while leaving mine empty, emitting Class three times instead of days:[...], renaming
   // blocks the app already disambiguates, and splitting a 120m block into 85m of pieces.
@@ -1011,7 +1090,7 @@ function importPrompt() {
     + "\n3. DO NOT RENAME my activities (no \"CEH Morning\"/\"CEH Afternoon\"). The app adds a -2 suffix itself when the same name repeats."
     + (prayers ? "\n4. You MAY split a block that runs across a prayer into two pieces, and it helps. THE PIECES MUST ADD UP TO THE DURATION I ASKED FOR. If a 120m block loses 35m to a prayer, the second piece runs 35m longer, it does not disappear. Keep the same name for both pieces." : "\n4. Never shorten a block below the duration I asked for.")
     + "\n5. REPORT EVERY CHANGE. Any block you split, move, shorten or merge gets a short \"note\" on that item saying what you did and why. Put an overall summary of how the day flows in a top-level \"notes\" string."
-    + "\n6. If I mention anything that can't become a timed block (no clear time, or not a schedulable task), tell me plainly it can't be added and won't appear on my Pehar."
+    + "\n6. Put date/interval reminders in top-level reminders: [{name,every,unit}] (unit days/weeks/months), or [{name,date}] using YYYY-MM-DD. They are not Pehar blocks."
     + "\n\nReturn JSON only.";
   return instruction + "\n\nOUTPUT FORMAT:\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; prayer duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons. Reply with ONLY the JSON object. No code fence, no explanation before or after.\n\nEXAMPLE:\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nNOW DESCRIBE YOUR DAY OR WEEK BELOW in plain words. Give times, and which days for weekly things (e.g. \"Gym 6:30–7:30am\", \"Team meeting Mon/Wed 10–11am\"). Turn it into the format above:\n\n";
 }
@@ -2458,6 +2537,7 @@ function rSchedule() {
   // Checklist cards — stacked, above the timeline.
   h += renderPrayersDayCard();
   h += cardItems.map(function(ci) { return renderCard(ci.card, ci.items); }).join('');
+  h += renderReminders(key);
 
   h += '</div>';
   return h;
@@ -2823,6 +2903,8 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "prevday") { cDate.setDate(cDate.getDate() - 1); render(); return; }
     if (a === "nextday") { cDate.setDate(cDate.getDate() + 1); render(); return; }
     if (a === "today") { cDate = new Date(); render(); return; }
+    if (a === "reminderadd") { addReminderFromPrompt(dk(cDate)); render(); return; }
+    if (a === "reminderdone") { completeReminder(t.dataset.id, dk(cDate)); render(); return; }
     if (a === "wkprev") { cDate.setDate(cDate.getDate() - 7); render(); return; }
     if (a === "wknext") { cDate.setDate(cDate.getDate() + 7); render(); return; }
     if (a === "wkday") {

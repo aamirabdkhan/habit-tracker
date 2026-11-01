@@ -306,11 +306,14 @@
           row.addSpacer(fam === "large" ? 7 : 8);
 
           const isDone = it.done;
+          // Match the demo: everything before NOW is dimmed; strike ONLY what's actually ticked.
+          const isPast = typeof it.start === "number" && it.start < n;
+          const dim = isDone || isPast;
           const nameText = isDone ? strike(it.name) : it.name;
           const name = row.addText(nameText);
           name.lineLimit = 1;
           name.font = isDone ? Font.systemFont(12) : Font.mediumSystemFont(12);
-          name.textColor = new Color(TEXT, isDone ? 0.42 : 1.0);
+          name.textColor = new Color(TEXT, dim ? 0.42 : 1.0);
           if (isDone) {
             try { name.applyStrikethroughStyle = true; } catch (e) {}
           }
@@ -319,7 +322,7 @@
 
           const tm = row.addText(formatTime(it.time || it.start));
           tm.font = monoFont(10);
-          tm.textColor = new Color(MUTED, isDone ? 0.42 : 1.0);
+          tm.textColor = new Color(MUTED, dim ? 0.42 : 1.0);
         }
 
         if (i < windowItems.length - 1) {

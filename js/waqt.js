@@ -123,7 +123,9 @@ function computeWidgetPayload() {
     counts.push({ label:"PRAYERS", done:prayersDone, total:PRAYERS.length });
   }
   cards.forEach(function(card) {
-    var label = cardLabels[card.id];
+    // Base cards get their fixed label; custom cards (Study, Fitness, …) use their own name,
+    // so every card shows in the stats widget, not just the three base ones.
+    var label = cardLabels[card.id] || String(card.name || "").toUpperCase();
     if (!label) return;
     var score = scoreItems(dayItemsForCard(card, day, dow));
     counts.push({ label:label, done:score.done, total:score.total });

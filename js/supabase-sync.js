@@ -182,9 +182,13 @@ function syncDown() {
                         render();
                     }
                 }
+                // Republish the widget feed after every sign-in/foreground sync so the Scriptable
+                // widgets always read current data, even when the app opens with no edits made.
+                if (typeof publishWidgetFeed === "function") publishWidgetFeed();
             });
         }
         if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
+        if (typeof publishWidgetFeed === "function") publishWidgetFeed();
     });
 }
 

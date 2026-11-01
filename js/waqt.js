@@ -178,7 +178,9 @@ function widgetLoaderText() {
     + 'var SUPABASE_URL="' + SUPABASE_URL + '";\n'
     + 'var ANON_KEY="' + SUPABASE_ANON_KEY + '";\n'
     + 'var WIDGETS={pehar:"pehar-widget",stats:"stats-widget",priority:"priority-widget",nextprayer:"next-prayer-widget"};\n'
-    + 'var file=WIDGETS[((typeof args!=="undefined"&&args.widgetParameter)||"pehar").trim().toLowerCase()]||"pehar-widget";\n'
+    + 'var ALIAS={pehar:"pehar",today:"pehar",timeline:"pehar",stats:"stats",stat:"stats",summary:"stats",priority:"priority",priorities:"priority",commitment:"priority",commitments:"priority",nextprayer:"nextprayer",next:"nextprayer",prayer:"nextprayer",prayers:"nextprayer",salah:"nextprayer"};\n'
+    + 'var P=((typeof args!=="undefined"&&args.widgetParameter)||"pehar").toLowerCase().replace(/[^a-z]/g,"");\n'
+    + 'var file=WIDGETS[ALIAS[P]||"pehar"]||"pehar-widget";\n'
     + 'const src=await new Request("' + location.origin + '/"+file+".js?t="+Date.now()).loadString();\n'
     + 'await eval(src);';
 }

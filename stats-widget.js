@@ -179,11 +179,15 @@
 
         col.addSpacer(5);
 
-        const lblText = String(c.label || "").toUpperCase();
+        // Keep labels to one short word so 5 columns never collide ("Healthy Lifestyle" -> HEALTHY,
+        // "Extra Deeds" -> EXTRA); shrink any still-long single word to fit.
+        let lblText = String(c.label || "").toUpperCase().trim();
+        if (lblText.indexOf(" ") !== -1) lblText = lblText.split(/\s+/)[0];
         const lbl = col.addText(lblText);
         lbl.font = monoFont(7, "medium");
         lbl.textColor = new Color(MUTED);
         lbl.lineLimit = 1;
+        lbl.minimumScaleFactor = 0.6;
 
         if (i < visibleCounts.length - 1) {
           statsStack.addSpacer();

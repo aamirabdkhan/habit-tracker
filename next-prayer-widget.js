@@ -85,13 +85,12 @@
   }
 
   const prayers = rawPrayers.map((p, idx) => {
-    // Passed-by-clock prayers count as done (or explicitly ticked). The "next" one is highlighted.
-    const pMin = parseHM(p.time);
-    const isDone = !!p.done || (pMin != null && nextIdx >= 0 && nextMin < 1440 && pMin < nowMin && idx !== nextIdx);
+    // A prayer dot is filled (green) ONLY when it's actually ticked in the app — a passed-but-
+    // unticked prayer stays an empty/muted dot, it is not auto-completed by the clock.
     const isNext = idx === nextIdx;
     return {
       name: p.name || DEFAULT_PRAYERS[idx] || "Prayer",
-      done: isDone && !isNext,
+      done: !!p.done && !isNext,
       next: isNext,
       time: p.time || ""
     };

@@ -102,6 +102,7 @@
     const done = !!it.done;
     const prayer = !!(it.prayer || it.isPrayer);
     const isNowExplicit = !!(it.now || it.isNow);
+    const tag = it.tag || (prayer ? "PRAYER" : "");
     return {
       name,
       time: timeStr,
@@ -110,6 +111,7 @@
       color,
       done,
       prayer,
+      tag,
       isNowExplicit,
       raw: it
     };
@@ -186,43 +188,54 @@
     const nowItem = nowIndex >= 0 ? items[nowIndex] : null;
 
     if (fam === "large") {
-      // Large keeps the approved timeline compact enough for seven windowed items.
+      // Header matches the demo: greeting eyebrow, day, date on the left; a gold ring with the
+      // done/total count on the right.
       const head = w.addStack();
       head.centerAlignContent();
 
       const headLeft = head.addStack();
       headLeft.layoutVertically();
 
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
       const nowD = new Date();
-      const dayStr = dayNames[nowD.getDay()];
-      const dayLabel = headLeft.addText(dayStr);
-      dayLabel.font = Font.boldSystemFont(17);
+      const hr = nowD.getHours();
+      const greet = hr < 12 ? "GOOD MORNING" : hr < 17 ? "GOOD AFTERNOON" : "GOOD EVENING";
+      const eye = headLeft.addText(greet);
+      eye.font = monoFont(9, "medium");
+      eye.textColor = new Color(MUTED);
+
+      headLeft.addSpacer(5);
+
+      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+      const dayLabel = headLeft.addText(dayNames[nowD.getDay()]);
+      dayLabel.font = Font.boldSystemFont(22);
       dayLabel.textColor = new Color(TEXT);
 
-      headLeft.addSpacer(1);
+      headLeft.addSpacer(3);
 
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const dateStr = `${monthNames[nowD.getMonth()]} ${nowD.getDate()}`;
-      const dt = headLeft.addText(dateStr);
+      const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+      const dt = headLeft.addText(`${monthNames[nowD.getMonth()]} ${nowD.getDate()} · ${nowD.getFullYear()}`);
       dt.font = monoFont(9);
       dt.textColor = new Color(MUTED);
 
       head.addSpacer();
 
-      const prog = head.addStack();
-      prog.centerAlignContent();
-      prog.setPadding(3, 0, 3, 0);
-      const pt = prog.addText(`${doneCount}/${totalCount}`);
-      pt.font = monoFont(10, "bold");
+      // Gold ring (bordered circle) with done/total, like the demo.
+      const ring = head.addStack();
+      ring.size = new Size(44, 44);
+      ring.cornerRadius = 22;
+      ring.borderWidth = 1;
+      ring.borderColor = new Color(GOLD);
+      ring.centerAlignContent();
+      const pt = ring.addText(`${doneCount}/${totalCount}`);
+      pt.font = monoFont(11, "bold");
       pt.textColor = new Color(GOLD);
       pt.centerAlignText();
 
-      w.addSpacer(6);
+      w.addSpacer(10);
       const divTop = w.addStack();
       divTop.size = new Size(0, 1);
       divTop.backgroundColor = new Color(LINE);
-      w.addSpacer(6);
+      w.addSpacer(10);
     } else {
       // Compact header for medium / small
       const head = w.addStack();
@@ -253,76 +266,70 @@
         const it = windowItems[i];
         const isNow = it === nowItem;
 
-        if (isNow) {
-          // Current item gets the only filled card and a small NOW tag.
-          const box = w.addStack();
-          box.centerAlignContent();
-          box.backgroundColor = new Color(fam === "large" ? GOLD : CARD_BG, fam === "large" ? 0.18 : 1);
-          box.borderWidth = 1;
-          box.borderColor = new Color(GOLD);
-          box.cornerRadius = 8;
-          box.setPadding(5, fam === "large" ? 7 : 8, 5, fam === "large" ? 7 : 8);
+        // One demo-style row: [time] · [dot] · [entry card: color bar | name | tag].
+        // Past = dimmed; strike ONLY ticked items; NOW = gold card.
+        const isDone = it.done;
+        const isPast = typeof it.start === "number" && it.start < n && !isNow;
+        const dim = (isDone || isPast) && !isNow;
+        const alpha = dim ? 0.42 : 1.0;
+        const tone = isNow ? GOLD : (it.prayer ? timeTone(it.start) : (it.color || timeTone(it.start)));
 
-          const bar = box.addStack();
-          bar.backgroundColor = new Color(GOLD);
-          bar.size = new Size(3, fam === "large" ? 17 : 18);
-          bar.cornerRadius = 1.5;
+        const row = w.addStack();
+        row.centerAlignContent();
 
-          box.addSpacer(fam === "large" ? 7 : 8);
+        // Fixed-width time column (height 0 = auto), right-aligned.
+        const tcol = row.addStack();
+        tcol.size = new Size(fam === "large" ? 52 : 46, 0);
+        tcol.addSpacer();
+        const tm = tcol.addText(formatTime(it.time || it.start));
+        tm.font = monoFont(10, isNow ? "bold" : "regular");
+        tm.textColor = isNow ? new Color(GOLD) : new Color(MUTED, alpha);
+        tm.lineLimit = 1;
 
-          const nameText = it.done ? strike(it.name) : it.name;
-          const name = box.addText(nameText);
-          name.lineLimit = 1;
-          name.font = Font.boldSystemFont(fam === "large" ? 12 : 12.5);
-          name.textColor = new Color("#FFF7EA");
-          if (it.done) {
-            name.textOpacity = 0.6;
-            try { name.applyStrikethroughStyle = true; } catch (e) {}
-          }
+        row.addSpacer(8);
 
-          box.addSpacer();
+        // Timeline dot.
+        const dotWrap = row.addStack();
+        dotWrap.size = new Size(11, 11);
+        dotWrap.centerAlignContent();
+        const dot = dotWrap.addStack();
+        const dsz = isNow ? 10 : 8;
+        dot.size = new Size(dsz, dsz);
+        dot.cornerRadius = dsz / 2;
+        dot.backgroundColor = new Color(tone, dim ? 0.5 : 1.0);
 
-          const marker = box.addText("NOW");
-          marker.font = monoFont(9, "bold");
-          marker.textColor = new Color(GOLD);
+        row.addSpacer(8);
 
-          box.addSpacer(fam === "large" ? 5 : 6);
+        // Entry card.
+        const card = row.addStack();
+        card.centerAlignContent();
+        card.cornerRadius = 9;
+        card.borderWidth = 1;
+        card.borderColor = isNow ? new Color(GOLD, 0.8) : new Color(LINE);
+        card.backgroundColor = isNow ? new Color(GOLD, 0.16) : new Color(CARD_BG, dim ? 0.5 : 1.0);
+        card.setPadding(7, 10, 7, 10);
 
-          const tm = box.addText(formatTime(it.time || it.start));
-          tm.font = monoFont(10, "bold");
-          tm.textColor = new Color(GOLD);
-        } else {
-          // Plain timeline rows retain one aligned text/time column pair.
-          const row = w.addStack();
-          row.centerAlignContent();
-          row.setPadding(fam === "large" ? 3 : 2, 4, fam === "large" ? 3 : 2, 4);
+        const bar = card.addStack();
+        bar.backgroundColor = new Color(tone, dim ? 0.6 : 1.0);
+        bar.size = new Size(3, 16);
+        bar.cornerRadius = 1.5;
+        card.addSpacer(9);
 
-          const barTone = it.prayer ? timeTone(it.start) : (it.color || timeTone(it.start));
-          const bar = row.addStack();
-          bar.backgroundColor = new Color(barTone);
-          bar.size = new Size(3, fam === "large" ? 15 : 16);
-          bar.cornerRadius = 1.5;
+        const nameText = isDone ? strike(it.name) : it.name;
+        const name = card.addText(nameText);
+        name.lineLimit = 1;
+        name.font = isNow ? Font.boldSystemFont(12) : (isDone ? Font.systemFont(12) : Font.mediumSystemFont(12));
+        name.textColor = isNow ? new Color("#FFF7EA") : new Color(TEXT, alpha);
+        if (isDone) { try { name.applyStrikethroughStyle = true; } catch (e) {} }
 
-          row.addSpacer(fam === "large" ? 7 : 8);
+        card.addSpacer();
 
-          const isDone = it.done;
-          // Match the demo: everything before NOW is dimmed; strike ONLY what's actually ticked.
-          const isPast = typeof it.start === "number" && it.start < n;
-          const dim = isDone || isPast;
-          const nameText = isDone ? strike(it.name) : it.name;
-          const name = row.addText(nameText);
-          name.lineLimit = 1;
-          name.font = isDone ? Font.systemFont(12) : Font.mediumSystemFont(12);
-          name.textColor = new Color(TEXT, dim ? 0.42 : 1.0);
-          if (isDone) {
-            try { name.applyStrikethroughStyle = true; } catch (e) {}
-          }
-
-          row.addSpacer();
-
-          const tm = row.addText(formatTime(it.time || it.start));
-          tm.font = monoFont(10);
-          tm.textColor = new Color(MUTED, dim ? 0.42 : 1.0);
+        const tagText = isNow ? "NOW" : (it.tag || "");
+        if (tagText) {
+          const tag = card.addText(tagText);
+          tag.font = monoFont(9, isNow ? "bold" : "regular");
+          tag.textColor = isNow ? new Color(GOLD) : new Color(MUTED, alpha);
+          tag.lineLimit = 1;
         }
 
         if (i < windowItems.length - 1) {

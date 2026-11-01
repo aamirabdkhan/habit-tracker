@@ -102,13 +102,15 @@ function computeWidgetPayload() {
   var now = new Date(), key = dk(now), day = gDay(key), dow = now.getDay(), items = [];
   if (prayersOn()) PRAYERS.forEach(function(p) {
     var t = getNotifTime("prayers", p);
-    if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true });
+    if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true, tag:"PRAYER" });
   });
   getCards().forEach(function(card) {
+    // tag = short card label shown on the Pehar widget's entry cards (first word, upper-case).
+    var tag = String(card.name || "").toUpperCase().split(/\s+/)[0];
     dayItemsForCard(card, day, dow).forEach(function(it) {
       if (!it.time) return;
       var end = timeToMin(it.time) + effectiveDur(card.id, it.n, it.oneday, day);
-      items.push({ n:it.n, t:it.time, end:minToHHMM(end), c:card.color, done:!!it.done });
+      items.push({ n:it.n, t:it.time, end:minToHHMM(end), c:card.color, done:!!it.done, tag:tag });
     });
   });
   items.sort(function(a, b) { return timeToMin(a.t) - timeToMin(b.t); });

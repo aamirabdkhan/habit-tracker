@@ -139,8 +139,12 @@ function computeWidgetPayload() {
     var next = computeNextPrayer(now.getHours() * 60 + now.getMinutes(), prayerTimes);
     if (next) nextPrayer = { name:next.name, in:fmtHM(next.mins) };
   }
+  // The greeting carries the motivating nickname ("Good Morning, Achiever") — that's the whole
+  // touch; no separate motivation line.
+  var greeting = (typeof greet === "function") ? greet() : "";
   return {
     date:dstr, done:done, total:items.length, items:items,
+    greeting:greeting,
     stats:{ percent:dScore(key), counts:counts, next:nextPrayer },
     priority:priority,
     prayers:prayersOn() ? allTrackedPrayers().map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "", voluntary:isVoluntaryPrayer(p) }; }) : [],
@@ -1567,6 +1571,16 @@ var HELP_TOPICS = {
     "All 5 prayers, always shown. Tap a time to set or change it.",
     "A timed prayer shows green on the Pehar, and reminds you 5 minutes before it starts."
   ]},
+  priority: { title: "Priority & carry-over", steps: [
+    "Star a one-time task to mark it a priority — it stands out so it won't slip.",
+    "If you don't finish it today, it carries over to tomorrow with an age tag (e.g. “2d late”) until you do it or remove the star.",
+    "Great for deadlines and one-off errands that must not be forgotten."
+  ]},
+  merge:    { title: "Merge duplicates", steps: [
+    "If the same activity got added several times (CEH, CEH-2, CEH 3…), Merge folds them into one item.",
+    "Pick the duplicates, choose the name to keep, and confirm. Every distinct time across them becomes a slot on the one item.",
+    "Items with no time add nothing — after merging, set the times you want with the pencil → “＋ Add time”."
+  ]},
   takbeer:  { title: "First Takbīr", steps: [
     "The first takbīr (takbīrat al-iḥrām) is the opening “Allāhu akbar” said with the imam. Catching it means you joined the congregation right from the start.",
     "The Messenger of Allah ﷺ said: whoever prays forty days in congregation, catching the first takbīr, two exemptions are written for him: freedom from the Fire, and freedom from hypocrisy.",
@@ -1778,7 +1792,7 @@ function renderPlanCard(card) {
 
   if (tplMergeCard === card.id) {
     var keepName = shortestItemName(items.map(function(item) { return item.n; }));
-    h += '<div class="sch-mergepanel"><p>Pick duplicates. Keep name and all times.</p>';
+    h += '<div class="sch-mergepanel"><p>Pick duplicates. Keep name and all times. <button type="button" class="sch-ib" data-a="help" data-topic="merge" aria-label="How merge works" style="width:22px;height:22px;vertical-align:middle">?</button></p>';
     items.forEach(function(item) { h += '<label><input type="checkbox" data-merge-item value="' + esA(item.n) + '"> ' + esc(item.n) + '</label>'; });
     h += '<label class="sch-mergelabel">Keep <select data-merge-keep>';
     items.forEach(function(item) { h += '<option value="' + esA(item.n) + '"' + (item.n === keepName ? ' selected' : '') + '>' + esc(item.n) + '</option>'; });
@@ -2578,6 +2592,8 @@ function renderCard(card, items) {
         h += '</div>';
         h += '</div>';
       });
+      // Explain the star (priority / carry-over) once a one-day task is present.
+      if (untimed.some(function(it) { return it.oneday; })) h += '<div style="text-align:right;margin:-2px 2px 2px"><button type="button" class="sch-ib" data-a="help" data-topic="priority" aria-label="About priority" style="width:22px;height:22px;font-size:12px">?</button></div>';
     }
     h += renderTimedDisclosure({ id:card.id, color:card.color, items:timed }, dowOf(dk(cDate)));
   }
@@ -3199,13 +3215,19 @@ document.getElementById("app").addEventListener("click", function(e) {
     // Card's "on timeline" name-link (Task 14 #2): scroll the matching timeline block into
     // view and flash it for 2s in its own section color (sch-flash, keyed off --kc).
     if (a === "gototimeline") {
-      var tgt = document.querySelector('.sch-block[data-block="' + CSS.escape(t.dataset.block) + '"]');
-      if (tgt) {
+      // The pill lives on the Today card; the timeline block lives on the Pehar tab. Since the tab
+      // split they're different views, so switch to Pehar first, then scroll+flash the block.
+      var blockId = t.dataset.block;
+      var jumpToBlock = function() {
+        var tgt = document.querySelector('.sch-block[data-block="' + CSS.escape(blockId) + '"]');
+        if (!tgt) return;
         tgt.scrollIntoView({ behavior: carReducedMotion() ? "auto" : "smooth", block: "center" });
         tgt.classList.remove("sch-flash"); void tgt.offsetWidth;
         tgt.classList.add("sch-flash");
         setTimeout(function() { tgt.classList.remove("sch-flash"); }, 2000);
-      }
+      };
+      if (view !== "pehar") { view = "pehar"; render(); setTimeout(jumpToBlock, 60); }
+      else jumpToBlock();
       return;
     }
     if (a === "slotadd") {
@@ -3273,7 +3295,11 @@ document.getElementById("app").addEventListener("click", function(e) {
       var mergeSlots = mergeSlotLists.apply(null, mergeNames.map(function(name) { return getItemSlots(t.dataset.c, name); }));
       setItemSlots(t.dataset.c, mergeKeep, mergeSlots);
       mergeNames.forEach(function(name) { if (name !== mergeKeep) removeCardItem(t.dataset.c, name); });
-      tplMergeCard = null; tplItemEdit = null; render(); toast("Merged"); return;
+      tplMergeCard = null; tplItemEdit = null; render();
+      // Make the result legible: say how many kept times resulted, and nudge to add more via the pencil.
+      var n = mergeSlots.length;
+      toast(n ? ("Merged into " + mergeKeep + " · " + n + " time" + (n === 1 ? "" : "s") + " kept") : ("Merged into " + mergeKeep + " · no times — add them with the pencil"));
+      return;
     }
     // ---- Template: card management (add/rename/restyle/delete) ----
     if (a === "cardadd") {

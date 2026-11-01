@@ -198,10 +198,15 @@
 
       const nowD = new Date();
       const hr = nowD.getHours();
-      const greet = hr < 12 ? "GOOD MORNING" : hr < 17 ? "GOOD AFTERNOON" : "GOOD EVENING";
+      // Prefer the app's "Good Evening, Conqueror" greeting (name + rotating nickname) — the
+      // motivating touch from the website — falling back to a plain time-of-day line.
+      const greet = (feed && feed.greeting) ? String(feed.greeting).toUpperCase()
+        : (hr < 12 ? "GOOD MORNING" : hr < 17 ? "GOOD AFTERNOON" : "GOOD EVENING");
       const eye = headLeft.addText(greet);
       eye.font = monoFont(9, "medium");
       eye.textColor = new Color(MUTED);
+      eye.lineLimit = 1;
+      eye.minimumScaleFactor = 0.7;
 
       headLeft.addSpacer(5);
 
@@ -349,17 +354,15 @@
       const foot = w.addStack();
       foot.centerAlignContent();
 
-      if (fam !== "large") {
-        const footLabel = foot.addText("PEHAR");
-        footLabel.font = monoFont(9, "bold");
-        footLabel.textColor = new Color(MUTED);
-        foot.addSpacer();
-      }
+      const footLabel = foot.addText("PEHAR");
+      footLabel.font = monoFont(9, "bold");
+      footLabel.textColor = new Color(MUTED);
+      foot.addSpacer();
 
       const remaining = Math.max(0, totalCount - doneCount);
       const rem = foot.addText(`${remaining} LEFT TODAY`);
       rem.font = monoFont(9, "bold");
-      rem.textColor = new Color(fam === "large" ? MUTED : GOLD);
+      rem.textColor = new Color(GOLD);
     }
   }
 

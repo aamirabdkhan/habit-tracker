@@ -176,6 +176,8 @@
         const val = col.addText(`${doneVal}/${totalVal}`);
         val.font = Font.boldSystemFont(17);
         val.textColor = new Color(TEXT);
+        val.lineLimit = 1;
+        val.minimumScaleFactor = 0.7;
 
         col.addSpacer(5);
 

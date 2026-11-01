@@ -446,7 +446,7 @@ body::before{display:none!important}
 .sch-ovsteps{margin:0 0 14px;padding:0 0 0 18px;font-size:13px;line-height:1.7;color:var(--stext,var(--fg))}
 
 /* Bottom tab bar (replaces the old top .sch-nav segment tabs) */
-.waqt-tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom));z-index:50;display:flex;justify-content:space-around;gap:4px;width:calc(100% - 28px);max-width:520px;padding:6px;background:var(--cd,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+.waqt-tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(4px + env(safe-area-inset-bottom));z-index:50;display:flex;justify-content:space-around;gap:4px;width:calc(100% - 28px);max-width:520px;padding:6px;background:var(--cd,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 /* clear the fixed bar so the last content isn't hidden behind it */
 .sch-view{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 /* multi-time slot row: pills + Add-time flow cleanly to the right of the TIME label */

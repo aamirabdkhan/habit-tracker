@@ -55,26 +55,43 @@
   }
 
   const feed = await getFeed();
-  const nextPrayer = (feed && feed.nextPrayer) || (feed && feed.stats && feed.stats.next) || null;
 
   const DEFAULT_PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
   const rawPrayers = (feed && Array.isArray(feed.prayers) && feed.prayers.length > 0)
     ? feed.prayers
     : DEFAULT_PRAYERS.map((name) => ({ name, done: false, time: "" }));
 
-  let nextIdx = -1;
-  if (nextPrayer && nextPrayer.name) {
-    nextIdx = rawPrayers.findIndex(
-      (p) => (p.name || "").toLowerCase() === nextPrayer.name.toLowerCase()
-    );
+  // Compute the next prayer LIVE from the clock + the times in the feed, rather than trusting
+  // feed.nextPrayer (which is baked when the app last published, so it goes stale — e.g. still
+  // showing Asr at Isha time). This makes the widget correct whenever iOS refreshes it.
+  function parseHM(t) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function fmtIn(mins) { const h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+  const nowD = new Date();
+  const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
+  const timed = rawPrayers.map((p, i) => ({ i, min: parseHM(p.time) })).filter((p) => p.min != null);
+  // next = earliest prayer still ahead today; after the last one, wrap to the first tomorrow.
+  let nextIdx = -1, nextMin = null, nextDate = null;
+  const ahead = timed.filter((p) => p.min > nowMin).sort((a, b) => a.min - b.min);
+  if (ahead.length) { nextIdx = ahead[0].i; nextMin = ahead[0].min; }
+  else if (timed.length) { const first = timed.slice().sort((a, b) => a.min - b.min)[0]; nextIdx = first.i; nextMin = first.min + 1440; }
+  // Fall back to the server-baked value only when the feed carries no times at all.
+  const baked = (feed && feed.nextPrayer) || (feed && feed.stats && feed.stats.next) || null;
+  let nextPrayer = null;
+  if (nextIdx >= 0) {
+    nextPrayer = { name: rawPrayers[nextIdx].name || DEFAULT_PRAYERS[nextIdx] || "Prayer", in: fmtIn(nextMin - nowMin) };
+    nextDate = new Date(nowD.getTime() + (nextMin - nowMin) * 60000);
+  } else if (baked) {
+    nextPrayer = baked;
   }
 
   const prayers = rawPrayers.map((p, idx) => {
-    const isDone = !!p.done || (nextIdx >= 0 && idx < nextIdx);
-    const isNext = (nextIdx >= 0 && idx === nextIdx) || (!isDone && nextPrayer && (p.name || "").toLowerCase() === (nextPrayer.name || "").toLowerCase());
+    // Passed-by-clock prayers count as done (or explicitly ticked). The "next" one is highlighted.
+    const pMin = parseHM(p.time);
+    const isDone = !!p.done || (pMin != null && nextIdx >= 0 && nextMin < 1440 && pMin < nowMin && idx !== nextIdx);
+    const isNext = idx === nextIdx;
     return {
       name: p.name || DEFAULT_PRAYERS[idx] || "Prayer",
-      done: isDone,
+      done: isDone && !isNext,
       next: isNext,
       time: p.time || ""
     };
@@ -201,6 +218,14 @@
       }
     }
   }
+
+  // Ask iOS to reload at the next prayer boundary (capped 2–60 min) so the widget flips right
+  // when the prayer changes. iOS treats this as a hint within its refresh budget — it can't be
+  // pushed from the app, but it keeps the widget from drifting far from real time.
+  try {
+    const capMs = Math.max(2 * 60000, Math.min(60 * 60000, nextDate ? nextDate.getTime() - Date.now() + 60000 : 15 * 60000));
+    w.refreshAfterDate = new Date(Date.now() + capMs);
+  } catch (e) {}
 
   if (typeof Script !== "undefined") {
     Script.setWidget(w);

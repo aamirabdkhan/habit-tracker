@@ -353,6 +353,14 @@
     }
   }
 
+  // Reload at the next item boundary (capped 2–60 min) so NOW/upcoming stay aligned with real
+  // time. iOS honors this within its refresh budget; it can't be pushed live from the app.
+  try {
+    const nMin = nowMin();
+    const up = items.map((x) => x.start).filter((s) => typeof s === "number" && s > nMin).sort((a, b) => a - b);
+    const deltaMs = up.length ? (up[0] - nMin) * 60000 + 60000 : 15 * 60000;
+    w.refreshAfterDate = new Date(Date.now() + Math.max(2 * 60000, Math.min(60 * 60000, deltaMs)));
+  } catch (e) {}
   if (typeof Script !== "undefined") { Script.setWidget(w); Script.complete(); }
   if (typeof config === "undefined" || !config.runsInWidget) {
     if (lock && w.presentAccessoryRectangular) w.presentAccessoryRectangular();

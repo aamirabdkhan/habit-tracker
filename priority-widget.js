@@ -166,6 +166,7 @@
     }
   }
 
+  try { w.refreshAfterDate = new Date(Date.now() + 15 * 60000); } catch (e) {}
   if (typeof Script !== "undefined") {
     Script.setWidget(w);
     Script.complete();

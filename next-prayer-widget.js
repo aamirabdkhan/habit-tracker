@@ -151,6 +151,9 @@
       // approximate rounded fill with a rect (rounding is sub-pixel at this height)
       ctx.setFillColor(new Color(GOLD)); ctx.fillRect(new Rect(0, 0, fw, H));
       const barImg = w.addImage(ctx.getImage());
+      // Without an explicit imageSize Scriptable draws the image at its full pixel size (960px wide),
+      // overflowing the widget. Constrain it to a sensible display width.
+      barImg.imageSize = new Size(fam === "large" ? 320 : 300, BH);
       barImg.cornerRadius = rad;
     }
 

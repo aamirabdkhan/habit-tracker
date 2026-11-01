@@ -2507,7 +2507,7 @@ function dayItemsForCard(card, day, dow) {
 // sorted chronologically. Tie-break: prayers first, then card order, then item order.
 function buildTimeline(cards, day, dow) {
   var items = [];
-  if (prayersOn()) PRAYERS.forEach(function(name) {
+  if (prayersOn()) allTrackedPrayers().forEach(function(name) {
     var t = getNotifTime("prayers", name);
     if (t) {
       var dur = effectiveDur("prayers", name, false, day), start = timeToMin(t);
@@ -2647,8 +2647,15 @@ function applyAutoPrayerTimes() {
   if (typeof prayerAutoOn !== "function" || !prayerAutoOn()) return false;
   var t = (typeof computeAutoPrayerTimes === "function") ? computeAutoPrayerTimes(new Date()) : null;
   if (!t) return false;
-  PRAYERS.forEach(function(p) { if (t[p]) setNotifTime("prayers", p, t[p]); });
-  trackedVoluntaryPrayers().forEach(function(p) { if (t[p]) setNotifTime("prayers", p, t[p]); });
+  // Write times straight into the notif map (one write), NOT via setNotifTime — setNotifTime also
+  // force-upserts a push-reminder row, which would then race the bell-off delete below. With the raw
+  // write, each prayer's reminder row is set exactly once by syncItemReminder, respecting its bell.
+  var names = PRAYERS.concat(trackedVoluntaryPrayers());
+  var map = getNotifTimesMap();
+  names.forEach(function(p) { if (t[p]) map[notifKey("prayers", p)] = t[p]; });
+  saveNotifTimesMap(map);
+  names.forEach(function(p) { if (t[p] && typeof syncItemReminder === "function") syncItemReminder("prayers", p); });
+  if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
   return true;
 }
 var _autoPrayerAppliedDate = null;
@@ -3294,6 +3301,13 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (!confirm('Merge ' + mergeNames.length + ' items into "' + mergeKeep + '"? Other names will be removed.')) return;
       var mergeSlots = mergeSlotLists.apply(null, mergeNames.map(function(name) { return getItemSlots(t.dataset.c, name); }));
       setItemSlots(t.dataset.c, mergeKeep, mergeSlots);
+      // Preserve today's completion: if any merged duplicate was ticked today, keep the result ticked.
+      var mcid = t.dataset.c, mdone = isBaseCard(mcid) ? (cData[mcid] || {}) : ((cData.cards && cData.cards[mcid]) || {});
+      if (mergeNames.some(function(name) { return !!mdone[name]; })) {
+        if (isBaseCard(mcid)) { if (!cData[mcid]) cData[mcid] = {}; cData[mcid][mergeKeep] = true; }
+        else { if (!cData.cards) cData.cards = {}; if (!cData.cards[mcid]) cData.cards[mcid] = {}; cData.cards[mcid][mergeKeep] = true; }
+        sDay();
+      }
       mergeNames.forEach(function(name) { if (name !== mergeKeep) removeCardItem(t.dataset.c, name); });
       tplMergeCard = null; tplItemEdit = null; render();
       // Make the result legible: say how many kept times resulted, and nudge to add more via the pencil.

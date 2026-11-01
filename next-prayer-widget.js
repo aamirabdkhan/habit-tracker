@@ -1,244 +1,188 @@
-// Next prayer widget for Scriptable — renders active countdown and 5 daily prayer dots.
-// This file is fetched and run by a small loader pasted into Scriptable (get it from
-// Waqt -> Settings -> Home screen widget). The loader sets TOKEN, SUPABASE_URL and ANON_KEY
-// as globals, then runs this. Home-screen widgets are full colour; lock-screen widgets are
-// monochrome (an iOS rule).
+// Prayer widget for Scriptable — the "current window" design (mockup C-v3): the prayer you're in
+// right now, a bar draining until it ends, "ends in Xh Ym · <next> at <time>", and an adaptive dot
+// row of every prayer you track. Fard = solid ring, voluntary (Duha/Tahajjud) = dashed ring; done =
+// green, current = gold. All of it is computed LIVE from the clock against the times in the feed, so
+// it stays correct whenever iOS refreshes (the app can't push a refresh).
+//
+// Fetched + run by the loader pasted into Scriptable (Waqt > Settings > Home screen widget), which
+// sets TOKEN, SUPABASE_URL and ANON_KEY. Lock-screen widgets are monochrome (an iOS rule).
 (async () => {
   const GOLD = "#C9943E";
   const TEXT = "#E8E2D9";
   const MUTED = "#7A756E";
   const BG = "#0C0C0C";
-  const CARD_BG = "#1A1A1A";
-  const LINE = "#2A2725";
   const SAGE = "#7B9E6B";
-  const COPPER = "#B87333";
-  const DANGER = "#B84C4C";
+  const DUSK = "#B87333";
+  const TRACK = "#2A2725";
 
   async function getFeed() {
     try {
-      if (typeof SUPABASE_URL === "undefined" || typeof ANON_KEY === "undefined" || typeof TOKEN === "undefined") {
-        return { error: true };
-      }
+      if (typeof SUPABASE_URL === "undefined" || typeof ANON_KEY === "undefined" || typeof TOKEN === "undefined") return { error: true };
       const r = new Request(SUPABASE_URL + "/rest/v1/rpc/get_widget_feed");
       r.method = "POST";
       r.headers = { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY, "Content-Type": "application/json" };
       r.body = JSON.stringify({ p_token: TOKEN });
       return (await r.loadJSON()) || {};
-    } catch (e) {
-      return { error: true };
-    }
+    } catch (e) { return { error: true }; }
   }
 
-  function monoFont(size, weight) {
-    const bold = weight === "bold" || weight === "600" || weight === "700";
-    try {
-      return new Font(bold ? "Menlo-Bold" : "Menlo", size);
-    } catch (e) {
-      try {
-        return bold ? Font.boldMonospacedSystemFont(size) : Font.regularMonospacedSystemFont(size);
-      } catch (e2) {
-        return bold ? Font.boldSystemFont(size) : Font.systemFont(size);
-      }
-    }
+  function monoFont(size, bold) {
+    try { return new Font(bold ? "Menlo-Bold" : "Menlo", size); }
+    catch (e) { return bold ? Font.boldSystemFont(size) : Font.systemFont(size); }
   }
-
   function serifFont(size, bold) {
-    try {
-      return new Font(bold ? "Georgia-Bold" : "Georgia", size);
-    } catch (e) {
-      try {
-        return bold ? Font.boldSerifSystemFont(size) : Font.regularSerifSystemFont(size);
-      } catch (e2) {
-        return bold ? Font.boldSystemFont(size) : Font.systemFont(size);
+    try { return new Font(bold ? "Georgia-Bold" : "Georgia", size); }
+    catch (e) { return bold ? Font.boldSystemFont(size) : Font.systemFont(size); }
+  }
+
+  function parseHM(t) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function fmtLeft(mins) { const h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+  function fmtClock(min) {
+    min = ((min % 1440) + 1440) % 1440;
+    let h = Math.floor(min / 60), m = min % 60, ap = h < 12 ? "am" : "pm";
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${m < 10 ? "0" : ""}${m} ${ap}`;
+  }
+
+  // Draw a prayer dot as an image so voluntary prayers can have a real dashed ring (Scriptable
+  // stacks can't dash a border). state: "done" | "now" | "upcoming".
+  function dotImage(state, voluntary, mono) {
+    const size = 13, scale = 3, S = size * scale;
+    const ctx = new DrawContext();
+    ctx.size = new Size(S, S); ctx.opaque = false; ctx.respectScreenScale = false;
+    const cx = S / 2, r = S * 0.40;
+    let ring = mono ? "#9A978F" : MUTED, fill = null;
+    if (state === "done") { ring = mono ? "#CFCCC5" : SAGE; fill = ring; }
+    else if (state === "now") { ring = mono ? "#FFFFFF" : GOLD; }
+    if (voluntary) {
+      // dotted ring = ring of small circles around the circumference
+      const dots = 9, rr = S * 0.065;
+      ctx.setFillColor(new Color(ring));
+      for (let i = 0; i < dots; i++) {
+        const a = (i / dots) * 2 * Math.PI, x = cx + r * Math.cos(a), y = cx + r * Math.sin(a);
+        ctx.fillEllipse(new Rect(x - rr, y - rr, rr * 2, rr * 2));
       }
+      if (fill) { const ir = r * 0.42; ctx.setFillColor(new Color(fill)); ctx.fillEllipse(new Rect(cx - ir, cx - ir, ir * 2, ir * 2)); }
+    } else if (fill) {
+      ctx.setFillColor(new Color(fill)); ctx.fillEllipse(new Rect(cx - r, cx - r, r * 2, r * 2));
+    } else {
+      ctx.setStrokeColor(new Color(ring)); ctx.setLineWidth(S * (state === "now" ? 0.11 : 0.085));
+      ctx.strokeEllipse(new Rect(cx - r, cx - r, r * 2, r * 2));
     }
+    return ctx.getImage();
   }
 
   const feed = await getFeed();
+  const DEFAULT = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+  const raw = (feed && Array.isArray(feed.prayers) && feed.prayers.length) ? feed.prayers : DEFAULT.map((name) => ({ name, done: false, time: "", voluntary: false }));
 
-  const DEFAULT_PRAYERS = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
-  const rawPrayers = (feed && Array.isArray(feed.prayers) && feed.prayers.length > 0)
-    ? feed.prayers
-    : DEFAULT_PRAYERS.map((name) => ({ name, done: false, time: "" }));
+  // Build the timed, time-sorted list and find the CURRENT window from the clock.
+  const list = raw.map((p) => ({ name: p.name, done: !!p.done, voluntary: !!p.voluntary, min: parseHM(p.time) }))
+    .filter((p) => p.min != null)
+    .sort((a, b) => a.min - b.min);
 
-  // Compute the next prayer LIVE from the clock + the times in the feed, rather than trusting
-  // feed.nextPrayer (which is baked when the app last published, so it goes stale — e.g. still
-  // showing Asr at Isha time). This makes the widget correct whenever iOS refreshes it.
-  function parseHM(t) { const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || "").trim()); return m ? (+m[1]) * 60 + (+m[2]) : null; }
-  function fmtIn(mins) { const h = Math.floor(mins / 60), m = mins % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; }
   const nowD = new Date();
   const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
-  const timed = rawPrayers.map((p, i) => ({ i, min: parseHM(p.time) })).filter((p) => p.min != null);
-  // next = earliest prayer still ahead today; after the last one, wrap to the first tomorrow.
-  let nextIdx = -1, nextMin = null, nextDate = null;
-  const ahead = timed.filter((p) => p.min > nowMin).sort((a, b) => a.min - b.min);
-  if (ahead.length) { nextIdx = ahead[0].i; nextMin = ahead[0].min; }
-  else if (timed.length) { const first = timed.slice().sort((a, b) => a.min - b.min)[0]; nextIdx = first.i; nextMin = first.min + 1440; }
-  // Fall back to the server-baked value only when the feed carries no times at all.
-  const baked = (feed && feed.nextPrayer) || (feed && feed.stats && feed.stats.next) || null;
-  let nextPrayer = null;
-  if (nextIdx >= 0) {
-    nextPrayer = { name: rawPrayers[nextIdx].name || DEFAULT_PRAYERS[nextIdx] || "Prayer", in: fmtIn(nextMin - nowMin) };
-    nextDate = new Date(nowD.getTime() + (nextMin - nowMin) * 60000);
-  } else if (baked) {
-    nextPrayer = baked;
-  }
 
-  const prayers = rawPrayers.map((p, idx) => {
-    // A prayer dot is filled (green) ONLY when it's actually ticked in the app — a passed-but-
-    // unticked prayer stays an empty/muted dot, it is not auto-completed by the clock.
-    const isNext = idx === nextIdx;
-    return {
-      name: p.name || DEFAULT_PRAYERS[idx] || "Prayer",
-      done: !!p.done && !isNext,
-      next: isNext,
-      time: p.time || ""
-    };
-  });
+  let cur = null, nxt = null, curStart = 0, nxtStart = 0, hasWindow = list.length > 0;
+  if (hasWindow) {
+    let ci = -1;
+    for (let i = 0; i < list.length; i++) if (list[i].min <= nowMin) ci = i;
+    if (ci === -1) { cur = list[list.length - 1]; curStart = cur.min - 1440; nxt = list[0]; nxtStart = nxt.min; }
+    else {
+      cur = list[ci]; curStart = cur.min;
+      if (ci + 1 >= list.length) { nxt = list[0]; nxtStart = nxt.min + 1440; }
+      else { nxt = list[ci + 1]; nxtStart = nxt.min; }
+    }
+  }
+  const windowLen = Math.max(1, nxtStart - curStart);
+  const frac = hasWindow ? Math.max(0, Math.min(1, (nowMin - curStart) / windowLen)) : 0;
+  const leftMin = hasWindow ? Math.max(0, nxtStart - nowMin) : 0;
 
   const fam = (typeof config !== "undefined" && config.widgetFamily) || "medium";
   const isLock = fam.indexOf("accessory") === 0;
-  const lock = isLock;
-
   const w = new ListWidget();
 
   if (isLock) {
-    // iOS lock-screen accessory widget: monochrome
-    const prayerName = nextPrayer && nextPrayer.name ? nextPrayer.name : (feed.error ? "Open Waqt" : "Done");
-    let countdownStr = "";
-    if (nextPrayer && nextPrayer.in) {
-      const inClean = String(nextPrayer.in).replace(/^in\s+/, "");
-      countdownStr = `in ${inClean}`;
-    }
-
+    const name = hasWindow ? cur.name : (feed.error ? "Open Waqt" : "Prayers");
+    const left = hasWindow ? `ends in ${fmtLeft(leftMin)}` : "";
     if (fam === "accessoryInline") {
-      w.addText(`Next: ${prayerName}${countdownStr ? " " + countdownStr : ""}`);
+      w.addText(`${name}${left ? " · " + left : ""}`);
     } else if (fam === "accessoryCircular") {
-      const a = w.addText(prayerName.slice(0, 4));
-      a.font = Font.boldSystemFont(12);
-      a.centerAlignText();
-      const b = w.addText(nextPrayer && nextPrayer.in ? String(nextPrayer.in).replace(/^in\s+/, "") : "Done");
-      b.font = Font.systemFont(9);
-      b.centerAlignText();
+      const a = w.addText(name.slice(0, 4)); a.font = Font.boldSystemFont(12); a.centerAlignText();
+      const b = w.addText(hasWindow ? fmtLeft(leftMin) : ""); b.font = Font.systemFont(9); b.centerAlignText();
     } else {
-      // accessoryRectangular
-      const h = w.addText("NEXT PRAYER");
-      h.font = Font.boldSystemFont(9);
-      h.textOpacity = 0.7;
+      const hh = w.addText("PRAYER NOW"); hh.font = Font.boldSystemFont(9); hh.textOpacity = 0.7;
       w.addSpacer(2);
-      const t = w.addText(prayerName);
-      t.font = Font.boldSystemFont(16);
-      if (countdownStr) {
-        const c = w.addText(countdownStr);
-        c.font = Font.systemFont(11);
-        c.textOpacity = 0.75;
-      }
+      const t = w.addText(name); t.font = Font.boldSystemFont(16);
+      if (left) { const c = w.addText(left); c.font = Font.systemFont(11); c.textOpacity = 0.75; }
     }
   } else {
-    // Home-screen medium widget: full colour
     w.backgroundColor = new Color(BG);
     w.setPadding(16, 18, 14, 18);
 
-    // Eyebrow
-    const eyebrow = w.addText("NEXT PRAYER");
-    eyebrow.font = monoFont(10, "medium");
-    eyebrow.textColor = new Color(MUTED);
+    // Title: current prayer + "now"
+    const top = w.addStack(); top.centerAlignContent();
+    const nm = top.addText(hasWindow ? cur.name : (feed.error ? "Open Waqt" : "No prayers"));
+    nm.font = serifFont(fam === "large" ? 34 : 28, true);
+    nm.textColor = new Color(TEXT);
+    top.addSpacer();
+    if (hasWindow) { const nowLbl = top.addText("now"); nowLbl.font = monoFont(12); nowLbl.textColor = new Color(MUTED); }
 
-    w.addSpacer(10);
+    w.addSpacer(7);
 
-    // Prayer Top: Big prayer name + countdown
-    const prayerTop = w.addStack();
-    prayerTop.centerAlignContent();
-
-    const prayerNameStr = nextPrayer && nextPrayer.name ? nextPrayer.name : (feed.error ? "Open Waqt" : "Completed");
-    const nameLabel = prayerTop.addText(prayerNameStr);
-    nameLabel.font = serifFont(36, true);
-    nameLabel.textColor = new Color(TEXT);
-
-    prayerTop.addSpacer();
-
-    let countStr = "";
-    if (nextPrayer && nextPrayer.in) {
-      const rawIn = String(nextPrayer.in);
-      countStr = rawIn.startsWith("in ") ? rawIn : `in ${rawIn}`;
-    } else if (!nextPrayer) {
-      countStr = feed.error ? "to sync" : "for today";
+    // "ends in X · next at HH:MM"
+    if (hasWindow) {
+      const line = w.addStack(); line.centerAlignContent();
+      const e1 = line.addText("ends in "); e1.font = monoFont(12); e1.textColor = new Color(MUTED);
+      const e2 = line.addText(fmtLeft(leftMin)); e2.font = monoFont(12, true); e2.textColor = new Color(GOLD);
+      const e3 = line.addText(` · ${nxt.name} ${fmtClock(nxtStart)}`); e3.font = monoFont(12); e3.textColor = new Color(MUTED); e3.lineLimit = 1;
     }
 
-    if (countStr) {
-      const countLabel = prayerTop.addText(countStr);
-      countLabel.font = monoFont(13, "bold");
-      countLabel.textColor = new Color(GOLD);
+    w.addSpacer(11);
+
+    // Progress bar drawn as an image so the fill is truly proportional (stacks can't do % widths).
+    if (hasWindow) {
+      const BW = 320, BH = 6, sc = 3, W = BW * sc, H = BH * sc;
+      const ctx = new DrawContext(); ctx.size = new Size(W, H); ctx.opaque = false; ctx.respectScreenScale = false;
+      const rad = H / 2;
+      ctx.setFillColor(new Color(TRACK)); ctx.fillRect(new Rect(0, 0, W, H));
+      const fw = Math.max(H, W * frac);
+      // approximate rounded fill with a rect (rounding is sub-pixel at this height)
+      ctx.setFillColor(new Color(GOLD)); ctx.fillRect(new Rect(0, 0, fw, H));
+      const barImg = w.addImage(ctx.getImage());
+      barImg.cornerRadius = rad;
     }
 
-    w.addSpacer();
+    w.addSpacer(fam === "large" ? 16 : 13);
 
-    // Prayers dots row: done=filled (SAGE), next=ring (GOLD), later=muted (MUTED)
-    const prayersStack = w.addStack();
-    prayersStack.centerAlignContent();
-
-    for (let i = 0; i < prayers.length; i++) {
-      const p = prayers[i];
-      const col = prayersStack.addStack();
-      col.layoutVertically();
-      col.centerAlignContent();
-
-      // Uniform dot wrap stack to center dot horizontally and vertically
-      const dotWrap = col.addStack();
-      dotWrap.size = new Size(14, 14);
-      dotWrap.centerAlignContent();
-
-      const dot = dotWrap.addStack();
-      if (p.done) {
-        dot.size = new Size(10, 10);
-        dot.cornerRadius = 5;
-        dot.backgroundColor = new Color(SAGE);
-      } else if (p.next) {
-        dot.size = new Size(12, 12);
-        dot.cornerRadius = 6;
-        dot.borderWidth = 2;
-        dot.borderColor = new Color(GOLD);
-      } else {
-        dot.size = new Size(10, 10);
-        dot.cornerRadius = 5;
-        dot.borderWidth = 1;
-        dot.borderColor = new Color(MUTED);
-      }
-
+    // Dot row — one column per tracked prayer, in time order.
+    const row = w.addStack(); row.centerAlignContent();
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const state = (p === cur && hasWindow) ? "now" : (p.done ? "done" : "upcoming");
+      const col = row.addStack(); col.layoutVertically(); col.centerAlignContent();
+      const img = col.addImage(dotImage(state, p.voluntary, false));
+      img.imageSize = new Size(15, 15);
       col.addSpacer(6);
-
-      const lbl = col.addText(p.name);
-      lbl.font = monoFont(9, p.next ? "bold" : "regular");
-      lbl.textColor = p.next ? new Color(GOLD) : new Color(MUTED);
-      lbl.centerAlignText();
-
-      if (i < prayers.length - 1) {
-        prayersStack.addSpacer();
-      }
+      const lbl = col.addText(p.name.length > 5 ? p.name.slice(0, 4) : p.name);
+      lbl.font = monoFont(9, state === "now");
+      lbl.textColor = state === "now" ? new Color(GOLD) : new Color(MUTED);
+      lbl.centerAlignText(); lbl.lineLimit = 1; lbl.minimumScaleFactor = 0.7;
+      if (i < list.length - 1) row.addSpacer();
     }
   }
 
-  // Ask iOS to reload at the next prayer boundary (capped 2–60 min) so the widget flips right
-  // when the prayer changes. iOS treats this as a hint within its refresh budget — it can't be
-  // pushed from the app, but it keeps the widget from drifting far from real time.
   try {
-    const capMs = Math.max(2 * 60000, Math.min(60 * 60000, nextDate ? nextDate.getTime() - Date.now() + 60000 : 15 * 60000));
+    const capMs = Math.max(2 * 60000, Math.min(60 * 60000, hasWindow ? leftMin * 60000 + 60000 : 15 * 60000));
     w.refreshAfterDate = new Date(Date.now() + capMs);
   } catch (e) {}
 
-  if (typeof Script !== "undefined") {
-    Script.setWidget(w);
-    Script.complete();
-  }
+  if (typeof Script !== "undefined") { Script.setWidget(w); Script.complete(); }
   if (typeof config === "undefined" || !config.runsInWidget) {
-    if (lock && w.presentAccessoryRectangular) {
-      w.presentAccessoryRectangular();
-    } else if (fam === "large") {
-      w.presentLarge();
-    } else if (fam === "small") {
-      w.presentSmall();
-    } else {
-      w.presentMedium();
-    }
+    if (isLock && w.presentAccessoryRectangular) w.presentAccessoryRectangular();
+    else if (fam === "large") w.presentLarge();
+    else if (fam === "small") w.presentSmall();
+    else w.presentMedium();
   }
 })();

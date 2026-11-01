@@ -1906,10 +1906,10 @@ function rTemplate() {
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vprefs" aria-label="Settings"><i class="fas fa-gear"></i></button><p class="sch-eyebrow">PLAN</p><h1 class="sch-dayname sch-datefull">Your plan</h1><p class="sch-sub">set a time and repeat days once, it repeats every day</p></header>';
   h += '<div class="al"></div>';
   if (prayersOn()) h += renderPrayersCard();
-  h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">YOUR PLAN</p>';
-  h += getCardMeta().length >= 5 ? '<span class="sch-summary">Max 5 cards</span>' : '<button class="sch-plusbtn" data-a="cardadd"><i class="fas fa-plus"></i></button>';
-  h += '</div>';
+  h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">YOUR PLAN</p></div>';
   h += getCards().map(renderPlanCard).join('');
+  // Unified dashed add row (matches Reminders); replaces the old corner + button.
+  h += getCardMeta().length >= 5 ? '<p class="sch-summary" style="text-align:center;margin-top:10px">Max 5 cards</p>' : '<button type="button" class="rem-add" data-a="cardadd"><i class="fas fa-plus"></i> Add card</button>';
   return h + '</div>';
 }
 

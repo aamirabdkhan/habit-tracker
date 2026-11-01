@@ -453,3 +453,14 @@ body::before{display:none!important}
 .waqt-tab{min-width:56px;padding:7px 5px;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--smut,#7A756E);background:transparent;border:0;border-radius:16px;cursor:pointer;font:600 10px/1 'Space Grotesk',sans-serif;transition:.15s}
 .waqt-tab svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
 .waqt-tab.on{color:var(--stext,#E8E2D9);background:var(--acd,rgba(201,148,62,.12))}
+
+/* ===== Reminders — progress rings (urgency color via --kc, cycle fill via --p) ===== */
+.rem-card{position:relative;display:flex;align-items:center;gap:13px;margin-top:9px;padding:12px 13px;background:var(--surface,rgba(26,26,26,.72));border:1px solid var(--line,#2A2725);border-left:3px solid var(--kc,var(--line));border-radius:12px;backdrop-filter:blur(6px)}
+.rem-card.due{box-shadow:0 0 0 1px var(--kc) inset,0 0 18px -6px var(--kc)}
+.rem-ring{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--kc) calc(var(--p,0)*1%),rgba(255,255,255,.06) 0)}
+.rem-ring::before{content:"";position:absolute;width:34px;height:34px;border-radius:50%;background:var(--cd,#1A1A1A)}
+.rem-ring span{position:relative;font-family:var(--smono,ui-monospace,monospace);font-size:11px;font-weight:700;color:var(--kc)}
+.rem-body{flex:1;min-width:0}
+.rem-ttl{font-size:15px;font-weight:600;margin:0;color:var(--stext,#E8E2D9)}
+.rem-meta{color:var(--smut,#7A756E);font-size:11.5px;margin:3px 0 0}
+.rem-done{flex:none;align-self:center;background:var(--ac,#C9943E);color:#1a1206;border:0;border-radius:8px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer}

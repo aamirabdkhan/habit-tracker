@@ -854,21 +854,24 @@ function reminderCycleDays(r) { var s = r && r.schedule || {}; var e = Math.max(
 // Ring fill 0..100 = how far through the current cycle we are. Fixed dates have no cycle,
 // so they fill against a rolling 30-day horizon (floor so there's always a visible arc).
 function reminderProgress(r, todayISO) { var left = reminderDaysUntil(r, todayISO), span = reminderCycleDays(r); if (left <= 0) return 100; return Math.max(6, Math.min(100, Math.round((span - left) / span * 100))); }
-function reminderRingLabel(r, todayISO) { var d = reminderDaysUntil(r, todayISO); if (d <= 0) return "!"; return d >= 100 ? Math.round(d / 30) + "m" : d + "d"; }
-function reminderUrgencyVar(r, todayISO) { var d = reminderDaysUntil(r, todayISO); return d <= 0 ? "var(--ac)" : d <= 7 ? "var(--hl)" : "var(--pr)"; }
-function reminderRelLabel(r, todayISO) { var d = reminderDaysUntil(r, todayISO); if (d <= 0) return "Due today"; if (d === 1) return "Tomorrow"; return "In " + (d >= 100 ? Math.round(d / 30) + " months" : d + " days"); }
+function reminderRingLabel(r, todayISO) { var d = reminderDaysUntil(r, todayISO); if (d < 0) return Math.abs(d) + "d"; if (d === 0) return "!"; return d >= 100 ? Math.round(d / 30) + "m" : d + "d"; }
+// Option 1: any day past the fire date is "late" (red); due-today stays gold.
+function reminderUrgencyVar(r, todayISO) { var d = reminderDaysUntil(r, todayISO); return d < 0 ? "var(--dn)" : d === 0 ? "var(--ac)" : d <= 7 ? "var(--hl)" : "var(--pr)"; }
+function reminderRelLabel(r, todayISO) { var d = reminderDaysUntil(r, todayISO); if (d < 0) { var n = Math.abs(d); return n === 1 ? "1 day late" : n + " days late"; } if (d === 0) return "Due today"; if (d === 1) return "Tomorrow"; return "In " + (d >= 100 ? Math.round(d / 30) + " months" : d + " days"); }
 function renderReminders(todayISO) {
   var rows = getReminders().slice().sort(function(a, b) { return (isReminderDue(b, todayISO) - isReminderDue(a, todayISO)) || String(a.nextFire || "").localeCompare(String(b.nextFire || "")); }), due = rows.filter(function(r) { return isReminderDue(r, todayISO); }).length;
-  var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders' + (due ? ' <span class="bdg" style="background:var(--acd);color:var(--ac)">' + due + ' due</span>' : '') + '</h2><button type="button" class="bt t-xs" data-a="reminderadd">Add</button></div>';
+  var late = rows.filter(function(r) { return isReminderDue(r, todayISO) && reminderDaysUntil(r, todayISO) < 0; }).length;
+  var hdr = late ? '<span class="bdg" style="background:rgba(184,76,76,.16);color:#E08A8A">' + late + ' overdue</span>' : (due ? '<span class="bdg" style="background:var(--acd);color:var(--ac)">' + due + ' due</span>' : '');
+  var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders ' + hdr + '</h2><button type="button" class="bt t-xs" data-a="reminderadd">Add</button></div>';
   if (!rows.length) h += '<p class="sch-empty">No reminders yet.</p>';
   rows.forEach(function(r) {
-    var isDue = isReminderDue(r, todayISO), kc = reminderUrgencyVar(r, todayISO);
-    h += '<div class="rem-card' + (isDue ? ' due' : '') + '" style="--kc:' + kc + '">' +
-      '<div class="rem-ring" style="--p:' + reminderProgress(r, todayISO) + '"><span>' + esc(reminderRingLabel(r, todayISO)) + '</span></div>' +
+    var isDue = isReminderDue(r, todayISO), isLate = isDue && reminderDaysUntil(r, todayISO) < 0, kc = reminderUrgencyVar(r, todayISO);
+    h += '<div class="rem-card' + (isLate ? ' late' : isDue ? ' due' : '') + '" style="--kc:' + kc + '">' +
+      '<div class="rem-ring' + (isLate ? ' late' : '') + '" style="--p:' + reminderProgress(r, todayISO) + '"><span>' + esc(reminderRingLabel(r, todayISO)) + '</span></div>' +
       '<div class="rem-body"><p class="rem-ttl">' + esc(r.name) + '</p>' +
-      '<p class="rem-meta">' + esc(reminderRelLabel(r, todayISO)) + ' · ' + esc(reminderScheduleLabel(r)) + '</p>' +
+      '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(reminderRelLabel(r, todayISO)) + ' · ' + esc(reminderScheduleLabel(r)) + '</p>' +
       (r.note ? '<p class="rem-meta">' + esc(r.note) + '</p>' : '') + '</div>' +
-      (isDue ? '<button type="button" class="rem-done" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button>' : '') +
+      (isDue ? '<button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button>' : '') +
       '</div>';
   });
   return h + '</section>';
@@ -897,6 +900,7 @@ function _remindersSelfCheck() {
     console.assert(reminderProgress({schedule:{kind:"interval",every:2,unit:"weeks"},nextFire:"2026-11-13"}, "2026-11-01") === 14, "ring progress = elapsed % of cycle");
     console.assert(reminderProgress({nextFire:"2026-11-01"}, "2026-11-01") === 100 && reminderRingLabel({nextFire:"2026-11-01"}, "2026-11-01") === "!", "due rings fill fully and show !");
     console.assert(reminderUrgencyVar({nextFire:"2026-11-04"}, "2026-11-01") === "var(--hl)" && reminderUrgencyVar({nextFire:"2026-12-01"}, "2026-11-01") === "var(--pr)", "urgency color thresholds");
+    console.assert(reminderUrgencyVar({nextFire:"2026-10-26"}, "2026-11-01") === "var(--dn)" && reminderRelLabel({nextFire:"2026-10-26"}, "2026-11-01") === "6 days late" && reminderRingLabel({nextFire:"2026-10-31"}, "2026-11-01") === "1d", "overdue goes red and counts days late");
     console.log("REMINDERSCHECK PASS");
   } catch(e) { console.log("REMINDERSCHECK FAIL: " + e.message); }
   finally { if (saved === null) localStorage.removeItem(REMINDERS_KEY); else localStorage.setItem(REMINDERS_KEY, saved); }

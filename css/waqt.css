@@ -497,3 +497,6 @@ body::before{display:none!important}
 .sch-swatch.sel{border-color:var(--stext,#E8E2D9);box-shadow:0 0 0 2px var(--ink2,#1A1A1A),0 0 0 3px var(--sw)}
 .sch-swatch.taken{opacity:.3;cursor:not-allowed}
 .sch-swatch.taken:hover{transform:none}
+
+/* Prayer calculation-method select (Settings) */
+.sch-methodsel{width:100%;background:var(--ink2,#1A1A1A);color:var(--stext,#E8E2D9);border:1px solid var(--line,#2A2725);border-radius:10px;padding:10px 12px;font:14px 'Space Grotesk',sans-serif;color-scheme:dark;appearance:none;cursor:pointer}

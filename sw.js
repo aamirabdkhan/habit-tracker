@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v43';
+const CACHE = 'habit-tracker-v44';
 const URLS = [
   './',
   'index.html',
@@ -6,6 +6,8 @@ const URLS = [
   'css/waqt.css',
   'js/app.js',
   'js/waqt.js',
+  'js/vendor/adhan.min.js',
+  'js/prayer-calc.js',
   'js/supabase-sync.js',
   'js/manifest.js',
   'js/push-client.js',

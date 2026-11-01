@@ -100,9 +100,9 @@ function takbeerStreak() {
 var WIDGET_TOKEN_KEY = "ht_widget_token";
 function computeWidgetPayload() {
   var now = new Date(), key = dk(now), day = gDay(key), dow = now.getDay(), items = [];
-  if (prayersOn()) PRAYERS.forEach(function(p) {
+  if (prayersOn()) allTrackedPrayers().forEach(function(p) {
     var t = getNotifTime("prayers", p);
-    if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true, tag:"PRAYER" });
+    if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true, voluntary:isVoluntaryPrayer(p), tag:"PRAYER" });
   });
   getCards().forEach(function(card) {
     // tag = short card label shown on the Pehar widget's entry cards (first word, upper-case).
@@ -118,12 +118,8 @@ function computeWidgetPayload() {
   var dstr = "";
   try { dstr = now.toLocaleDateString(undefined, { weekday:"short", day:"numeric", month:"short" }); } catch(e) {}
 
+  // PRAYERS deliberately NOT a stats column any more — the prayer widget covers prayer progress.
   var cards = getCards(), counts = [], cardLabels = { habits:"DAILY", extra:"EXTRA", health:"HEALTHY" };
-  if (prayersOn()) {
-    var prayersDone = 0;
-    PRAYERS.forEach(function(p) { if (day.prayers && day.prayers[p]) prayersDone++; });
-    counts.push({ label:"PRAYERS", done:prayersDone, total:PRAYERS.length });
-  }
   cards.forEach(function(card) {
     // Base cards get their fixed label; custom cards (Study, Fitness, …) use their own name,
     // so every card shows in the stats widget, not just the three base ones.
@@ -147,7 +143,7 @@ function computeWidgetPayload() {
     date:dstr, done:done, total:items.length, items:items,
     stats:{ percent:dScore(key), counts:counts, next:nextPrayer },
     priority:priority,
-    prayers:prayersOn() ? PRAYERS.map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "" }; }) : [],
+    prayers:prayersOn() ? allTrackedPrayers().map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "", voluntary:isVoluntaryPrayer(p) }; }) : [],
     nextPrayer:nextPrayer
   };
 }
@@ -1943,6 +1939,26 @@ function rPrefs() {
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Weight</span><button type="button" class="sch-switch' + (weightOn() ? ' on' : '') + '" data-a="weighttoggle" role="switch" aria-checked="' + (weightOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center"><span style="flex:1">Pehar timeline</span><button type="button" class="sch-switch' + (peharOn() ? ' on' : '') + '" data-a="pehartoggle" role="switch" aria-checked="' + (peharOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div></div>';
 
+  if (prayersOn()) {
+    var pAuto = (typeof prayerAutoOn === "function") && prayerAutoOn();
+    var pGeo = (typeof getPrayerGeo === "function") ? getPrayerGeo() : null;
+    h += '<div class="cd"><div class="sec-t"><i class="fas fa-location-dot mr-1.5" style="color:var(--wa)"></i>Prayer times</div>';
+    h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Automatic from my location<br><small style="color:var(--mt)">calculate prayer times instead of typing them</small></span><button type="button" class="sch-switch' + (pAuto ? ' on' : '') + '" data-a="prayerautotoggle" role="switch" aria-checked="' + (pAuto ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
+    if (pAuto) {
+      h += '<p class="t-xs" style="color:var(--mt);margin:0 0 8px">' + (pGeo ? 'Location set' : 'No location yet — tap Update location') + '</p>';
+      h += '<button class="bt t-sm" data-a="prayerupdateloc" style="margin-bottom:14px"><i class="fas fa-location-crosshairs mr-1.5"></i>Update location</button>';
+      h += '<label class="t-xs" style="color:var(--mt);display:block;margin-bottom:5px">Calculation method</label>';
+      h += '<select class="sch-methodsel" data-a="prayermethod">';
+      (window.PRAYER_METHODS || []).forEach(function(m) { h += '<option value="' + esA(m[0]) + '"' + (getPrayerMethod() === m[0] ? ' selected' : '') + '>' + esc(m[1]) + '</option>'; });
+      h += '</select>';
+      var mad = getPrayerMadhab();
+      h += '<div class="flx gap-2" style="align-items:center;margin-top:12px"><span style="flex:1">Asr calculation</span><span class="flx gap-1"><button type="button" class="sch-durchip' + (mad === "Shafi" ? ' on' : '') + '" data-a="prayermadhab" data-m="Shafi">Shafi</button><button type="button" class="sch-durchip' + (mad === "Hanafi" ? ' on' : '') + '" data-a="prayermadhab" data-m="Hanafi">Hanafi</button></span></div>';
+    }
+    h += '<div class="flx gap-2" style="align-items:center;margin-top:14px"><span style="flex:1">Track Duha<br><small style="color:var(--mt)">voluntary · after sunrise</small></span><button type="button" class="sch-switch' + (voluntaryTracked("Duha") ? ' on' : '') + '" data-a="voltoggle" data-p="Duha" role="switch" aria-checked="' + (voluntaryTracked("Duha") ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
+    h += '<div class="flx gap-2" style="align-items:center;margin-top:10px"><span style="flex:1">Track Tahajjud<br><small style="color:var(--mt)">voluntary · last third of the night</small></span><button type="button" class="sch-switch' + (voluntaryTracked("Tahajjud") ? ' on' : '') + '" data-a="voltoggle" data-p="Tahajjud" role="switch" aria-checked="' + (voluntaryTracked("Tahajjud") ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
+    h += '</div>';
+  }
+
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-rotate mr-1.5" style="color:var(--wa)"></i>Cloud Sync</div>';
   if (typeof sbClient === "undefined" || !sbClient) {
     h += '<p class="t-xs mb-3" style="color:var(--mt)">Sync not configured.</p>';
@@ -2266,6 +2282,7 @@ _calculatorsSelfCheck();
 // ---- Daily view IS the timeline ----
 var originalRender = render;
 render = function() {
+  maybeApplyAutoPrayerTimes();
   if (shouldShowOnboarding()) { document.getElementById("content").innerHTML = rOnboarding(); return; }
   var h;
   if (view === "daily") h = rSchedule();
@@ -2586,10 +2603,58 @@ function renderGapQuickAdd(cards) {
 }
 
 // Fallback strip shown only while no prayer has a time yet.
+// ===== Voluntary prayers (Duha, Tahajjud) + location auto-times =====
+// PRAYERS stays the 5 fard so the obligatory ratio is never diluted. Voluntary prayers are opt-in,
+// tracked device-local, tickable, and shown on the widget/Pehar with a dashed ring — but excluded
+// from the fard count.
+var VOLUNTARY_PRAYERS = ["Duha", "Tahajjud"];
+function voluntaryTracked(name) { try { return localStorage.getItem("htn_track_" + name) === "true"; } catch(e) { return false; } }
+function setVoluntaryTracked(name, on) { try { if (on) localStorage.setItem("htn_track_" + name, "true"); else localStorage.removeItem("htn_track_" + name); } catch(e) {} }
+function trackedVoluntaryPrayers() { return VOLUNTARY_PRAYERS.filter(voluntaryTracked); }
+function allTrackedPrayers() { return PRAYERS.concat(trackedVoluntaryPrayers()); }
+function isVoluntaryPrayer(name) { return VOLUNTARY_PRAYERS.indexOf(name) !== -1; }
+
+var PRAYER_MANUAL_BACKUP_KEY = "htn_prayer_manual_backup";
+function backupManualPrayerTimes() {
+  var map = {};
+  PRAYERS.concat(VOLUNTARY_PRAYERS).forEach(function(p) { map[p] = getNotifTime("prayers", p) || ""; });
+  try { localStorage.setItem(PRAYER_MANUAL_BACKUP_KEY, JSON.stringify(map)); } catch(e) {}
+}
+function restoreManualPrayerTimes() {
+  var map; try { map = JSON.parse(localStorage.getItem(PRAYER_MANUAL_BACKUP_KEY)); } catch(e) {}
+  if (!map) return;
+  Object.keys(map).forEach(function(p) { setNotifTime("prayers", p, map[p] || ""); });
+  try { localStorage.removeItem(PRAYER_MANUAL_BACKUP_KEY); } catch(e) {}
+}
+// Writes computed times into the normal prayer-time store (so the whole app reads them like manual).
+function applyAutoPrayerTimes() {
+  if (typeof prayerAutoOn !== "function" || !prayerAutoOn()) return false;
+  var t = (typeof computeAutoPrayerTimes === "function") ? computeAutoPrayerTimes(new Date()) : null;
+  if (!t) return false;
+  PRAYERS.forEach(function(p) { if (t[p]) setNotifTime("prayers", p, t[p]); });
+  trackedVoluntaryPrayers().forEach(function(p) { if (t[p]) setNotifTime("prayers", p, t[p]); });
+  return true;
+}
+var _autoPrayerAppliedDate = null;
+function maybeApplyAutoPrayerTimes() {
+  if (typeof prayerAutoOn !== "function" || !prayerAutoOn()) return;
+  var today = dk(new Date());
+  if (_autoPrayerAppliedDate === today) return;
+  if (applyAutoPrayerTimes()) _autoPrayerAppliedDate = today;
+}
+// Toggle handler: ON backs up manual then computes; OFF restores manual.
+function setPrayerAutoAndApply(on) {
+  if (on) { backupManualPrayerTimes(); setPrayerAutoOn(true); _autoPrayerAppliedDate = null; }
+  else { setPrayerAutoOn(false); restoreManualPrayerTimes(); _autoPrayerAppliedDate = null; }
+}
+
 function renderPrayersDayCard() {
   if (!prayersOn()) return "";
   var items = PRAYERS.map(function(p){ return { n:p, done:!!cData.prayers[p], time:getNotifTime("prayers", p) || "", okey:"prayers::" + p }; });
-  var done = items.filter(function(it){ return it.done; }).length, total = items.length;
+  trackedVoluntaryPrayers().forEach(function(p){ items.push({ n:p, done:!!cData.prayers[p], time:getNotifTime("prayers", p) || "", okey:"prayers::" + p, voluntary:true }); });
+  // Ratio counts the 5 fard only; voluntary prayers are bonus and never lower the percentage.
+  var fard = items.filter(function(it){ return !it.voluntary; });
+  var done = fard.filter(function(it){ return it.done; }).length, total = fard.length;
   var pct = Math.round(done / total * 100), kc = PRAYER_GREEN;
   var untimed = items.filter(function(it){ return !it.time; });
   var timed = items.filter(function(it){ return !!it.time; });
@@ -3261,6 +3326,20 @@ document.getElementById("app").addEventListener("click", function(e) {
     // ---- Item editor (Task 12): duration presets, overview-stats switch ----
     if (a === "weighttoggle") { setWeightOn(!weightOn()); render(); return; }
     if (a === "takbeertoggle") { setTakbeerOn(!takbeerOn()); render(); return; }
+    if (a === "prayerautotoggle") {
+      var turningOn = !((typeof prayerAutoOn === "function") && prayerAutoOn());
+      if (turningOn) {
+        setPrayerAutoAndApply(true);
+        if (!(typeof getPrayerGeo === "function" && getPrayerGeo())) {
+          toast("Getting your location…");
+          if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } else toast("Couldn't get location — allow location access"); render(); });
+        } else { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); }
+      } else { setPrayerAutoAndApply(false); }
+      render(); return;
+    }
+    if (a === "prayermadhab") { setPrayerMadhab(t.dataset.m); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
+    if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location"); render(); }); return; }
+    if (a === "voltoggle") { setVoluntaryTracked(t.dataset.p, !voluntaryTracked(t.dataset.p)); if ((typeof prayerAutoOn === "function") && prayerAutoOn()) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); render(); return; }
     if (a === "pehartoggle") {
       if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
       else setPeharOn(!peharOn());
@@ -3369,6 +3448,8 @@ document.getElementById("app").addEventListener("change", function(e) {
     }
     return;
   }
+  var msel = e.target.closest('[data-a="prayermethod"]');
+  if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
   var dinp = e.target.closest(".sch-durinp");
   if (dinp && dinp.dataset.field) {
     var mins = parseInt(dinp.value, 10);

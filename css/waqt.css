@@ -488,3 +488,12 @@ body::before{display:none!important}
 .rem-emptyico{width:40px;height:40px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:var(--acd,rgba(201,148,62,.12));color:var(--ac,#C9943E);font-size:15px}
 .rem-emptytitle{font-family:"DM Serif Display",serif;font-size:17px;margin:0 0 4px;color:var(--stext,#E8E2D9)}
 .rem-emptysub{color:var(--smut,#7A756E);font-size:12.5px;line-height:1.5;margin:0;max-width:300px;margin-inline:auto}
+
+/* Per-card colour picker (Template): tap the card icon to open a swatch row */
+.sch-cardcolorbtn{appearance:none;background:transparent;border:0;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;line-height:0}
+.sch-colorpanel{display:flex;flex-wrap:wrap;gap:9px;margin:4px 0 12px;padding:12px;background:var(--ink2,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:12px}
+.sch-swatch{appearance:none;width:30px;height:30px;border-radius:50%;border:2px solid transparent;background:var(--sw);cursor:pointer;padding:0;transition:.14s;position:relative}
+.sch-swatch:hover{transform:scale(1.08)}
+.sch-swatch.sel{border-color:var(--stext,#E8E2D9);box-shadow:0 0 0 2px var(--ink2,#1A1A1A),0 0 0 3px var(--sw)}
+.sch-swatch.taken{opacity:.3;cursor:not-allowed}
+.sch-swatch.taken:hover{transform:none}

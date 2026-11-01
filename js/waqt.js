@@ -384,7 +384,9 @@ var OV_INTRO_KEY = "ht_ov_intro_seen";
 var CARD_ITEMS_KEY = "ht_card_items";
 var PRAYERS_ON_KEY = "ht_prayers_on";
 // Green (#82a06e) is reserved for Prayers — never assign it to a card.
-var CARD_PALETTE = ["#e0a33a", "#e07a3a", "#e05a6f", "#d64f8f", "#b85fd6", "#8f5fe0", "#6070e0", "#4090d6", "#40b0d6", "#40c0a8", "#7d84c0", "#b05a86"];
+// Spread across the hue wheel so adjacent cards never look alike. Keeps #b05a86 (the mauve-pink
+// some profiles already use) so that saved colour still shows as selected and is re-pickable.
+var CARD_PALETTE = ["#e0a33a", "#e57a35", "#d6544c", "#e0589c", "#b05a86", "#9b5fd6", "#6a6fe0", "#4090d6", "#35b6c4", "#3bbe8a", "#8fb04a", "#a86b3c"];
 
 // ---- metadata store (ht_cards) ----
 function getCardMeta() { try { return JSON.parse(localStorage.getItem(CARDS_KEY)) || []; } catch(e) { return []; } }
@@ -1703,6 +1705,7 @@ var ovStatsEdit = null;   // cardId whose Overview stats-picker panel is open, o
 var tplCardEdit = null;   // cardId whose name is being renamed inline
 var tplItemEdit = null;   // "field::name" of the item whose inline editor is open
 var tplMergeCard = null;  // cardId whose duplicate-cleanup panel is open
+var tplColorCard = null;  // cardId whose colour swatch panel is open
 var tplRepeatMode = {};   // "field::name" -> "every"|"custom", UI-only (persists via setItemDays)
 
 // carForceReduced/carReducedMotion are kept (used by row-gesture drag animation gating below,
@@ -1738,10 +1741,8 @@ function renderPlanCard(card) {
   var items = cardItemsFor(card.id);
   var h = '<div class="sch-cardblock" style="--kc:' + esA(card.color) + '">';
   h += '<div class="sch-cardhead">';
-  // The icon is decoration now, not a button: colour and icon are auto-assigned at creation
-  // (nextCardColor/nextCardIcon) and the 12x10 restyle popover is gone. Delete-card moved out
-  // of that popover and onto the head, because the popover was the only way to reach it.
-  h += '<i class="fas ' + esA(card.icon) + ' sch-cardicon" style="--kc:' + esA(card.color) + '"></i>';
+  // The icon doubles as the colour button: tap it to open a swatch row and recolour the card.
+  h += '<button type="button" class="sch-cardcolorbtn" data-a="cardcolor" data-c="' + esA(card.id) + '" aria-label="Change colour of ' + esA(card.name) + '"><i class="fas ' + esA(card.icon) + ' sch-cardicon" style="--kc:' + esA(card.color) + '"></i></button>';
   if (tplCardEdit === card.id) {
     h += '<input type="text" class="sch-addname sch-cardnameinp" id="cardname-' + esA(card.id) + '" value="' + esA(card.name) + '" maxlength="40">';
   } else {
@@ -1751,6 +1752,16 @@ function renderPlanCard(card) {
   if (items.length > 1) h += '<button type="button" class="sch-ib sch-cardmerge" data-a="tplmerge" data-c="' + esA(card.id) + '">Merge</button>';
   if (!card.base) h += '<button type="button" class="sch-ib sch-carddel" data-a="carddel" data-c="' + esA(card.id) + '" aria-label="Delete ' + esA(card.name) + '"><i class="fas fa-trash-can"></i></button>';
   h += '</div>';
+
+  if (tplColorCard === card.id) {
+    var usedColors = getCardMeta().filter(function(c) { return c.id !== card.id; }).map(function(c) { return c.color; });
+    h += '<div class="sch-colorpanel">';
+    CARD_PALETTE.forEach(function(col) {
+      var taken = usedColors.indexOf(col) !== -1, sel = card.color === col;
+      h += '<button type="button" class="sch-swatch' + (sel ? ' sel' : '') + (taken && !sel ? ' taken' : '') + '" data-a="cardcolorset" data-c="' + esA(card.id) + '" data-col="' + esA(col) + '" style="--sw:' + esA(col) + '"' + (taken && !sel ? ' aria-disabled="true"' : '') + ' aria-label="' + esA(col) + (sel ? ' (current)' : taken ? ' (in use)' : '') + '"></button>';
+    });
+    h += '</div>';
+  }
 
   if (!items.length) {
     h += emptyStateHTML('fa-list-check', 'No items yet');
@@ -3181,6 +3192,14 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "tplmerge") { tplMergeCard = t.dataset.c; tplItemEdit = null; render(); return; }
     if (a === "tplmergeclose") { tplMergeCard = null; render(); return; }
+    if (a === "cardcolor") { tplColorCard = tplColorCard === t.dataset.c ? null : t.dataset.c; render(); return; }
+    if (a === "cardcolorset") {
+      var okCol = restyleCard(t.dataset.c, { color:t.dataset.col });
+      if (!okCol) { toast("That colour is used by another card"); return; }
+      tplColorCard = null;
+      if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
+      render(); return;
+    }
     if (a === "tplmergeconfirm") {
       var mergePanel = t.closest(".sch-mergepanel"), mergeNames = Array.prototype.slice.call(mergePanel.querySelectorAll("[data-merge-item]:checked")).map(function(input) { return input.value; });
       var mergeKeep = mergePanel.querySelector("[data-merge-keep]").value;

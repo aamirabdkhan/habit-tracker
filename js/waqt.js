@@ -846,9 +846,12 @@ function nextReminderFire(reminder, fromDateISO) {
   if (candidate <= fromDateISO) { year++; candidate = reminderISO(year, month, Math.min(day, reminderDaysInMonth(year, month))); }
   return candidate;
 }
-function isReminderDue(reminder, todayISO) { return !!(reminder && reminder.nextFire && !reminder.snoozedUntil && reminder.nextFire <= todayISO); }
-function completeReminder(id, doneDateISO) { var rows = getReminders().map(function(r) { if (r.id === id) { r.lastDone = doneDateISO; r.nextFire = nextReminderFire(r, doneDateISO); } return r; }); saveReminders(rows); }
-function reminderScheduleLabel(reminder) { var s = reminder.schedule || {}; return s.kind === "interval" ? "Every " + s.every + " " + s.unit : "On " + (reminder.nextFire || s.date || "a date"); }
+// Snooze hides a due reminder until snoozedUntil passes (then it's due again), so an overdue nag
+// can be deferred a day instead of forcing a false "Done".
+function isReminderDue(reminder, todayISO) { return !!(reminder && reminder.nextFire && reminder.nextFire <= todayISO && (!reminder.snoozedUntil || reminder.snoozedUntil <= todayISO)); }
+function completeReminder(id, doneDateISO) { var rows = getReminders().map(function(r) { if (r.id === id) { r.lastDone = doneDateISO; r.snoozedUntil = ""; r.nextFire = nextReminderFire(r, doneDateISO); } return r; }); saveReminders(rows); }
+function snoozeReminder(id, untilISO) { var rows = getReminders().map(function(r) { if (r.id === id) r.snoozedUntil = untilISO; return r; }); saveReminders(rows); }
+function reminderScheduleLabel(reminder) { var s = reminder.schedule || {}; if (s.kind === "interval") { var u = String(s.unit || "days").replace(/s$/, ""), n = Math.max(1, Math.round(+s.every || 1)); return "Every " + (n === 1 ? u : n + " " + u + "s"); } return "On " + (reminder.nextFire || s.date || "a date"); }
 function reminderDaysUntil(r, todayISO) { if (!r || !r.nextFire) return 0; return Math.round((new Date(r.nextFire + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000); }
 function reminderCycleDays(r) { var s = r && r.schedule || {}; var e = Math.max(1, Math.round(+s.every || 1)); return s.unit === "weeks" ? e * 7 : s.unit === "months" ? e * 30 : s.kind === "interval" ? e : 30; }
 // Ring fill 0..100 = how far through the current cycle we are. Fixed dates have no cycle,
@@ -862,18 +865,21 @@ function renderReminders(todayISO) {
   var rows = getReminders().slice().sort(function(a, b) { return (isReminderDue(b, todayISO) - isReminderDue(a, todayISO)) || String(a.nextFire || "").localeCompare(String(b.nextFire || "")); }), due = rows.filter(function(r) { return isReminderDue(r, todayISO); }).length;
   var late = rows.filter(function(r) { return isReminderDue(r, todayISO) && reminderDaysUntil(r, todayISO) < 0; }).length;
   var hdr = late ? '<span class="bdg" style="background:rgba(184,76,76,.16);color:#E08A8A">' + late + ' overdue</span>' : (due ? '<span class="bdg" style="background:var(--acd);color:var(--ac)">' + due + ' due</span>' : '');
-  var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders ' + hdr + '</h2><button type="button" class="bt t-xs" data-a="reminderadd">Add</button></div>';
-  if (!rows.length) h += '<p class="sch-empty">No reminders yet.</p>';
+  var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders ' + hdr + '</h2></div>';
+  if (!rows.length) h += '<div class="rem-empty"><div class="rem-emptyico"><i class="fas fa-bell"></i></div><p class="rem-emptytitle">No reminders yet</p><p class="rem-emptysub">Track things that repeat — bills, filters, servicing. We&rsquo;ll nag you when they&rsquo;re due.</p></div>';
   rows.forEach(function(r) {
     var isDue = isReminderDue(r, todayISO), isLate = isDue && reminderDaysUntil(r, todayISO) < 0, kc = reminderUrgencyVar(r, todayISO);
+    // Ring already shows the number for upcoming items; only spell out urgency words when due/late.
+    var meta = isDue ? reminderRelLabel(r, todayISO) + ' · ' + reminderScheduleLabel(r) : reminderScheduleLabel(r);
     h += '<div class="rem-card' + (isLate ? ' late' : isDue ? ' due' : '') + '" style="--kc:' + kc + '">' +
       '<div class="rem-ring' + (isLate ? ' late' : '') + '" style="--p:' + reminderProgress(r, todayISO) + '"><span>' + esc(reminderRingLabel(r, todayISO)) + '</span></div>' +
       '<div class="rem-body"><p class="rem-ttl">' + esc(r.name) + '</p>' +
-      '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(reminderRelLabel(r, todayISO)) + ' · ' + esc(reminderScheduleLabel(r)) + '</p>' +
+      '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(meta) + '</p>' +
       (r.note ? '<p class="rem-meta">' + esc(r.note) + '</p>' : '') + '</div>' +
-      (isDue ? '<button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button>' : '') +
+      (isDue ? '<div class="rem-acts"><button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button><button type="button" class="rem-later" data-a="reminderlater" data-id="' + esA(r.id) + '">Later</button></div>' : '') +
       '</div>';
   });
+  h += '<button type="button" class="rem-add" data-a="reminderadd"><i class="fas fa-plus"></i> Add reminder</button>';
   return h + '</section>';
 }
 function addReminderFromPrompt(todayISO) {
@@ -901,6 +907,8 @@ function _remindersSelfCheck() {
     console.assert(reminderProgress({nextFire:"2026-11-01"}, "2026-11-01") === 100 && reminderRingLabel({nextFire:"2026-11-01"}, "2026-11-01") === "!", "due rings fill fully and show !");
     console.assert(reminderUrgencyVar({nextFire:"2026-11-04"}, "2026-11-01") === "var(--hl)" && reminderUrgencyVar({nextFire:"2026-12-01"}, "2026-11-01") === "var(--pr)", "urgency color thresholds");
     console.assert(reminderUrgencyVar({nextFire:"2026-10-26"}, "2026-11-01") === "var(--dn)" && reminderRelLabel({nextFire:"2026-10-26"}, "2026-11-01") === "6 days late" && reminderRingLabel({nextFire:"2026-10-31"}, "2026-11-01") === "1d", "overdue goes red and counts days late");
+    console.assert(reminderScheduleLabel({schedule:{kind:"interval",every:1,unit:"days"}}) === "Every day" && reminderScheduleLabel({schedule:{kind:"interval",every:3,unit:"months"}}) === "Every 3 months", "schedule label singular/plural grammar");
+    console.assert(!isReminderDue({nextFire:"2026-10-31",snoozedUntil:"2026-11-02"}, "2026-11-01") && isReminderDue({nextFire:"2026-10-31",snoozedUntil:"2026-11-01"}, "2026-11-01"), "snooze hides until snoozedUntil passes");
     console.log("REMINDERSCHECK PASS");
   } catch(e) { console.log("REMINDERSCHECK FAIL: " + e.message); }
   finally { if (saved === null) localStorage.removeItem(REMINDERS_KEY); else localStorage.setItem(REMINDERS_KEY, saved); }
@@ -3097,6 +3105,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "today") { cDate = new Date(); render(); return; }
     if (a === "reminderadd") { addReminderFromPrompt(dk(cDate)); render(); return; }
     if (a === "reminderdone") { completeReminder(t.dataset.id, dk(cDate)); render(); return; }
+    if (a === "reminderlater") { var tm = new Date(cDate); tm.setDate(tm.getDate() + 1); snoozeReminder(t.dataset.id, dk(tm)); render(); return; }
     if (a === "wkprev") { cDate.setDate(cDate.getDate() - 7); render(); return; }
     if (a === "wknext") { cDate.setDate(cDate.getDate() + 7); render(); return; }
     if (a === "wkday") {

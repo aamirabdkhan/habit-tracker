@@ -472,3 +472,16 @@ body::before{display:none!important}
 .rem-meta.late{color:#E08A8A;font-weight:600}
 .rem-done.late{background:var(--dn,#B84C4C);color:#fff}
 @media (prefers-reduced-motion:reduce){.rem-card.late{animation:none}}
+
+/* Reminder actions (Done + Later snooze) */
+.rem-acts{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.rem-later{background:transparent;border:1px solid var(--bd,#2A2725);color:var(--smut,#7A756E);border-radius:8px;padding:5px 13px;font-size:11px;font-weight:500;cursor:pointer}
+.rem-later:hover{color:var(--stext,#E8E2D9)}
+/* Add-reminder row (full-width dashed, discoverable) */
+.rem-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:11px;background:transparent;border:1px dashed var(--bd,#2A2725);border-radius:12px;color:var(--smut,#7A756E);font:600 13px/1 'Space Grotesk',sans-serif;cursor:pointer;transition:.15s}
+.rem-add:hover{border-color:var(--ac,#C9943E);color:var(--ac,#C9943E)}
+/* Empty state — matches Pehar/Overview polish */
+.rem-empty{text-align:center;padding:22px 16px 8px}
+.rem-emptyico{width:40px;height:40px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:var(--acd,rgba(201,148,62,.12));color:var(--ac,#C9943E);font-size:15px}
+.rem-emptytitle{font-family:"DM Serif Display",serif;font-size:17px;margin:0 0 4px;color:var(--stext,#E8E2D9)}
+.rem-emptysub{color:var(--smut,#7A756E);font-size:12.5px;line-height:1.5;margin:0;max-width:300px;margin-inline:auto}

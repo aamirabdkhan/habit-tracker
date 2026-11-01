@@ -922,6 +922,67 @@ function importItem(value, prayer) {
 }
 // Repeat activity names inside ONE card get a -2/-3 suffix so none get merged or lost. Shared by
 // the JSON path and the prayer-split below (which legitimately produces two pieces of one name).
+function normalizeImportItemName(name) {
+  var base = String(name || "").toLowerCase().trim();
+  base = base.replace(/\b(?:morning|evening|night|am|pm)\b/g, " ");
+  // Collapse ONLY collision-style suffixes a dedup/AI produces — "(2)", "-2"/"_2", or a number
+  // glued straight onto letters ("ceh2"). NEVER a space-separated trailing number ("surah 2"),
+  // which denotes a legitimate numbered series the user set on purpose.
+  base = base.replace(/\s*\(\s*\d+\s*\)\s*$/, "");
+  base = base.replace(/[_-]\s*\d+\s*$/, "");
+  base = base.replace(/([a-z])\d+$/, "$1");
+  return base.replace(/[\s_-]+/g, " ").trim();
+}
+function mergeSlotLists() {
+  var out = [], seen = {};
+  Array.prototype.slice.call(arguments).forEach(function(slots) {
+    (slots || []).forEach(function(slot) {
+      if (!slot || !validSlotTime(slot.time)) return;
+      var days = Array.isArray(slot.days) ? slot.days.slice() : undefined;
+      var key = slot.time + "|" + JSON.stringify(days || null);
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push({ time:slot.time, days:days });
+    });
+  });
+  return out;
+}
+function importItemSlots(item) {
+  return item.slots && item.slots.length ? item.slots : (item.time ? [{ time:item.time, days:item.days || undefined }] : []);
+}
+function shortestItemName(names) {
+  return names.slice().sort(function(a, b) { return a.length - b.length || a.localeCompare(b); })[0] || "";
+}
+function collapseImportItems(items) {
+  var groups = {}, order = [];
+  items.forEach(function(item) {
+    var key = normalizeImportItemName(item.name) || item.name.toLowerCase();
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(item);
+  });
+  return order.map(function(key) {
+    var group = groups[key], kept = group.slice().sort(function(a, b) { return a.name.length - b.name.length || a.name.localeCompare(b.name); })[0];
+    if (group.length === 1) return kept;
+    var slots = mergeSlotLists.apply(null, group.map(importItemSlots));
+    kept.name = shortestItemName(group.map(function(item) { return item.name; }));
+    if (slots.length > 1) {
+      kept.slots = slots;
+      kept.time = slots[0].time;
+      kept.days = slots[0].days || null;
+    } else if (slots.length === 1) {
+      delete kept.slots;
+      kept.time = slots[0].time;
+      kept.days = slots[0].days || null;
+    } else {
+      delete kept.slots;
+      kept.time = "";
+      kept.days = null;
+    }
+    return kept;
+  });
+}
+// Repeat names can still be suffixed by callers that genuinely need distinct items (for example,
+// prayer splitting). Import parsing itself now calls collapseImportItems instead.
 function dedupItemNames(items) {
   var used = {};
   items.forEach(function(it) {
@@ -969,7 +1030,7 @@ function parseImportSchedule(text) {
     if (!card || typeof card !== "object" || Array.isArray(card) || typeof card.name !== "string" || !card.name.trim() || !Array.isArray(card.items)) return { error:"Each card needs a name and an items array." };
     var clean = { name:card.name.trim(), items:[] };
     for (var j = 0; j < card.items.length; j++) { var item = importItem(card.items[j], false); if (!item) return { error:"Each item needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
-    dedupItemNames(clean.items);
+    clean.items = collapseImportItems(clean.items);
     out.cards.push(clean);
   }
   if (raw.reminders !== undefined) {
@@ -1603,6 +1664,7 @@ var ICON_CHOICES = ["fa-star","fa-bullseye","fa-hand-holding-heart","fa-heart-pu
 var ovStatsEdit = null;   // cardId whose Overview stats-picker panel is open, or null
 var tplCardEdit = null;   // cardId whose name is being renamed inline
 var tplItemEdit = null;   // "field::name" of the item whose inline editor is open
+var tplMergeCard = null;  // cardId whose duplicate-cleanup panel is open
 var tplRepeatMode = {};   // "field::name" -> "every"|"custom", UI-only (persists via setItemDays)
 
 // carForceReduced/carReducedMotion are kept (used by row-gesture drag animation gating below,
@@ -1648,6 +1710,7 @@ function renderPlanCard(card) {
     h += '<span class="sch-cardname" data-a="cardrename" data-c="' + esA(card.id) + '" role="button" tabindex="0">' + esc(card.name) + '</span>';
   }
   h += '<span class="sch-cardcount">' + items.length + '</span>';
+  if (items.length > 1) h += '<button type="button" class="sch-ib sch-cardmerge" data-a="tplmerge" data-c="' + esA(card.id) + '">Merge</button>';
   if (!card.base) h += '<button type="button" class="sch-ib sch-carddel" data-a="carddel" data-c="' + esA(card.id) + '" aria-label="Delete ' + esA(card.name) + '"><i class="fas fa-trash-can"></i></button>';
   h += '</div>';
 
@@ -1666,6 +1729,15 @@ function renderPlanCard(card) {
       if (tplItemEdit === key) h += templateEditorHTML(card.id, it.n);
       h += '</div>';
     });
+  }
+
+  if (tplMergeCard === card.id) {
+    var keepName = shortestItemName(items.map(function(item) { return item.n; }));
+    h += '<div class="sch-mergepanel"><p>Pick duplicates. Keep name and all times.</p>';
+    items.forEach(function(item) { h += '<label><input type="checkbox" data-merge-item value="' + esA(item.n) + '"> ' + esc(item.n) + '</label>'; });
+    h += '<label class="sch-mergelabel">Keep <select data-merge-keep>';
+    items.forEach(function(item) { h += '<option value="' + esA(item.n) + '"' + (item.n === keepName ? ' selected' : '') + '>' + esc(item.n) + '</option>'; });
+    h += '</select></label><div><button type="button" class="bt t-sm" data-a="tplmergeconfirm" data-c="' + esA(card.id) + '">Merge selected</button><button type="button" class="sch-ib" data-a="tplmergeclose">Cancel</button></div></div>';
   }
 
   // Persistent name-only add row (the live-site convenience the user asked back): type a name,
@@ -3068,6 +3140,18 @@ document.getElementById("app").addEventListener("click", function(e) {
       removeCardItem(t.dataset.f, t.dataset.k);
       render(); toast("Removed"); return;
     }
+    if (a === "tplmerge") { tplMergeCard = t.dataset.c; tplItemEdit = null; render(); return; }
+    if (a === "tplmergeclose") { tplMergeCard = null; render(); return; }
+    if (a === "tplmergeconfirm") {
+      var mergePanel = t.closest(".sch-mergepanel"), mergeNames = Array.prototype.slice.call(mergePanel.querySelectorAll("[data-merge-item]:checked")).map(function(input) { return input.value; });
+      var mergeKeep = mergePanel.querySelector("[data-merge-keep]").value;
+      if (mergeNames.length < 2 || mergeNames.indexOf(mergeKeep) === -1) { toast("Pick 2+ items and a kept name"); return; }
+      if (!confirm('Merge ' + mergeNames.length + ' items into "' + mergeKeep + '"? Other names will be removed.')) return;
+      var mergeSlots = mergeSlotLists.apply(null, mergeNames.map(function(name) { return getItemSlots(t.dataset.c, name); }));
+      setItemSlots(t.dataset.c, mergeKeep, mergeSlots);
+      mergeNames.forEach(function(name) { if (name !== mergeKeep) removeCardItem(t.dataset.c, name); });
+      tplMergeCard = null; tplItemEdit = null; render(); toast("Merged"); return;
+    }
     // ---- Template: card management (add/rename/restyle/delete) ----
     if (a === "cardadd") {
       var newCard = addCard("New card");
@@ -3960,8 +4044,8 @@ function _importSelfCheck() {
     var unique = buildImportPreview(parseImportSchedule('{"version":1,"cards":[{"name":"Fitness","items":[{"name":"Run"}]},{"name":"Work","items":[{"name":"Deep work"}]}]}').value); applyImportSchedule(unique, true);
     var newCards = getCards().filter(function(c) { return c.name === "Fitness" || c.name === "Work"; });
     assert(newCards.length === 2 && newCards[0].color !== newCards[1].color && newCards[0].icon !== newCards[1].icon && newCards.every(function(c) { return c.color !== "#82a06e"; }), "new cards did not receive unique non-green color/icon assignments");
-    var dup = buildImportPreview(parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Physio","time":"09:00","days":["Sat"]},{"name":"Physio","time":"11:00","days":["Wed"]}]}]}').value);
-    assert(dup.rows.filter(function(r){ return r.kind === "newitem"; }).length === 2, "duplicate import item names must both survive as distinct items");
+    var dup = parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Physio","time":"09:00","days":["Sat"]},{"name":"Physio","time":"11:00","days":["Wed"]}]}]}').value.cards[0].items;
+    assert(dup.length === 1 && dup[0].slots.length === 2, "duplicate import names must collapse into one multi-slot item");
 
     // ---- 2026-08-13 import fixes ----
     // Reset to a known profile: Daily Goals + a Fitness card holding "Exercise", Asr at 17:35/35m.
@@ -4025,6 +4109,24 @@ function _importSelfCheck() {
   finally { restore(); cDate = savedDate; cData = savedData; }
 }
 _importSelfCheck();
+
+// ---- self-check (run with the page open at #mergecheck) ----
+function _mergeSelfCheck() {
+  if (location.hash !== "#mergecheck") return;
+  function assert(ok, message) { if (!ok) throw new Error(message); }
+  try {
+    assert(normalizeImportItemName("CEH3") === "ceh", "CEH3 must normalize to ceh");
+    assert(normalizeImportItemName("CEH-2") === "ceh", "CEH-2 must normalize to ceh");
+    assert(normalizeImportItemName("Surah 2") === "surah 2" && normalizeImportItemName("Surah 3") === "surah 3", "space-separated numbered series must NOT collapse");
+    assert(normalizeImportItemName(" CEH evening ") === "ceh", "time word must normalize away");
+    var slots = mergeSlotLists([{ time:"09:00", days:[1,3] }], [{ time:"09:00", days:[1,3] }, { time:"18:00" }]);
+    assert(JSON.stringify(slots) === JSON.stringify([{ time:"09:00", days:[1,3] }, { time:"18:00", days:undefined }]), "slot union must dedupe");
+    var collapsed = collapseImportItems([{ name:"CEH", time:"09:00", days:[1] }, { name:"CEH-2", time:"18:00", days:[3] }]);
+    assert(collapsed.length === 1 && collapsed[0].name === "CEH" && collapsed[0].slots.length === 2, "import duplicates must collapse");
+    console.log("MERGECHECK PASS");
+  } catch(e) { console.log("MERGECHECK FAIL: " + e.message); }
+}
+_mergeSelfCheck();
 
 // ---- self-check (run with the page open at #peharcheck) ----
 function _peharSelfCheck() {

@@ -166,14 +166,18 @@ function scheduleWidgetPublish() {
   clearTimeout(_widgetPubTimer);
   _widgetPubTimer = setTimeout(publishWidgetFeed, 1500);
 }
-// The tiny loader the user pastes into Scriptable. It fetches pehar-widget.js (so we can update the
-// widget later without anyone re-pasting) and runs it with their token baked in.
+// The tiny loader the user pastes into Scriptable. One universal script runs ALL FOUR widgets —
+// which one is chosen by the home-screen widget's Parameter (pehar/stats/priority/nextprayer),
+// defaulting to pehar. It fetches the matching *-widget.js (so we can update widgets without anyone
+// re-pasting) and runs it with their token baked in.
 function widgetLoaderText() {
   var token = localStorage.getItem(WIDGET_TOKEN_KEY) || "(open this screen while signed in to get your token)";
   return 'var TOKEN="' + token + '";\n'
     + 'var SUPABASE_URL="' + SUPABASE_URL + '";\n'
     + 'var ANON_KEY="' + SUPABASE_ANON_KEY + '";\n'
-    + 'const src=await new Request("' + location.origin + '/pehar-widget.js?t="+Date.now()).loadString();\n'
+    + 'var WIDGETS={pehar:"pehar-widget",stats:"stats-widget",priority:"priority-widget",nextprayer:"next-prayer-widget"};\n'
+    + 'var file=WIDGETS[((typeof args!=="undefined"&&args.widgetParameter)||"pehar").trim().toLowerCase()]||"pehar-widget";\n'
+    + 'const src=await new Request("' + location.origin + '/"+file+".js?t="+Date.now()).loadString();\n'
     + 'await eval(src);';
 }
 
@@ -1852,15 +1856,16 @@ function rPrefs() {
 
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-table-cells-large mr-1.5" style="color:var(--ac)"></i>Home screen widget</div>';
   if (typeof currentUser !== "undefined" && currentUser) {
-    h += '<p class="t-xs mb-3" style="color:var(--mt)">Show today’s Pehar on your iPhone home screen, using the free Scriptable app.</p>';
+    h += '<p class="t-xs mb-3" style="color:var(--mt)">Four home-screen widgets — Pehar, Stats, Priority and Next prayer — from one script, using the free Scriptable app. You pick which one each widget shows with its <b>Parameter</b>.</p>';
     h += '<button type="button" class="bt bta t-sm" data-a="copywidgetscript"><i class="fas fa-copy mr-1.5"></i>Copy widget script</button>';
     h += '<ol class="sch-parsesteps" style="margin-top:11px">'
       + '<li>Install <b>Scriptable</b> (free, from the App Store).</li>'
       + '<li>Tap <b>Copy widget script</b> above.</li>'
-      + '<li>Open Scriptable, tap <b>+</b> for a new script, paste, and name it <b>Pehar</b>.</li>'
-      + '<li>Long-press your home screen, tap <b>+</b>, add a <b>Scriptable</b> widget (Large), then edit it and pick the <b>Pehar</b> script.</li>'
+      + '<li>Open Scriptable, tap <b>+</b> for a new script, paste, and name it <b>Waqt</b>.</li>'
+      + '<li>Long-press your home screen → <b>+</b> → <b>Scriptable</b> → add a widget. Then long-press it → <b>Edit Widget</b> → set <b>Script</b> = <b>Waqt</b> and <b>Parameter</b> to one of: <b>pehar</b> (Large), <b>stats</b> (Medium), <b>priority</b> (Medium), <b>nextprayer</b> (Medium).</li>'
+      + '<li>Repeat for each widget you want — same <b>Waqt</b> script, a different <b>Parameter</b> each time.</li>'
       + '</ol>';
-    h += '<p class="sch-parsehint">Lock-screen widgets work too, but iOS shows them in white only. Anyone with the script can see your schedule, so keep it to your own devices.</p>';
+    h += '<p class="sch-parsehint">Lock-screen widgets work too (same script + parameter), but iOS shows them in white only. Anyone with the script can see your schedule, so keep it to your own devices.</p>';
   } else {
     h += '<p class="t-xs" style="color:var(--mt)">Connect Cloud Sync above first, then your widget script appears here.</p>';
   }

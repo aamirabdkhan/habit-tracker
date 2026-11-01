@@ -263,7 +263,10 @@ body::before{display:none!important}
 /* Persistent inline add row on each Plan card: name box + Add, side by side, always visible. */
 .sch-inlineadd{display:flex;gap:8px;align-items:center;margin-top:10px}
 .sch-inlineadd .sch-addname{margin-bottom:0;flex:1;font-size:14px}
-.sch-inlineadd .sch-addgo{margin-left:0;flex-shrink:0;display:inline-flex;align-items:center}
+/* Ghost/dashed to match the Reminders & Your-plan add rows — keeps the fast type-enter flow,
+   drops the solid gold pill. (Base .sch-addgo stays gold for merge/gap contexts.) */
+.sch-inlineadd .sch-addgo{margin-left:0;flex-shrink:0;display:inline-flex;align-items:center;background:transparent;border:1px dashed var(--line);color:var(--smut);transition:.15s}
+.sch-inlineadd .sch-addgo:hover{border-color:var(--ac);color:var(--ac)}
 .sch-cardmerge{font-size:11px;color:var(--smut)}
 .sch-mergepanel{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:10px;color:var(--stext);font-size:12px}
 .sch-mergepanel p{margin:0 0 7px;color:var(--smut)}.sch-mergepanel label{display:block;margin:5px 0}.sch-mergelabel{margin-top:8px!important}.sch-mergepanel select{margin-left:5px;max-width:65%;background:var(--surface);color:var(--stext);border:1px solid var(--line);border-radius:6px;padding:4px}.sch-mergepanel>div{display:flex;gap:7px;align-items:center;margin-top:9px}

@@ -186,32 +186,24 @@
     const nowItem = nowIndex >= 0 ? items[nowIndex] : null;
 
     if (fam === "large") {
-      // Header matching approved demo: Eyebrow + Day + Date on left, circular progress badge on right
+      // Large keeps the approved timeline compact enough for seven windowed items.
       const head = w.addStack();
       head.centerAlignContent();
 
       const headLeft = head.addStack();
       headLeft.layoutVertically();
 
-      const curHour = (new Date()).getHours();
-      const eyebrowStr = curHour < 12 ? "GOOD MORNING" : (curHour < 17 ? "GOOD AFTERNOON" : "GOOD EVENING");
-      const eb = headLeft.addText(eyebrowStr);
-      eb.font = monoFont(9);
-      eb.textColor = new Color(MUTED);
-
-      headLeft.addSpacer(2);
-
       const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const dayStr = dayNames[(new Date()).getDay()];
+      const nowD = new Date();
+      const dayStr = dayNames[nowD.getDay()];
       const dayLabel = headLeft.addText(dayStr);
-      dayLabel.font = Font.boldSystemFont(22);
+      dayLabel.font = Font.boldSystemFont(17);
       dayLabel.textColor = new Color(TEXT);
 
-      headLeft.addSpacer(2);
+      headLeft.addSpacer(1);
 
-      const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
-      const nowD = new Date();
-      const dateStr = `${monthNames[nowD.getMonth()]} ${nowD.getDate()} · ${nowD.getFullYear()}`;
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const dateStr = `${monthNames[nowD.getMonth()]} ${nowD.getDate()}`;
       const dt = headLeft.addText(dateStr);
       dt.font = monoFont(9);
       dt.textColor = new Color(MUTED);
@@ -220,21 +212,17 @@
 
       const prog = head.addStack();
       prog.centerAlignContent();
-      prog.size = new Size(38, 38);
-      prog.cornerRadius = 19;
-      prog.borderWidth = 1;
-      prog.borderColor = new Color(GOLD);
-      prog.backgroundColor = new Color("#161412");
+      prog.setPadding(3, 0, 3, 0);
       const pt = prog.addText(`${doneCount}/${totalCount}`);
       pt.font = monoFont(10, "bold");
       pt.textColor = new Color(GOLD);
       pt.centerAlignText();
 
-      w.addSpacer(8);
+      w.addSpacer(6);
       const divTop = w.addStack();
       divTop.size = new Size(0, 1);
       divTop.backgroundColor = new Color(LINE);
-      w.addSpacer(8);
+      w.addSpacer(6);
     } else {
       // Compact header for medium / small
       const head = w.addStack();
@@ -259,33 +247,33 @@
       em.font = Font.systemFont(12);
       em.textColor = new Color(MUTED);
     } else {
-      const rowGap = fam === "large" ? 4 : 3;
+      const rowGap = fam === "large" ? 3 : 3;
 
       for (let i = 0; i < windowItems.length; i++) {
         const it = windowItems[i];
         const isNow = it === nowItem;
 
         if (isNow) {
-          // Highlighted NOW item: boxed, gold-accented, bold, with NOW marker
+          // Current item gets the only filled card and a small NOW tag.
           const box = w.addStack();
           box.centerAlignContent();
-          box.backgroundColor = new Color(CARD_BG);
+          box.backgroundColor = new Color(fam === "large" ? GOLD : CARD_BG, fam === "large" ? 0.18 : 1);
           box.borderWidth = 1;
           box.borderColor = new Color(GOLD);
           box.cornerRadius = 8;
-          box.setPadding(5, 8, 5, 8);
+          box.setPadding(5, fam === "large" ? 7 : 8, 5, fam === "large" ? 7 : 8);
 
           const bar = box.addStack();
           bar.backgroundColor = new Color(GOLD);
-          bar.size = new Size(3, 18);
+          bar.size = new Size(3, fam === "large" ? 17 : 18);
           bar.cornerRadius = 1.5;
 
-          box.addSpacer(8);
+          box.addSpacer(fam === "large" ? 7 : 8);
 
           const nameText = it.done ? strike(it.name) : it.name;
           const name = box.addText(nameText);
           name.lineLimit = 1;
-          name.font = Font.boldSystemFont(12.5);
+          name.font = Font.boldSystemFont(fam === "large" ? 12 : 12.5);
           name.textColor = new Color("#FFF7EA");
           if (it.done) {
             name.textOpacity = 0.6;
@@ -298,24 +286,24 @@
           marker.font = monoFont(9, "bold");
           marker.textColor = new Color(GOLD);
 
-          box.addSpacer(6);
+          box.addSpacer(fam === "large" ? 5 : 6);
 
           const tm = box.addText(formatTime(it.time || it.start));
           tm.font = monoFont(10, "bold");
           tm.textColor = new Color(GOLD);
         } else {
-          // Regular row: past (completed = dimmed + strike-through) or upcoming (normal)
+          // Plain timeline rows retain one aligned text/time column pair.
           const row = w.addStack();
           row.centerAlignContent();
-          row.setPadding(2, 4, 2, 4);
+          row.setPadding(fam === "large" ? 3 : 2, 4, fam === "large" ? 3 : 2, 4);
 
           const barTone = it.prayer ? timeTone(it.start) : (it.color || timeTone(it.start));
           const bar = row.addStack();
           bar.backgroundColor = new Color(barTone);
-          bar.size = new Size(3, 16);
+          bar.size = new Size(3, fam === "large" ? 15 : 16);
           bar.cornerRadius = 1.5;
 
-          row.addSpacer(8);
+          row.addSpacer(fam === "large" ? 7 : 8);
 
           const isDone = it.done;
           const nameText = isDone ? strike(it.name) : it.name;
@@ -346,21 +334,22 @@
       const footDiv = w.addStack();
       footDiv.size = new Size(0, 1);
       footDiv.backgroundColor = new Color(LINE);
-      w.addSpacer(6);
+      w.addSpacer(fam === "large" ? 5 : 6);
 
       const foot = w.addStack();
       foot.centerAlignContent();
 
-      const footLabel = foot.addText("PEHAR");
-      footLabel.font = monoFont(9, "bold");
-      footLabel.textColor = new Color(MUTED);
-
-      foot.addSpacer();
+      if (fam !== "large") {
+        const footLabel = foot.addText("PEHAR");
+        footLabel.font = monoFont(9, "bold");
+        footLabel.textColor = new Color(MUTED);
+        foot.addSpacer();
+      }
 
       const remaining = Math.max(0, totalCount - doneCount);
       const rem = foot.addText(`${remaining} LEFT TODAY`);
       rem.font = monoFont(9, "bold");
-      rem.textColor = new Color(GOLD);
+      rem.textColor = new Color(fam === "large" ? MUTED : GOLD);
     }
   }
 

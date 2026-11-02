@@ -1998,7 +1998,9 @@ function rPrefs() {
 
   h += '<div class="cd"><div class="sec-t">Reset</div>';
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn)" data-a="resetschedule"><i class="fas fa-trash-can mr-1.5"></i>Reset schedule</button>';
-  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p></div>';
+  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p>';
+  h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn);margin-top:14px" data-a="resetall"><i class="fas fa-fire mr-1.5"></i>Erase everything &amp; start fresh</button>';
+  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Wipes <b>all</b> data — cards, times, prayer settings <b>and every day of completion history</b>, on this device and in the cloud. Can\'t be undone.</p></div>';
 
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
   h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + '</p>';
@@ -3147,6 +3149,28 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
     if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false)); localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
+    if (a === "resetall") {
+      if (!confirm("Start completely fresh?\n\nThis erases EVERYTHING — every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone.")) return;
+      if (!confirm("Are you sure? All your tracked history will be permanently deleted.")) return;
+      var wipeLocalAndReload = function() {
+        try {
+          var kill = [];
+          for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && (k.indexOf("ht_") === 0 || k.indexOf("htn_") === 0)) kill.push(k); }
+          kill.forEach(function(k) { localStorage.removeItem(k); });
+        } catch (e) {}
+        location.reload();
+      };
+      // Delete cloud rows FIRST (RLS scopes the delete to this account only). If it fails we wipe
+      // nothing, so realtime/syncDown can't re-download a half-cleared account.
+      if (typeof sbClient !== "undefined" && sbClient && typeof currentUser !== "undefined" && currentUser) {
+        toast("Erasing everything…");
+        sbClient.from("user_data").delete().eq("user_id", currentUser.id).then(function(res) {
+          if (res && res.error) { alert("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
+          wipeLocalAndReload();
+        });
+      } else { wipeLocalAndReload(); }
+      return;
+    }
     if (a === "importapply") { if (!importPreview) return; applyImportSchedule(importPreview, false); importPreview = null; importDraft = ""; importError = ""; aiStep = 0; parseText = ""; parseUnread = []; render(); toast("Schedule imported"); return; }
     // ---- "Type your day" parser (Feature 1/2/4/5) ----
     if (a === "parsecardchip") { parseCardId = t.dataset.c; render(); return; }
@@ -3920,6 +3944,7 @@ function _navHeaderSelfCheck() {
     assert(rPrefs().indexOf("Cloud Sync") !== -1, "(a2) Cloud Sync must live on Settings");
     assert(rTemplate().indexOf('data-a="resetschedule"') === -1, "(a2) Reset must have left the Plan page");
     assert(rPrefs().indexOf('data-a="resetschedule"') !== -1, "(a2) Reset must live on Settings");
+    assert(rPrefs().indexOf('data-a="resetall"') !== -1, "(a2) Erase-everything must live on Settings");
 
     // (b) nav renders immediately after the header on all 3 views — no page-specific block
     // (week-strip, month-arrows) sits between </header> and the nav.

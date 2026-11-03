@@ -66,6 +66,64 @@
     return out;
   };
 
+  // Standard makruh/forbidden durations (minutes). Mirrors the common convention most prayer apps
+  // use: ~15 min after sunrise, the zawal sliver before Dhuhr, and the yellowing before sunset.
+  var FORBIDDEN_AFTER_SUNRISE = 15, ZAWAL_BEFORE_DHUHR = 10, BEFORE_SUNSET = 10;
+
+  // Full Deen-style window table for one day: an ordered list of events, each with a start and (for
+  // windows) an end Date. kind: "prayer" | "voluntary" | "sunrise" | "sunset" | "forbidden".
+  // A window runs until the next event begins; sunrise/sunset are single-moment markers (end null).
+  // Needs location + adhan (same as computeAutoPrayerTimes); returns null without them.
+  window.computePrayerWindows = function (dateObj) {
+    if (typeof adhan === "undefined") return null;
+    var geo = window.getPrayerGeo();
+    if (!geo || typeof geo.lat !== "number" || typeof geo.lng !== "number") return null;
+    var coords = new adhan.Coordinates(geo.lat, geo.lng);
+    var methodFn = adhan.CalculationMethod[window.getPrayerMethod()] || adhan.CalculationMethod.MuslimWorldLeague;
+    var params = methodFn();
+    var madhab = window.getPrayerMadhab() === "Hanafi" ? "Hanafi" : "Shafi";
+    params.madhab = madhab === "Hanafi" ? adhan.Madhab.Hanafi : adhan.Madhab.Shafi;
+    var ok = function (d) { return d instanceof Date && !isNaN(d.getTime()); };
+    var base = dateObj || new Date();
+    // Pre-dawn (before today's Fajr) we're still in last night's prayer-day, so compute for yesterday
+    // — that keeps the Isha/Tahajjud windows current and the "now" highlight correct at 2am.
+    if (!dateObj) {
+      var probe = new adhan.PrayerTimes(coords, base, params);
+      if (ok(probe.fajr) && new Date() < probe.fajr) base = new Date(base.getFullYear(), base.getMonth(), base.getDate() - 1);
+    }
+    var pt = new adhan.PrayerTimes(coords, base, params);
+    // next day's Fajr, so Isha/Tahajjud windows have a real end past midnight
+    var next = new Date(base.getFullYear(), base.getMonth(), base.getDate() + 1);
+    var ptN = new adhan.PrayerTimes(coords, next, params);
+    var mins = function (d, m) { return new Date(d.getTime() + m * 60000); };
+    var sunrise = pt.sunrise, sunset = ok(pt.sunset) ? pt.sunset : pt.maghrib, fajrNext = ptN.fajr;
+    // Every row depends on these; at polar latitudes adhan can return Invalid Date for some. Rather
+    // than render blank/garbled rows, bail to null so the sheet shows the manual-times fallback.
+    if (![pt.fajr, sunrise, pt.dhuhr, pt.asr, pt.maghrib, pt.isha, sunset, fajrNext].every(ok)) return null;
+    var duhaStart = mins(sunrise, window.getDuhaOffset());
+    var zawalStart = mins(pt.dhuhr, -ZAWAL_BEFORE_DHUHR);
+    var preSunset = mins(sunset, -BEFORE_SUNSET);
+    var tahajjud = null; try { tahajjud = new adhan.SunnahTimes(pt).lastThirdOfTheNight; } catch (e) {}
+    var hasTahajjud = ok(tahajjud);
+    // Isha runs until Tahajjud begins (if tracked-able) so the two windows don't both claim "now".
+    var ishaEnd = hasTahajjud ? tahajjud : fajrNext;
+    var ev = [
+      { key: "Fajr", label: "Fajr", kind: "prayer", start: pt.fajr, end: sunrise },
+      { key: "Sunrise", label: "Sunrise", kind: "sunrise", start: sunrise, end: null },
+      { key: "Forbidden1", label: "Forbidden Time", kind: "forbidden", start: sunrise, end: mins(sunrise, FORBIDDEN_AFTER_SUNRISE) },
+      { key: "Duha", label: "Salatul Duha", kind: "voluntary", start: duhaStart, end: zawalStart },
+      { key: "Forbidden2", label: "Forbidden Time", kind: "forbidden", start: zawalStart, end: pt.dhuhr },
+      { key: "Dhuhr", label: "Dhuhr", kind: "prayer", start: pt.dhuhr, end: pt.asr },
+      { key: "Asr", label: "Asr (" + madhab + ")", kind: "prayer", start: pt.asr, end: preSunset },
+      { key: "Forbidden3", label: "Forbidden Time", kind: "forbidden", start: preSunset, end: sunset },
+      { key: "Sunset", label: "Sunset", kind: "sunset", start: sunset, end: null },
+      { key: "Maghrib", label: "Maghrib", kind: "prayer", start: pt.maghrib, end: pt.isha },
+      { key: "Isha", label: "Isha", kind: "prayer", start: pt.isha, end: ishaEnd }
+    ];
+    if (hasTahajjud) ev.push({ key: "Tahajjud", label: "Tahajjud", kind: "voluntary", start: tahajjud, end: fajrNext });
+    return ev;
+  };
+
   // Ask the browser for one position fix; resolves to {lat,lng} (also stored) or null.
   window.fetchPrayerLocation = function () {
     return new Promise(function (resolve) {

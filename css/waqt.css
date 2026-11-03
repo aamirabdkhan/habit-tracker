@@ -501,6 +501,22 @@ body::before{display:none!important}
 .sch-settbody .cd{margin-top:0;margin-bottom:10px}
 .sch-settbody .cd:first-child{margin-top:0}
 @media (prefers-reduced-motion:reduce){.sch-settchev{transition:none}}
+/* Prayer-times (Deen-style) window table */
+.sch-pwincard{padding:6px}
+.sch-pwinrow{display:flex;align-items:center;gap:13px;padding:14px 12px;border-radius:12px;margin-bottom:4px}
+.sch-pwinicon{width:22px;text-align:center;font-size:17px;color:var(--stext,#E8E2D9);opacity:.9}
+.sch-pwinname{flex:1;font-size:15px;color:var(--stext,#E8E2D9)}
+.sch-pwintime{font-variant-numeric:tabular-nums;font-size:13.5px;color:var(--mt,#8A857E);white-space:nowrap}
+.sch-pwindash{opacity:.6;margin:0 1px}
+.sch-pwinnow{display:inline-block;margin-left:7px;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#0C0C0C;background:var(--ac,#C9943E);vertical-align:middle}
+.sch-pwinrow.k-forbidden{background:rgba(190,70,70,.16)}
+.sch-pwinrow.k-forbidden .sch-pwinicon{color:#d98a8a}
+.sch-pwinrow.k-sunrise,.sch-pwinrow.k-sunset{background:rgba(184,115,51,.17)}
+.sch-pwinrow.k-sunrise .sch-pwinicon,.sch-pwinrow.k-sunset .sch-pwinicon{color:#d2a35c}
+.sch-pwinrow.k-voluntary .sch-pwinname{color:var(--mt,#8A857E)}
+.sch-pwinrow.now{box-shadow:inset 0 0 0 2px var(--ac,#C9943E)}
+.sch-pwinrow.now .sch-pwintime{color:var(--ac,#C9943E)}
+.sch-pwinrow.past{opacity:.45}
 .sch-custompanel{margin:4px 0 12px;padding:12px;background:var(--ink2,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:12px}
 .sch-customlbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mt);margin:0 0 8px}
 .sch-custompanel .sch-customlbl:nth-of-type(1){margin-top:0}

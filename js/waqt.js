@@ -1916,7 +1916,7 @@ function renderPrayersCard() {
   if (!prayersOn()) return "";
   var bells = getPrayerBells();
   var h = '<div class="sch-cardblock" style="--kc:' + PRAYER_GREEN + '">';
-  h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><button type="button" class="sch-ib" style="margin-left:auto" data-a="help" data-topic="prayers" aria-label="Help with prayers">?</button></div>';
+  h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><button type="button" class="sch-ib" style="margin-left:auto" data-a="prayertimes" aria-label="Prayer time windows"><i class="fas fa-clock"></i></button><button type="button" class="sch-ib" data-a="help" data-topic="prayers" aria-label="Help with prayers">?</button></div>';
   var anyTimed = false;
   PRAYERS.forEach(function(name) {
     var t = getNotifTime("prayers", name);
@@ -1932,6 +1932,57 @@ function renderPrayersCard() {
   });
   if (anyTimed) h += '<button type="button" class="bt t-sm" style="margin-top:8px" data-a="clearallprayertimes"><i class="fas fa-xmark mr-1.5"></i>Clear all times</button>';
   h += '<p class="sch-autolbl">set your prayer times · updates your Pehar</p>';
+  return h + '</div>';
+}
+
+// ============================================================
+// PRAYER TIMES SHEET — a Deen-style read-only table of every prayer/sun/forbidden WINDOW for today
+// (start → end), opened by the clock icon on the Prayers card. Full set is computed from location
+// via computePrayerWindows(); if location is off we fall back to just the user's manual prayer times.
+// ============================================================
+var prayerTimesFrom = "daily"; // view to return to when the sheet is closed
+var PWIN_ICON = { Fajr:"fa-cloud-sun", Sunrise:"fa-sun", Forbidden1:"fa-ban", Forbidden2:"fa-ban", Forbidden3:"fa-ban", Duha:"fa-sun", Dhuhr:"fa-sun", Asr:"fa-cloud-sun", Sunset:"fa-cloud-sun", Maghrib:"fa-cloud-moon", Isha:"fa-moon", Tahajjud:"fa-star-and-crescent" };
+function pwinFmt(d) {
+  if (!d || isNaN(d.getTime())) return "";
+  var h = d.getHours(), m = d.getMinutes(), ap = h < 12 ? "AM" : "PM";
+  h = h % 12; if (h === 0) h = 12;
+  return h + ":" + (m < 10 ? "0" : "") + m + " " + ap;
+}
+function rPrayerTimes() {
+  var h = '<div class="sch-view sch-pwin">';
+  h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="prayertimesback" aria-label="Back"><i class="fas fa-arrow-left"></i></button><p class="sch-eyebrow">PRAYER TIMES</p><h1 class="sch-dayname sch-datefull">Today\'s windows</h1></header>';
+  h += '<div class="al"></div>';
+  var windows = (typeof computePrayerWindows === "function") ? computePrayerWindows(new Date()) : null;
+  if (!windows) {
+    // No location → show whatever manual prayer times exist, plus a nudge to enable the full table.
+    h += '<div class="cd" style="margin-top:14px">';
+    var any = false;
+    PRAYERS.forEach(function(name) {
+      var t = getNotifTime("prayers", name); if (!t) return; any = true;
+      h += '<div class="sch-pwinrow"><i class="fas fa-mosque sch-pwinicon"></i><span class="sch-pwinname">' + esc(name) + '</span><span class="sch-pwintime">' + esc(t) + '</span></div>';
+    });
+    if (!any) h += '<p class="t-sm" style="color:var(--mt)">No prayer times set yet.</p>';
+    h += '<p class="t-xs" style="color:var(--mt);margin-top:12px">Turn on <b>Automatic from my location</b> in Settings to see sunrise, sunset, the forbidden times and each prayer\'s start–end window.</p>';
+    h += '<button class="bt bta t-sm" style="margin-top:10px" data-a="gotoprayersettings"><i class="fas fa-location-crosshairs mr-1.5"></i>Go to prayer settings</button>';
+    h += '</div>';
+    return h + '</div>';
+  }
+  var now = new Date();
+  h += '<div class="cd sch-pwincard" style="margin-top:14px">';
+  windows.forEach(function(w) {
+    var marker = !w.end; // sunrise/sunset = single moment
+    var isNow = !marker && now >= w.start && now < w.end;
+    var isPast = (marker ? now >= w.start : now >= w.end) && !isNow;
+    var cls = "sch-pwinrow k-" + w.kind + (isNow ? " now" : "") + (isPast ? " past" : "");
+    h += '<div class="' + cls + '">';
+    h += '<i class="fas ' + (PWIN_ICON[w.key] || "fa-clock") + ' sch-pwinicon"></i>';
+    h += '<span class="sch-pwinname">' + esc(w.label) + (isNow ? ' <span class="sch-pwinnow">now</span>' : '') + '</span>';
+    if (marker) h += '<span class="sch-pwintime">' + pwinFmt(w.start) + '</span>';
+    else h += '<span class="sch-pwintime">' + pwinFmt(w.start) + ' <span class="sch-pwindash">–</span> ' + pwinFmt(w.end) + '</span>';
+    h += '</div>';
+  });
+  h += '</div>';
+  h += '<p class="t-xs" style="color:var(--mt);margin:12px 4px 0;text-align:center">Times from your location · forbidden windows use standard durations</p>';
   return h + '</div>';
 }
 
@@ -2417,6 +2468,7 @@ render = function() {
   else if (view === "settings") h = rTemplate();
   else if (view === "overview") h = rOverview();
   else if (view === "prefs") h = rPrefs();
+  else if (view === "prayertimes") { document.getElementById("content").innerHTML = rPrayerTimes(); return; }
   else { originalRender(); return; }
   document.getElementById("content").innerHTML = h + renderTabBar(view) + renderHelpOverlay() + renderOvStatsModal();
 };
@@ -2795,7 +2847,7 @@ function renderPrayersDayCard() {
   var untimed = items.filter(function(it){ return !it.time; });
   var timed = items.filter(function(it){ return !!it.time; });
   var h = '<div class="sch-cardblock" style="--kc:' + kc + '">';
-  h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><span class="sch-cardcount">' + done + '/' + total + '</span></div>';
+  h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><button type="button" class="sch-ib" style="margin-left:auto" data-a="prayertimes" aria-label="Prayer time windows"><i class="fas fa-clock"></i></button><span class="sch-cardcount">' + done + '/' + total + '</span></div>';
   h += '<div class="sch-cardbar"><div class="sch-cardbarfill" style="transform:scaleX(' + (pct / 100) + ')"></div></div>';
   untimed.forEach(function(it){
     h += '<div class="sch-gest" data-gest="complete" data-f="prayers" data-k="' + esA(it.n) + '" style="--kc:' + kc + '">';
@@ -3445,6 +3497,9 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "tplmerge") { tplMergeCard = t.dataset.c; tplItemEdit = null; render(); return; }
     if (a === "tplmergeclose") { tplMergeCard = null; render(); return; }
+    if (a === "prayertimes") { prayerTimesFrom = (view === "settings" || view === "daily") ? view : "daily"; view = "prayertimes"; render(); return; }
+    if (a === "prayertimesback") { view = prayerTimesFrom || "daily"; render(); return; }
+    if (a === "gotoprayersettings") { view = "prefs"; render(); return; }
     if (a === "cardcolor") { tplColorCard = tplColorCard === t.dataset.c ? null : t.dataset.c; render(); return; }
     if (a === "cardcolorset") {
       var okCol = restyleCard(t.dataset.c, { color:t.dataset.col });

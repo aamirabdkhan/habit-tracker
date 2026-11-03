@@ -491,6 +491,26 @@ body::before{display:none!important}
 
 /* Per-card colour picker (Template): tap the card icon to open a swatch row */
 .sch-cardcolorbtn{appearance:none;background:transparent;border:0;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:center;line-height:0}
+.sch-settgroup{margin-top:12px;border:1px solid var(--line,#2A2725);border-radius:14px;overflow:hidden;background:var(--ink2,#141414)}
+.sch-settgroup[open]{background:transparent}
+.sch-settsummary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:15px 16px;font-weight:600;font-size:14px;color:var(--stext,#E8E2D9);-webkit-tap-highlight-color:transparent}
+.sch-settsummary::-webkit-details-marker{display:none}
+.sch-settchev{font-size:12px;color:var(--mt);transition:transform .18s}
+.sch-settgroup[open] .sch-settchev{transform:rotate(180deg)}
+.sch-settbody{padding:0 2px 6px}
+.sch-settbody .cd{margin-top:0;margin-bottom:10px}
+.sch-settbody .cd:first-child{margin-top:0}
+@media (prefers-reduced-motion:reduce){.sch-settchev{transition:none}}
+.sch-custompanel{margin:4px 0 12px;padding:12px;background:var(--ink2,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:12px}
+.sch-customlbl{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mt);margin:0 0 8px}
+.sch-custompanel .sch-customlbl:nth-of-type(1){margin-top:0}
+.sch-iconpanel{display:flex;flex-wrap:wrap;gap:9px;margin:0 0 14px}
+.sch-iconswatch{appearance:none;width:34px;height:34px;border-radius:9px;border:2px solid transparent;background:var(--ink,#0F0F0F);color:var(--stext,#E8E2D9);cursor:pointer;padding:0;transition:.14s;display:flex;align-items:center;justify-content:center;font-size:14px}
+.sch-iconswatch:hover{transform:scale(1.08)}
+.sch-iconswatch.sel{border-color:var(--kc,#C9943E);color:var(--kc,#C9943E);box-shadow:0 0 0 2px var(--ink2,#1A1A1A),0 0 0 3px var(--kc,#C9943E)}
+.sch-iconswatch.taken{opacity:.3;cursor:not-allowed}
+.sch-iconswatch.taken:hover{transform:none}
+.sch-custompanel .sch-colorpanel{margin:0;padding:0;background:none;border:none}
 .sch-colorpanel{display:flex;flex-wrap:wrap;gap:9px;margin:4px 0 12px;padding:12px;background:var(--ink2,#1A1A1A);border:1px solid var(--line,#2A2725);border-radius:12px}
 .sch-swatch{appearance:none;width:30px;height:30px;border-radius:50%;border:2px solid transparent;background:var(--sw);cursor:pointer;padding:0;transition:.14s;position:relative}
 .sch-swatch:hover{transform:scale(1.08)}

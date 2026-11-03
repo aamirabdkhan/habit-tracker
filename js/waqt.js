@@ -390,7 +390,19 @@ var CARD_PALETTE = ["#e0a33a", "#e57a35", "#d6544c", "#e0589c", "#b05a86", "#9b5
 
 // ---- metadata store (ht_cards) ----
 function getCardMeta() { try { return JSON.parse(localStorage.getItem(CARDS_KEY)) || []; } catch(e) { return []; } }
-function saveCards(list) { localStorage.setItem(CARDS_KEY, JSON.stringify(list)); }
+// Pass userEdit=true for a genuine user change (add/rename/recolor/delete a card): it stamps the
+// _mt edit-clock and pushes to the cloud so the change wins over the older remote row on next sync
+// (without this, deletes/edits silently reverted — cloud's newer updated_at beat local's mt=0, so
+// cards "reappeared"). Seeding/migration writes MUST stay raw (userEdit falsy): a fresh device seeds
+// defaults and must yield to the real cloud cards, not overwrite them.
+function saveCards(list, userEdit) {
+  localStorage.setItem(CARDS_KEY, JSON.stringify(list));
+  if (userEdit) {
+    try { localStorage.setItem(CARDS_KEY + "_mt", String(Date.now())); } catch(e) {}
+    if (typeof dbSave === "function") dbSave(CARDS_KEY, list);
+    if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
+  }
+}
 
 function hasWeightHistory() {
   for (var i = 0; i < localStorage.length; i++) {
@@ -545,7 +557,14 @@ function nextCardIcon(list) {
 
 // ---- side-store for new (c_*) cards' items (ht_card_items) ----
 function getCardItemsStore() { try { return JSON.parse(localStorage.getItem(CARD_ITEMS_KEY)) || {}; } catch(e) { return {}; } }
-function saveCardItemsStore(store) { localStorage.setItem(CARD_ITEMS_KEY, JSON.stringify(store)); }
+function saveCardItemsStore(store, userEdit) {
+  localStorage.setItem(CARD_ITEMS_KEY, JSON.stringify(store));
+  if (userEdit) {
+    try { localStorage.setItem(CARD_ITEMS_KEY + "_mt", String(Date.now())); } catch(e) {}
+    if (typeof dbSave === "function") dbSave(CARD_ITEMS_KEY, store);
+    if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
+  }
+}
 
 // The raw {n,s,c} template array backing a card's items, wherever it lives.
 function cardTemplateArr(id) {
@@ -636,14 +655,14 @@ function addCard(name) {
   do { id = "c_" + Math.random().toString(36).slice(2, 8); } while (list.some(function(c) { return c.id === id; }));
   var card = { id:id, name:name, icon:nextCardIcon(list), color:nextCardColor(list), base:false };
   list.push(card);
-  saveCards(list);
+  saveCards(list, true);
   return card;
 }
 function renameCard(id, name) {
   var list = getCardMeta(), card = list.filter(function(c) { return c.id === id; })[0];
   if (!card) return false;
   card.name = name;
-  saveCards(list);
+  saveCards(list, true);
   return true;
 }
 function restyleCard(id, opts) {
@@ -654,17 +673,17 @@ function restyleCard(id, opts) {
   if (opts.color && list.some(function(c) { return c.id !== id && c.color === opts.color; })) return false;
   if (opts.icon) card.icon = opts.icon;
   if (opts.color) card.color = opts.color;
-  saveCards(list);
+  saveCards(list, true);
   return true;
 }
 function deleteCard(id) {
   var list = getCardMeta(), card = list.filter(function(c) { return c.id === id; })[0];
   if (!card) return false;
   if (card.base) { toast("Can't delete a base card"); return false; }
-  saveCards(list.filter(function(c) { return c.id !== id; }));
+  saveCards(list.filter(function(c) { return c.id !== id; }), true);
   var store = getCardItemsStore();
   delete store[id];
-  saveCardItemsStore(store);
+  saveCardItemsStore(store, true);
   return true;
 }
 
@@ -684,7 +703,7 @@ function addCardItem(cardId, name) {
   if (!store[cardId]) store[cardId] = [];
   if (store[cardId].some(function(x) { return itemName(x) === name; })) return false;
   store[cardId].push({ n:name, s:false, c:"rings" });
-  saveCardItemsStore(store);
+  saveCardItemsStore(store, true);
   return true;
 }
 function removeCardItem(cardId, name) {
@@ -700,13 +719,79 @@ function removeCardItem(cardId, name) {
     if (idx2 === -1) return false;
     list.splice(idx2, 1);
     store[cardId] = list;
-    saveCardItemsStore(store);
+    saveCardItemsStore(store, true);
   }
   setNotifTime(cardId, name, ""); // already clears any reminder_times row unconditionally (Task: task notifications)
   setItemDays(cardId, name, null);
   setItemSlots(cardId, name, []);
   setItemBell(cardId, name, false); // drop stale bell state so a reused name doesn't inherit it
   setOptional(cardId, name, false);
+  return true;
+}
+// Rename an item's text while PRESERVING all of its history. The item name is the key for done-state
+// in every day record and for all the "field::name"-keyed side maps, so a rename can't just change
+// the label — it migrates every one of those keys from old to new. Done because users asked to edit
+// a typo without losing the streak behind it. Returns false if the new name is empty, unchanged, or
+// already used in the same card.
+function renameCardItem(cardId, oldName, newName) {
+  newName = (newName || "").trim();
+  if (!newName || newName === oldName) return false;
+  if (cardTemplateArr(cardId).some(function(x) { return itemName(x) === newName; })) return false;
+  // 1) template
+  if (isBaseCard(cardId)) {
+    var d = gDef(), arr = cardId === "habits" ? d.habits : cardId === "extra" ? d.ex : d.hl;
+    var bi = arr.findIndex(function(x) { return itemName(x) === oldName; });
+    if (bi === -1) return false;
+    if (typeof arr[bi] === "string") arr[bi] = newName; else arr[bi].n = newName;
+    sDef(d);
+  } else {
+    var store = getCardItemsStore(), list = store[cardId] || [];
+    var ci = list.findIndex(function(x) { return itemName(x) === oldName; });
+    if (ci === -1) return false;
+    if (typeof list[ci] === "string") list[ci] = newName; else list[ci].n = newName;
+    store[cardId] = list; saveCardItemsStore(store, true);
+  }
+  // 2) migrate done-state + one-day structures across EVERY day record in history
+  var oldK = cardId + "::" + oldName, newK = cardId + "::" + newName;
+  for (var i = 0; i < localStorage.length; i++) {
+    var lk = localStorage.key(i);
+    if (!lk || !/^ht_\d{4}-\d{2}-\d{2}$/.test(lk)) continue;
+    var day; try { day = JSON.parse(localStorage.getItem(lk)); } catch (e) { continue; }
+    if (!day || typeof day !== "object") continue;
+    var changed = false;
+    var map = isBaseCard(cardId) ? day[cardId] : (day.cards && day.cards[cardId]);
+    // If a now-gone item once used newName in this same card, that day can already hold a newName
+    // entry. Don't clobber it: done-state is a boolean, so keep "done" if EITHER was done; for the
+    // other keyed sub-maps keep whatever's already under newName and just drop the old key.
+    if (map && Object.prototype.hasOwnProperty.call(map, oldName)) {
+      if (Object.prototype.hasOwnProperty.call(map, newName)) map[newName] = !!map[newName] || !!map[oldName];
+      else map[newName] = map[oldName];
+      delete map[oldName]; changed = true;
+    }
+    ["onedayTimes", "onedayDur", "onedayPriority"].forEach(function(sub) {
+      if (day[sub] && Object.prototype.hasOwnProperty.call(day[sub], oldK)) {
+        if (!Object.prototype.hasOwnProperty.call(day[sub], newK)) day[sub][newK] = day[sub][oldK];
+        delete day[sub][oldK]; changed = true;
+      }
+    });
+    if (Array.isArray(day.oneDay)) day.oneDay.forEach(function(o) { if (o && o.cardId === cardId && o.name === oldName) { o.name = newName; changed = true; } });
+    if (changed) { try { localStorage.setItem(lk, JSON.stringify(day)); localStorage.setItem(lk + "_mt", String(Date.now())); } catch (e) {} if (typeof dbSave === "function") dbSave(lk, day); }
+  }
+  // 3) migrate the "field::name"-keyed side maps
+  [NOTIF_TIMES_KEY, NOTIF_DAYS_KEY, NOTIF_SLOTS_KEY, HTN_DUR_KEY, ITEM_BELL_KEY, OPTIONAL_KEY].forEach(function(storeKey) {
+    var m; try { m = JSON.parse(localStorage.getItem(storeKey)); } catch (e) { return; }
+    if (!m || typeof m !== "object" || !Object.prototype.hasOwnProperty.call(m, oldK)) return;
+    if (!Object.prototype.hasOwnProperty.call(m, newK)) m[newK] = m[oldK]; // don't overwrite a pre-existing newName entry
+    delete m[oldK];
+    try { localStorage.setItem(storeKey, JSON.stringify(m)); } catch (e) {}
+    // ht_optional is syncable (ht_ prefix); htn_* are device-local. Stamp + push only the syncable one.
+    if (storeKey === OPTIONAL_KEY) { try { localStorage.setItem(storeKey + "_mt", String(Date.now())); } catch (e) {} if (typeof dbSave === "function") dbSave(storeKey, m); }
+  });
+  // Move the server-side push reminder: drop the old name's reminder_times row, (re)register newName's.
+  if (typeof pushSaveReminderTime === "function") pushSaveReminderTime(cardId, oldName, "");
+  if (typeof syncItemReminder === "function") syncItemReminder(cardId, newName);
+  if (typeof cDate !== "undefined" && typeof dk === "function" && typeof gDay === "function") cData = gDay(dk(cDate));
+  if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
   return true;
 }
 
@@ -1710,9 +1795,12 @@ function renderImportPanel() {
 // TEMPLATE VIEW (spec: "Page 2 — Template") — the recurring plan.
 // Prayers card (fixed/special) + YOUR PLAN custom cards + settings footer.
 // ============================================================
-var ICON_CHOICES = ["fa-star","fa-bullseye","fa-hand-holding-heart","fa-heart-pulse","fa-dumbbell","fa-book","fa-pen","fa-brain","fa-leaf","fa-mug-hot"];
+// Curated to the kinds of things a prayer / study / fitness / health tracker holds. All FontAwesome 6
+// free-solid glyphs (the app already loads that set), so no new assets.
+var ICON_CHOICES = ["fa-bullseye","fa-star","fa-mosque","fa-kaaba","fa-book","fa-book-open","fa-graduation-cap","fa-pen","fa-brain","fa-dumbbell","fa-person-running","fa-heart-pulse","fa-hand-holding-heart","fa-droplet","fa-bed","fa-mug-hot","fa-leaf","fa-code","fa-dollar-sign","fa-moon"];
 var ovStatsEdit = null;   // cardId whose Overview stats-picker panel is open, or null
 var tplCardEdit = null;   // cardId whose name is being renamed inline
+var tplItemNameEdit = null; // "cardId::name" of the item whose name is being renamed inline
 var tplItemEdit = null;   // "field::name" of the item whose inline editor is open
 var tplMergeCard = null;  // cardId whose duplicate-cleanup panel is open
 var tplColorCard = null;  // cardId whose colour swatch panel is open
@@ -1764,13 +1852,21 @@ function renderPlanCard(card) {
   h += '</div>';
 
   if (tplColorCard === card.id) {
-    var usedColors = getCardMeta().filter(function(c) { return c.id !== card.id; }).map(function(c) { return c.color; });
-    h += '<div class="sch-colorpanel">';
+    var otherCards = getCardMeta().filter(function(c) { return c.id !== card.id; });
+    var usedColors = otherCards.map(function(c) { return c.color; });
+    var usedIcons = otherCards.map(function(c) { return c.icon; });
+    h += '<div class="sch-custompanel">';
+    h += '<div class="sch-customlbl">Icon</div><div class="sch-iconpanel">';
+    ICON_CHOICES.forEach(function(ic) {
+      var takenI = usedIcons.indexOf(ic) !== -1, selI = card.icon === ic;
+      h += '<button type="button" class="sch-iconswatch' + (selI ? ' sel' : '') + (takenI && !selI ? ' taken' : '') + '" data-a="cardiconset" data-c="' + esA(card.id) + '" data-ic="' + esA(ic) + '"' + (takenI && !selI ? ' aria-disabled="true"' : '') + ' aria-label="' + esA(ic.replace('fa-', '')) + (selI ? ' (current)' : takenI ? ' (in use)' : '') + '"><i class="fas ' + esA(ic) + '"></i></button>';
+    });
+    h += '</div><div class="sch-customlbl">Colour</div><div class="sch-colorpanel">';
     CARD_PALETTE.forEach(function(col) {
       var taken = usedColors.indexOf(col) !== -1, sel = card.color === col;
       h += '<button type="button" class="sch-swatch' + (sel ? ' sel' : '') + (taken && !sel ? ' taken' : '') + '" data-a="cardcolorset" data-c="' + esA(card.id) + '" data-col="' + esA(col) + '" style="--sw:' + esA(col) + '"' + (taken && !sel ? ' aria-disabled="true"' : '') + ' aria-label="' + esA(col) + (sel ? ' (current)' : taken ? ' (in use)' : '') + '"></button>';
     });
-    h += '</div>';
+    h += '</div></div>';
   }
 
   if (!items.length) {
@@ -1781,7 +1877,13 @@ function renderPlanCard(card) {
       h += '<div class="sch-planitem"><div class="sch-gest" data-gest="delete" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '">';
       h += '<button type="button" class="sch-gest-action sch-gest-delete" data-a="gestdel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Delete ' + esA(it.n) + '"><i class="fas fa-trash-can"></i></button>';
       h += '<div class="sch-planrow sch-gest-row">';
-      h += '<div class="sch-planinfo"><span class="sch-title">' + esc(it.n) + (isOptional(card.id, it.n) ? ' <span class="sch-optionaltag">optional</span>' : '') + '</span><span class="sch-summary">' + scheduleSummary(it.time, it.days) + '</span></div>';
+      h += '<div class="sch-planinfo">';
+      if (tplItemNameEdit === key) {
+        h += '<input type="text" class="sch-addname sch-itemnameinp" id="itemname-' + esA(key) + '" value="' + esA(it.n) + '" maxlength="60" autocomplete="off">';
+      } else {
+        h += '<span class="sch-title" data-a="itemrename" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" role="button" tabindex="0" title="Tap to rename">' + esc(it.n) + (isOptional(card.id, it.n) ? ' <span class="sch-optionaltag">optional</span>' : '') + '</span>';
+      }
+      h += '<span class="sch-summary">' + scheduleSummary(it.time, it.days) + '</span></div>';
       h += '<button class="sch-edit" data-a="tpledit" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Edit ' + esA(it.n) + '"><i class="fas fa-pen"></i></button>';
       h += '<button class="sch-edit sch-rowdel" data-a="gestdel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Delete ' + esA(it.n) + '"><i class="fas fa-trash-can"></i></button>';
       h += '</div></div>';
@@ -1947,7 +2049,8 @@ function rPrefs() {
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vset" aria-label="Back to your plan"><i class="fas fa-xmark"></i></button><p class="sch-eyebrow">SETTINGS</p><h1 class="sch-dayname sch-datefull">Settings</h1></header>';
   h += '<div class="al"></div>';
 
-  h += '<div class="cd" style="margin-top:22px"><div class="sec-t">What you track</div>';
+  h += settOpen('Tracking', true);
+  h += '<div class="cd" style="margin-top:14px"><div class="sec-t">What you track</div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">The 5 daily prayers</span><button type="button" class="sch-switch' + (prayersOn() ? ' on' : '') + '" data-a="prayerstoggle" role="switch" aria-checked="' + (prayersOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   if (prayersOn()) h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">First Takbīr tracker<br><small style="color:var(--mt)">catching the first takbir in congregation</small></span><button type="button" class="sch-switch' + (takbeerOn() ? ' on' : '') + '" data-a="takbeertoggle" role="switch" aria-checked="' + (takbeerOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Weight</span><button type="button" class="sch-switch' + (weightOn() ? ' on' : '') + '" data-a="weighttoggle" role="switch" aria-checked="' + (weightOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
@@ -1973,6 +2076,7 @@ function rPrefs() {
     h += '</div>';
   }
 
+  h += settClose() + settOpen('Account &amp; alerts', false);
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-rotate mr-1.5" style="color:var(--wa)"></i>Cloud Sync</div>';
   if (typeof sbClient === "undefined" || !sbClient) {
     h += '<p class="t-xs mb-3" style="color:var(--mt)">Sync not configured.</p>';
@@ -1994,6 +2098,7 @@ function rPrefs() {
   }
   h += '</div>';
 
+  h += settClose() + settOpen('Schedule data', false);
   h += renderImportPanel();
 
   h += '<div class="cd"><div class="sec-t">Reset</div>';
@@ -2002,6 +2107,7 @@ function rPrefs() {
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn);margin-top:14px" data-a="resetall"><i class="fas fa-fire mr-1.5"></i>Erase everything &amp; start fresh</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Wipes <b>all</b> data — cards, times, prayer settings <b>and every day of completion history</b>, on this device and in the cloud. Can\'t be undone.</p></div>';
 
+  h += settClose() + settOpen('App &amp; widgets', false);
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
   h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + '</p>';
   h += '<button type="button" class="bt t-sm" data-a="doupdate"><i class="fas fa-rotate mr-1.5"></i>Check for updates</button>';
@@ -2024,9 +2130,14 @@ function rPrefs() {
   }
   h += '</div>';
 
+  h += settClose();
   h += rFoot();
   return h + '</div>';
 }
+// Collapsible settings group (native <details>, no JS). Only the first is open by default, so the
+// page is a short list of headers instead of one long scroll.
+function settOpen(title, open) { return '<details class="sch-settgroup"' + (open ? ' open' : '') + '><summary class="sch-settsummary"><span>' + title + '</span><i class="fas fa-chevron-down sch-settchev"></i></summary><div class="sch-settbody">'; }
+function settClose() { return '</div></details>'; }
 
 // ============================================================
 // OVERVIEW VIEW (spec: "Page 3 — Overview") — monthly stats, ink shell.
@@ -2364,7 +2475,7 @@ function setItemShow(cardId, name, val) {
     if (_patchItemShow(arr, name, val)) sDef(d);
   } else {
     var store = getCardItemsStore(), list = store[cardId] || [];
-    if (_patchItemShow(list, name, val)) { store[cardId] = list; saveCardItemsStore(store); }
+    if (_patchItemShow(list, name, val)) { store[cardId] = list; saveCardItemsStore(store, true); }
   }
 }
 function getItemShow(cardId, name) {
@@ -3148,9 +3259,15 @@ document.getElementById("app").addEventListener("click", function(e) {
       rebuildImportPreview(); render(); return;
     }
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
-    if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false)); localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
+    if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false), true); localStorage.removeItem(CARD_ITEMS_KEY); if (typeof dbSave === "function") dbSave(CARD_ITEMS_KEY, {}); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
     if (a === "resetall") {
-      if (!confirm("Start completely fresh?\n\nThis erases EVERYTHING — every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone.")) return;
+      var signedIn = typeof sbClient !== "undefined" && sbClient && typeof currentUser !== "undefined" && currentUser;
+      // When signed out there's no account to delete from, so be honest: this only clears the device,
+      // and signing back in would pull the cloud copy down again.
+      var firstMsg = signedIn
+        ? "Start completely fresh?\n\nThis erases EVERYTHING — every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone."
+        : "Start fresh on THIS device?\n\nYou're signed out, so this clears only this device. Any data saved to your cloud account stays and will sync back if you sign in again.\n\nThis cannot be undone.";
+      if (!confirm(firstMsg)) return;
       if (!confirm("Are you sure? All your tracked history will be permanently deleted.")) return;
       var wipeLocalAndReload = function() {
         try {
@@ -3160,14 +3277,32 @@ document.getElementById("app").addEventListener("click", function(e) {
         } catch (e) {}
         location.reload();
       };
-      // Delete cloud rows FIRST (RLS scopes the delete to this account only). If it fails we wipe
-      // nothing, so realtime/syncDown can't re-download a half-cleared account.
-      if (typeof sbClient !== "undefined" && sbClient && typeof currentUser !== "undefined" && currentUser) {
+      // Delete cloud rows FIRST, then VERIFY they're actually gone before touching local. A missing
+      // RLS DELETE policy makes .delete() return success with zero rows removed — the old data then
+      // survives and the reseed-on-reload pulls the cards back (the "cards reappeared" bug). So we
+      // re-select afterwards and only wipe local if the cloud is confirmed empty. htResetting stops
+      // dbSave from re-pushing the local copy during the gap, and we drop realtime so no late event
+      // re-inserts a row. If anything remains, we abort WITHOUT wiping — better a no-op than a
+      // half-cleared account that resurrects itself.
+      if (signedIn) {
         toast("Erasing everything…");
-        sbClient.from("user_data").delete().eq("user_id", currentUser.id).then(function(res) {
-          if (res && res.error) { alert("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
-          wipeLocalAndReload();
-        });
+        window.htResetting = true;
+        try { if (typeof realtimeChannel !== "undefined" && realtimeChannel) { sbClient.removeChannel(realtimeChannel); realtimeChannel = null; } } catch (e) {}
+        var uid = currentUser.id;
+        // ponytail: the htResetting guard blocks NEW dbSave calls, and the select below re-checks the
+        // cloud after the delete, so anything that landed before it is caught (we abort). A write
+        // already in flight that lands in the millisecond between select and reload is the only gap;
+        // closing it fully needs a server-side atomic reset RPC, overkill for a 1-2 device user who
+        // isn't editing mid-erase. The .catch releases the guard so a network failure can't wedge sync.
+        sbClient.from("user_data").delete().eq("user_id", uid).then(function(res) {
+          if (res && res.error) { window.htResetting = false; alert("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
+          return sbClient.from("user_data").select("key").eq("user_id", uid).then(function(chk) {
+            if (chk && chk.error) { window.htResetting = false; alert("Couldn't confirm the cloud was cleared (" + chk.error.message + "). Nothing was erased — try again."); return; }
+            var left = (chk && chk.data) ? chk.data.filter(function(r) { return typeof isSyncableKey === "function" ? isSyncableKey(r.key) : true; }) : [];
+            if (left.length) { window.htResetting = false; alert("Couldn't fully clear your cloud data (" + left.length + " item(s) remain) — likely a missing delete permission on the database. Nothing was erased on this device."); return; }
+            wipeLocalAndReload();
+          });
+        }).catch(function(err) { window.htResetting = false; alert("Couldn't reach the cloud to erase (" + (err && err.message ? err.message : "network error") + "). Nothing was erased — try again."); });
       } else { wipeLocalAndReload(); }
       return;
     }
@@ -3318,6 +3453,13 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
       render(); return;
     }
+    if (a === "cardiconset") {
+      var okIc = restyleCard(t.dataset.c, { icon:t.dataset.ic });
+      if (!okIc) { toast("That icon is used by another card"); return; }
+      // keep the panel open so colour can be picked in the same visit; just re-render the chosen icon
+      if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish();
+      render(); return;
+    }
     if (a === "tplmergeconfirm") {
       var mergePanel = t.closest(".sch-mergepanel"), mergeNames = Array.prototype.slice.call(mergePanel.querySelectorAll("[data-merge-item]:checked")).map(function(input) { return input.value; });
       var mergeKeep = mergePanel.querySelector("[data-merge-keep]").value;
@@ -3345,6 +3487,11 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (!newCard) { render(); return; }
       tplCardEdit = newCard.id; render();
       var ni = document.getElementById("cardname-" + newCard.id); if (ni) { ni.focus(); ni.select(); }
+      return;
+    }
+    if (a === "itemrename") {
+      tplItemNameEdit = t.dataset.f + "::" + t.dataset.k; render();
+      var ii = document.getElementById("itemname-" + tplItemNameEdit); if (ii) { ii.focus(); ii.select(); }
       return;
     }
     if (a === "cardrename") {
@@ -3562,6 +3709,10 @@ document.getElementById("app").addEventListener("keydown", function(e) {
     if (b2) b2.click();
   }
   if (e.target.id && e.target.id.indexOf("cardname-") === 0 && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+  if (e.target.id && e.target.id.indexOf("itemname-") === 0) {
+    if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
+    else if (e.key === "Escape") { tplItemNameEdit = null; render(); }
+  }
 });
 // Card rename: save on blur (covers click-away as well as Enter above).
 document.getElementById("app").addEventListener("focusout", function(e) {
@@ -3569,6 +3720,16 @@ document.getElementById("app").addEventListener("focusout", function(e) {
     var cid3 = e.target.id.slice("cardname-".length), val = e.target.value.trim();
     if (val) renameCard(cid3, val);
     tplCardEdit = null; render();
+  }
+  // Item rename: save on blur (Enter above blurs into here too).
+  if (e.target.id && e.target.id.indexOf("itemname-") === 0) {
+    var rawKey = e.target.id.slice("itemname-".length);
+    var sep = rawKey.indexOf("::");
+    if (sep !== -1) {
+      var rid = rawKey.slice(0, sep), rold = rawKey.slice(sep + 2), rnew = e.target.value.trim();
+      if (rnew && rnew !== rold) { if (renameCardItem(rid, rold, rnew)) toast("Renamed"); else toast("That name's already used"); }
+    }
+    tplItemNameEdit = null; render();
   }
   // Only re-render when the step actually moved. Rendering on every click-away rebuilt the whole
   // panel mid-interaction, which is how the pasted JSON used to disappear before the Preview click

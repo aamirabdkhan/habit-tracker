@@ -121,7 +121,12 @@
       emptyLabel.textColor = new Color(MUTED);
       w.addSpacer();
     } else {
-      const visible = priorityList.slice(0, 3);
+      // A large widget has room for more rows than a medium one. Whatever the family, if there are
+      // still more priorities than fit, the last line becomes "+N more" so the fourth (and beyond)
+      // are never silently invisible.
+      const cap = fam === "large" ? 8 : 4;
+      const overflow = priorityList.length > cap;
+      const visible = priorityList.slice(0, overflow ? cap - 1 : cap);
       for (let i = 0; i < visible.length; i++) {
         const it = visible[i];
         const nameStr = String(it.name || "Untitled");
@@ -162,6 +167,15 @@
           div.backgroundColor = new Color(LINE);
           w.addSpacer(7);
         }
+      }
+      if (overflow) {
+        w.addSpacer(7);
+        const moreRow = w.addStack();
+        moreRow.centerAlignContent();
+        const moreTxt = moreRow.addText(`+${priorityList.length - visible.length} more`);
+        moreTxt.font = monoFont(10, "medium");
+        moreTxt.textColor = new Color(MUTED);
+        moreRow.addSpacer();
       }
     }
   }

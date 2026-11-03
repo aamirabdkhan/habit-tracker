@@ -14,6 +14,7 @@ try {
 
 function dbSave(key, value) {
     if (!sbClient || !currentUser) return;
+    if (window.htResetting) return; // an "erase everything" is in flight — don't re-push the data we're deleting
     sbClient.from('user_data').upsert({
         user_id: currentUser.id,
         key: key,

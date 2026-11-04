@@ -76,43 +76,66 @@
   const DEFAULT = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
   const raw = (feed && Array.isArray(feed.prayers) && feed.prayers.length) ? feed.prayers : DEFAULT.map((name) => ({ name, done: false, time: "", voluntary: false }));
 
-  // Build the timed, time-sorted list and find the CURRENT window from the clock.
-  const list = raw.map((p) => ({ name: p.name, done: !!p.done, voluntary: !!p.voluntary, min: parseHM(p.time) }))
+  // Build the timed, time-sorted list. min = window start, endMin = TRUE window end (from the feed;
+  // null when the app had no location to compute real ends).
+  const list = raw.map((p) => ({ name: p.name, done: !!p.done, voluntary: !!p.voluntary, min: parseHM(p.time), endMin: parseHM(p.end) }))
     .filter((p) => p.min != null)
     .sort((a, b) => a.min - b.min);
 
   const nowD = new Date();
   const nowMin = nowD.getHours() * 60 + nowD.getMinutes();
+  const OFF = [-1440, 0, 1440]; // project each window onto yesterday/today/tomorrow so midnight wrap just works
 
-  let cur = null, nxt = null, curStart = 0, nxtStart = 0, hasWindow = list.length > 0;
-  if (hasWindow) {
+  const withEnd = list.filter((p) => p.endMin != null);
+  // cur = the prayer we're inside now; gap = true when now is between windows (post-sunrise, a
+  // forbidden sliver, etc.) and we instead count DOWN to the next prayer. winStart/winEnd bound
+  // whatever the bar is measuring, on a continuous number line that may run past 1440.
+  let cur = null, nxt = null, winStart = 0, winEnd = 0, gap = false, hasWindow = list.length > 0;
+
+  if (withEnd.length) {
+    // nearest prayer start strictly after now (for "then …" and for gap targeting)
+    let ns = Infinity, np = null;
+    for (const p of list) for (const off of OFF) { const s = p.min + off; if (s > nowMin && s < ns) { ns = s; np = p; } }
+    // are we inside a real window right now?
+    let active = null;
+    for (const p of withEnd) { for (const off of OFF) { const s = p.min + off; let e = p.endMin + off; if (e <= s) e += 1440; if (nowMin >= s && nowMin < e) { active = { p, s, e }; break; } } if (active) break; }
+    if (active) { cur = active.p; winStart = active.s; winEnd = active.e; nxt = np; }
+    else {
+      // GAP: fill the bar as the NEXT prayer approaches, from the previous window's end.
+      gap = true; cur = np; nxt = np;
+      let pe = -Infinity;
+      for (const p of withEnd) for (const off of OFF) { const s = p.min + off; let e = p.endMin + off; if (e <= s) e += 1440; if (e <= nowMin && e > pe) pe = e; }
+      winStart = (pe > -Infinity) ? pe : (ns - 60);
+      winEnd = ns;
+    }
+  } else if (hasWindow) {
+    // Legacy fallback (no real ends in feed = app had no location): window = this item → next item.
     let ci = -1;
     for (let i = 0; i < list.length; i++) if (list[i].min <= nowMin) ci = i;
-    if (ci === -1) { cur = list[list.length - 1]; curStart = cur.min - 1440; nxt = list[0]; nxtStart = nxt.min; }
-    else {
-      cur = list[ci]; curStart = cur.min;
-      if (ci + 1 >= list.length) { nxt = list[0]; nxtStart = nxt.min + 1440; }
-      else { nxt = list[ci + 1]; nxtStart = nxt.min; }
-    }
+    if (ci === -1) { cur = list[list.length - 1]; winStart = cur.min - 1440; nxt = list[0]; winEnd = nxt.min; }
+    else { cur = list[ci]; winStart = cur.min; if (ci + 1 >= list.length) { nxt = list[0]; winEnd = nxt.min + 1440; } else { nxt = list[ci + 1]; winEnd = nxt.min; } }
   }
-  const windowLen = Math.max(1, nxtStart - curStart);
-  const frac = hasWindow ? Math.max(0, Math.min(1, (nowMin - curStart) / windowLen)) : 0;
-  const leftMin = hasWindow ? Math.max(0, nxtStart - nowMin) : 0;
+  const nxtStart = winEnd; // the moment the bar reaches 100% (next prayer start, or this window's end)
+  const windowLen = Math.max(1, winEnd - winStart);
+  let nowAdj = nowMin; if (nowAdj < winStart) nowAdj += 1440;
+  const frac = hasWindow ? Math.max(0, Math.min(1, (nowAdj - winStart) / windowLen)) : 0;
+  const leftMin = hasWindow ? Math.max(0, winEnd - nowAdj) : 0;
 
   const fam = (typeof config !== "undefined" && config.widgetFamily) || "medium";
   const isLock = fam.indexOf("accessory") === 0;
   const w = new ListWidget();
 
+  const lead = gap ? "starts in" : "ends in"; // gap = counting down to the next prayer
   if (isLock) {
     const name = hasWindow ? cur.name : (feed.error ? "Open Waqt" : "Prayers");
-    const left = hasWindow ? `ends in ${fmtLeft(leftMin)}` : "";
+    const left = hasWindow ? `${lead} ${fmtLeft(leftMin)}` : "";
     if (fam === "accessoryInline") {
       w.addText(`${name}${left ? " · " + left : ""}`);
     } else if (fam === "accessoryCircular") {
       const a = w.addText(name.slice(0, 4)); a.font = Font.boldSystemFont(12); a.centerAlignText();
       const b = w.addText(hasWindow ? fmtLeft(leftMin) : ""); b.font = Font.systemFont(9); b.centerAlignText();
     } else {
-      const hh = w.addText("PRAYER NOW"); hh.font = Font.boldSystemFont(9); hh.textOpacity = 0.7;
+      const hh = w.addText(gap ? "NEXT PRAYER" : "PRAYER NOW"); hh.font = Font.boldSystemFont(9); hh.textOpacity = 0.7;
       w.addSpacer(2);
       const t = w.addText(name); t.font = Font.boldSystemFont(16);
       if (left) { const c = w.addText(left); c.font = Font.systemFont(11); c.textOpacity = 0.75; }
@@ -127,16 +150,17 @@
     nm.font = serifFont(fam === "large" ? 34 : 28, true);
     nm.textColor = new Color(TEXT);
     top.addSpacer();
-    if (hasWindow) { const nowLbl = top.addText("now"); nowLbl.font = monoFont(12); nowLbl.textColor = new Color(MUTED); }
+    if (hasWindow) { const nowLbl = top.addText(gap ? "soon" : "now"); nowLbl.font = monoFont(12); nowLbl.textColor = new Color(gap ? MUTED : GOLD); }
 
     w.addSpacer(7);
 
-    // "ends in X · next at HH:MM"
+    // "ends in X · <next> at HH:MM"  (in a gap: "starts in X · at HH:MM")
     if (hasWindow) {
       const line = w.addStack(); line.centerAlignContent();
-      const e1 = line.addText("ends in "); e1.font = monoFont(12); e1.textColor = new Color(MUTED);
+      const e1 = line.addText(`${lead} `); e1.font = monoFont(12); e1.textColor = new Color(MUTED);
       const e2 = line.addText(fmtLeft(leftMin)); e2.font = monoFont(12, true); e2.textColor = new Color(GOLD);
-      const e3 = line.addText(` · ${nxt.name} ${fmtClock(nxtStart)}`); e3.font = monoFont(12); e3.textColor = new Color(MUTED); e3.lineLimit = 1;
+      const tail = gap ? ` · at ${fmtClock(nxtStart)}` : (nxt ? ` · ${nxt.name} ${fmtClock(nxtStart)}` : "");
+      if (tail) { const e3 = line.addText(tail); e3.font = monoFont(12); e3.textColor = new Color(MUTED); e3.lineLimit = 1; }
     }
 
     w.addSpacer(11);
@@ -163,7 +187,9 @@
     const row = w.addStack(); row.centerAlignContent();
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      const state = (p === cur && hasWindow) ? "now" : (p.done ? "done" : "upcoming");
+      // Gold "now" ring only when we're truly inside this prayer's window; in a gap the upcoming
+      // prayer stays an empty ring (its countdown is already in the title/bar).
+      const state = (p === cur && hasWindow && !gap) ? "now" : (p.done ? "done" : "upcoming");
       const col = row.addStack(); col.layoutVertically(); col.centerAlignContent();
       const img = col.addImage(dotImage(state, p.voluntary, false));
       img.imageSize = new Size(15, 15);

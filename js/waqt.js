@@ -142,12 +142,20 @@ function computeWidgetPayload() {
   // The greeting carries the motivating nickname ("Good Morning, Achiever") — that's the whole
   // touch; no separate motivation line.
   var greeting = (typeof greet === "function") ? greet() : "";
+  // Each prayer's TRUE window end (Fajr→Sunrise, Dhuhr→Asr, Asr→pre-sunset, Maghrib→Isha, Isha→Fajr,
+  // Duha→zawal, Tahajjud→Fajr) so the widget's bar fills over the real window instead of guessing
+  // "until the next dot". Needs location (computePrayerWindows); without it the widget falls back.
+  var prayerEnd = {};
+  if (prayersOn() && typeof computePrayerWindows === "function") {
+    var wins = computePrayerWindows(now);
+    if (wins) wins.forEach(function(e) { if (e.end) prayerEnd[e.key] = minToHHMM(e.end.getHours() * 60 + e.end.getMinutes()); });
+  }
   return {
     date:dstr, done:done, total:items.length, items:items,
     greeting:greeting,
     stats:{ percent:dScore(key), counts:counts, next:nextPrayer },
     priority:priority,
-    prayers:prayersOn() ? allTrackedPrayers().map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "", voluntary:isVoluntaryPrayer(p) }; }) : [],
+    prayers:prayersOn() ? allTrackedPrayers().map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "", end:prayerEnd[p] || "", voluntary:isVoluntaryPrayer(p) }; }) : [],
     nextPrayer:nextPrayer
   };
 }

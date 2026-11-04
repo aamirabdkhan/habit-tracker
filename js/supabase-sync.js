@@ -204,6 +204,25 @@ function clearLocalHabitData() {
     keys.forEach(function(k) { localStorage.removeItem(k); });
 }
 
+// Push every local syncable key to the cloud as-is, no select/merge, no pull. Used right after an
+// "erase everything" so the fresh-empty local state becomes the cloud truth instead of being merged
+// against whatever rows might still be there.
+function overwriteCloudWithLocal() {
+    if (!sbClient || !currentUser) return Promise.resolve();
+    var rows = [];
+    for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!isSyncableKey(k)) continue;
+        var v = null; try { v = JSON.parse(localStorage.getItem(k)); } catch (e) { continue; }
+        if (v === null) continue;
+        rows.push({ user_id: currentUser.id, key: k, value: v, updated_at: new Date().toISOString() });
+    }
+    if (!rows.length) return Promise.resolve();
+    return sbClient.from('user_data').upsert(rows).then(function(res) {
+        if (res && res.error) console.error("Reset overwrite error:", res.error);
+    });
+}
+
 function syncUpAll() {
     if (!sbClient || !currentUser) return Promise.resolve();
     var keys = [];
@@ -254,7 +273,15 @@ if (sbClient) {
             subscribeRealtime();
             if (typeof resyncPrayerReminders === "function") resyncPrayerReminders();
             if (typeof publishWidgetFeed === "function") setTimeout(publishWidgetFeed, 2000);
-            if (oldUser && oldUser.id !== currentUser.id) {
+            var freshReset = false;
+            try { freshReset = localStorage.getItem("_htFreshReset") === "1"; } catch (e) {}
+            if (freshReset) {
+                // Just did "erase everything": the local state is the intended empty baseline. PUSH it
+                // over the cloud with no merge and do NOT sync down, so a stale/other-device cloud row
+                // can't repopulate the erased account on this reload.
+                try { localStorage.removeItem("_htFreshReset"); } catch (e) {}
+                overwriteCloudWithLocal();
+            } else if (oldUser && oldUser.id !== currentUser.id) {
                 clearLocalHabitData();
                 syncDown();
             } else if (!oldUser) {

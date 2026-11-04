@@ -120,17 +120,25 @@ function computeWidgetPayload() {
 
   // PRAYERS deliberately NOT a stats column any more — the prayer widget covers prayer progress.
   var cards = getCards(), counts = [], cardLabels = { habits:"DAILY", extra:"EXTRA", health:"HEALTHY" };
+  // Accumulate the day's overall ring the SAME way the app's Daily ring does (day-of-week scoped
+  // items via dayItemsForCard + prayers), so the widget dial matches the app exactly. Using dScore
+  // here counted every template item regardless of today's schedule, giving a lower % than the app.
+  var ringDone = 0, ringTotal = 0;
   cards.forEach(function(card) {
     // Base cards get their fixed label; custom cards (Study, Fitness, …) use their own name,
     // so every card shows in the stats widget, not just the three base ones.
     var label = cardLabels[card.id] || String(card.name || "").toUpperCase();
     if (!label) return;
     var score = scoreItems(dayItemsForCard(card, day, dow));
+    ringDone += score.done; ringTotal += score.total;
     counts.push({ label:label, done:score.done, total:score.total });
   });
+  var ringPd = 0; if (prayersOn()) PRAYERS.forEach(function(p) { if (day.prayers && day.prayers[p]) ringPd++; });
+  var ringDenom = (prayersOn() ? 5 : 0) + ringTotal;
+  var dayPct = ringDenom ? Math.round((ringPd + ringDone) / ringDenom * 100) : 0;
+  // Priority (starred one-time) tasks have their own dedicated widget, so they're NOT shown as a
+  // pseudo "COMMITMENTS" card in the stats dial any more — that looked like a card the user never made.
   var priority = priorityItemsForDay(day, key).map(function(item) { return { name:item.name, age:item.age }; });
-  var commitments = scoreItems(priority);
-  if (commitments.total) counts.push({ label:"COMMITMENTS", done:commitments.done, total:commitments.total });
 
   var nextPrayer = null;
   if (prayersOn()) {
@@ -153,7 +161,7 @@ function computeWidgetPayload() {
   return {
     date:dstr, done:done, total:items.length, items:items,
     greeting:greeting,
-    stats:{ percent:dScore(key), counts:counts, next:nextPrayer },
+    stats:{ percent:dayPct, counts:counts, next:nextPrayer },
     priority:priority,
     prayers:prayersOn() ? allTrackedPrayers().map(function(p) { return { name:p, done:!!(day.prayers && day.prayers[p]), time:getNotifTime("prayers", p) || "", end:prayerEnd[p] || "", voluntary:isVoluntaryPrayer(p) }; }) : [],
     nextPrayer:nextPrayer
@@ -3334,6 +3342,10 @@ document.getElementById("app").addEventListener("click", function(e) {
           var kill = [];
           for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && (k.indexOf("ht_") === 0 || k.indexOf("htn_") === 0)) kill.push(k); }
           kill.forEach(function(k) { localStorage.removeItem(k); });
+          // Sentinel survives the wipe (not an ht_/htn_ key). On the next load the sync layer sees it
+          // and PUSHES the fresh-empty local state over the cloud instead of merge-pulling — so a
+          // lingering/other-device cloud row can't resurrect the just-erased cards.
+          localStorage.setItem("_htFreshReset", "1");
         } catch (e) {}
         location.reload();
       };

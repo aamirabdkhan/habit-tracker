@@ -26,7 +26,7 @@ if (typeof setNotifTime === "function" && !setNotifTime.__wpWrapped) {
 // A new deploy bumps the service worker; it installs and WAITS (sw.js no longer skipWaiting on
 // install). We surface an "update available" banner and a Settings button; tapping either tells the
 // waiting worker to activate, then reloads once so the fresh files load. Mirrors the day-log app.
-var APP_VERSION = "2026-09-11.4";
+var APP_VERSION = "2026-11-04.1";
 var swReg = null;
 // Auto-update (matches day-log; reliable on iOS PWAs). sw.js skipWaiting()s on install, so a new
 // worker activates itself and controllerchange reloads once onto the fresh files. No prompt banner:
@@ -3342,8 +3342,18 @@ document.getElementById("app").addEventListener("click", function(e) {
           var kill = [];
           for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k && (k.indexOf("ht_") === 0 || k.indexOf("htn_") === 0)) kill.push(k); }
           kill.forEach(function(k) { localStorage.removeItem(k); });
+          // Write an explicit FRESH profile instead of leaving everything blank. Blank means ht_d is
+          // absent, and gDef() then returns its built-in SEED template (Surah Mulk, Night Duas,
+          // Tahajjud, Exercise…) — which is exactly why those items kept "coming back" after an erase.
+          // One empty Daily Goals card, an empty template, and the migration/onboarding flags set so
+          // nothing re-seeds the old starter content.
+          localStorage.setItem(CARDS_KEY, JSON.stringify([{ id:"habits", name:"Daily Goals", icon:"fa-bullseye", color:"#e0a33a", base:true }]));
+          localStorage.setItem(CARDS_V1_KEY, "true");          // stop the 3-card base reseed
+          localStorage.setItem("ht_d", JSON.stringify({ habits:[], ex:[], hl:[], rd:[], wt:8, prayers:[] }));
+          localStorage.setItem("ht_migrated_v3", "true");       // stop gDef's v3 migration re-adding Exercise
+          localStorage.setItem(ONBOARD_KEY, "true");            // an intentional erase shouldn't force onboarding
           // Sentinel survives the wipe (not an ht_/htn_ key). On the next load the sync layer sees it
-          // and PUSHES the fresh-empty local state over the cloud instead of merge-pulling — so a
+          // and PUSHES this fresh-empty state over the cloud instead of merge-pulling — so a
           // lingering/other-device cloud row can't resurrect the just-erased cards.
           localStorage.setItem("_htFreshReset", "1");
         } catch (e) {}

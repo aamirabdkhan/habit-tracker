@@ -78,7 +78,7 @@ Remove the hard `slice(0,3)` cap (already partially addressed with "+N more"); t
 A new small widget family that shows **one combined stat** — the % ring + a single total (e.g. "4/6 today") + the **Next prayer** line — instead of the per-card columns. Same feed, smaller layout.
 
 **2.3 "Hadith of the day" lock-screen widget.**
-A simple small/lock-screen widget showing one hadith per day under the clock. *Open to builder:* source of the hadith list (bundled static set rotating by day-of-year is the likely MVP — no network, no new dependency). Confirm with user whether a curated bundled set is acceptable.
+A simple small/lock-screen widget showing one hadith per day under the clock. **Source: Riyad as-Salihin** (user-chosen) — a bundled, offline static set, one hadith selected by day-of-year, each with its reference. No network, no new dependency. *Open to builder:* how many hadiths to bundle (a sizeable rotating subset is fine) and the exact text/translation edition to copy from.
 
 ### Wave 3 — Overview & prayers
 
@@ -96,8 +96,9 @@ Onboarding's first step asks "new here, or returning?" A returning user skips th
 **4.2 "Set up with AI" as its own section.**
 Pull "Set up with AI" out of the "Schedule data" tab pair into its **own collapsible Settings section**, so it's discoverable and not buried next to "Type your day".
 
-**4.3 A middle reset: new cards/Pehar, keep history.**
-Between "Reset schedule" and "Erase everything", give a reset that **clears cards + Pehar/schedule but keeps the Overview day-by-day records**. Matches the user's note: sometimes they want fresh cards without losing their history. *(Builder: this is close to today's "Reset schedule" — decide whether to relabel/extend it or add a third option; the differentiator is explicitly clearing Pehar/timed items while preserving `ht_YYYY-MM-DD` records.)*
+**4.3 Fix "Reset schedule" to truly reset cards while keeping history.**
+This is the "middle" reset the user wants (fresh cards + Pehar, keep Overview history) — and today's **"Reset schedule" is broken for it.** Confirmed: it reseeds `ht_cards` to Daily Goals and clears `ht_card_items` + times/days/slots, but it **never clears `ht_d`**, so the base-card items (Surah Mulk, Night Duas, Tahajjud in Extra; Exercise in Health) survive, and `recoverStalePollutedSeed()` then sees "1 card + leftover ex/hl items" and re-adds the full 3-card base. Net: the Pehar looks cleared but the cards and their items come back — the user's exact report, and it contradicts the button's own "leaving an empty Daily Goals card" promise.
+Fix: make "Reset schedule" write the **same fresh profile the erase path writes** (one empty Daily Goals card, empty `ht_d`, `ht_cards_v1` + `ht_migrated_v3` flags set so nothing re-seeds/recovers), **but preserve the `ht_YYYY-MM-DD` day records** (Overview history) — i.e. do everything "Erase everything" does to cards/template/schedule, minus wiping day history and minus the cloud-wide delete. Also clear the items' reminders (reuse the Wave 1.2 teardown) so a reset doesn't leave orphaned pings. No third button — the existing one is relabelled only if needed and finally does what it says.
 
 ---
 

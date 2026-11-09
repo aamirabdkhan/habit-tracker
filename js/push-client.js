@@ -49,6 +49,39 @@ function pushSaveReminderTime(field, name, time) {
   }
 }
 
+// True when a reminder_times row still maps to a live item: a tracked prayer, or an existing card id
+// whose template still holds that item name. Used to sweep orphaned reminders (deleted cards/items
+// whose cloud rows kept firing). Every lookup is guarded so a missing helper never throws.
+function pushReminderIsLive(field, name) {
+  var prayers, tracked, cards, items;
+  if (field === "prayers") {
+    prayers = (typeof PRAYERS !== "undefined" && Array.isArray(PRAYERS)) ? PRAYERS.slice() : [];
+    if (typeof trackedVoluntaryPrayers === "function") {
+      try { tracked = trackedVoluntaryPrayers(); if (Array.isArray(tracked)) prayers = prayers.concat(tracked); } catch (e) {}
+    }
+    return prayers.indexOf(name) !== -1;
+  }
+  if (typeof getCardMeta !== "function" || typeof cardTemplateArr !== "function" || typeof itemName !== "function") return false;
+  try { cards = getCardMeta(); } catch (e) { return false; }
+  if (!Array.isArray(cards) || !cards.some(function(card) { return card && card.id === field; })) return false;
+  try { items = cardTemplateArr(field); } catch (e) { return false; }
+  return Array.isArray(items) && items.some(function(it) { try { return itemName(it) === name; } catch (e) { return false; } });
+}
+
+// Delete any reminder_times row that no longer maps to a live item. Called after syncDown (template
+// is current by then). No-op without a signed-in client.
+function pushCleanupOrphanReminders() {
+  if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return;
+  return sbClient.from("reminder_times").select("field,name").eq("user_id", currentUser.id).then(function(res) {
+    if (res.error) { console.error("Reminder cleanup error:", res.error); return; }
+    (res.data || []).forEach(function(row) {
+      if (!pushReminderIsLive(row.field, row.name) && typeof pushSaveReminderTime === "function") {
+        pushSaveReminderTime(row.field, row.name, "");
+      }
+    });
+  });
+}
+
 // One-time per device: re-push existing prayer reminders so they pick up the new 5-min-early lead
 // (reminderTimeFor) without the user having to re-save each time. Runs after sign-in.
 function resyncPrayerReminders() {

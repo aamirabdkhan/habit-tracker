@@ -696,6 +696,10 @@ function deleteCard(id) {
   var list = getCardMeta(), card = list.filter(function(c) { return c.id === id; })[0];
   if (!card) return false;
   if (card.base) { toast("Can't delete a base card"); return false; }
+  // Tear down each item's reminder + side-data first (removeCardItem clears its reminder_times row
+  // and htn_* maps), so a deleted card leaves no orphaned push reminders still firing.
+  var items = (getCardItemsStore()[id] || []).slice();
+  items.forEach(function(it) { removeCardItem(id, itemName(it)); });
   saveCards(list.filter(function(c) { return c.id !== id; }), true);
   var store = getCardItemsStore();
   delete store[id];
@@ -811,6 +815,45 @@ function renameCardItem(cardId, oldName, newName) {
   return true;
 }
 
+// Self-check: deleting a card tears down every item's reminder, and the orphan predicate flags
+// only deleted items (run at #remindercleanupcheck).
+function _reminderTeardownSelfCheck() {
+  if (location.hash !== "#remindercleanupcheck") return;
+  var keys = [CARDS_KEY, CARD_ITEMS_KEY, NOTIF_TIMES_KEY, NOTIF_DAYS_KEY, NOTIF_SLOTS_KEY, ITEM_BELL_KEY, OPTIONAL_KEY];
+  var saved = {}, originalPush = pushSaveReminderTime, calls = [], card, live, times, deletedKey, liveKey, ok;
+  keys.forEach(function(key) { saved[key] = localStorage.getItem(key); });
+  try {
+    saveCards([], false);
+    saveCardItemsStore({}, false);
+    card = addCard("__reminder_delete__");
+    live = addCard("__reminder_live__");
+    addCardItem(card.id, "First");
+    addCardItem(card.id, "Second");
+    addCardItem(live.id, "Still here");
+    pushSaveReminderTime = function(field, name, time) { calls.push([field, name, time]); };
+    setNotifTime(card.id, "First", "08:00");
+    setNotifTime(card.id, "Second", "09:00");
+    deleteCard(card.id);
+    ok = calls.some(function(call) { return call[0] === card.id && call[1] === "First" && call[2] === ""; }) &&
+      calls.some(function(call) { return call[0] === card.id && call[1] === "Second" && call[2] === ""; }) &&
+      !getNotifTimesMap()[notifKey(card.id, "First")] &&
+      !getNotifTimesMap()[notifKey(card.id, "Second")];
+    console.assert(ok, "deleteCard must tear down both item reminders and htn_times keys", calls, getNotifTimesMap());
+    if (!ok) throw new Error("teardown");
+    liveKey = notifKey(live.id, "Still here");
+    deletedKey = notifKey(card.id, "Deleted item");
+    times = {}; times[liveKey] = "10:00"; times[deletedKey] = "11:00";
+    saveNotifTimesMap(times);
+    ok = pushReminderIsLive(live.id, "Still here") && !pushReminderIsLive(card.id, "Deleted item");
+    console.assert(ok, "orphan predicate must keep live item and flag deleted item", times);
+    console.log(ok ? "REMINDERCLEANUPCHECK PASS" : "REMINDERCLEANUPCHECK FAIL");
+  } catch (e) {
+    console.log("REMINDERCLEANUPCHECK FAIL: " + e.message);
+  } finally {
+    pushSaveReminderTime = originalPush;
+    keys.forEach(function(key) { if (saved[key] === null) localStorage.removeItem(key); else localStorage.setItem(key, saved[key]); });
+  }
+}
 // ---- self-check (run with the page open at #cardscheck) ----
 function _cardsSelfCheck() {
   if (location.hash !== "#cardscheck") return;

@@ -190,6 +190,9 @@ function syncDown() {
         }
         if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
         if (typeof publishWidgetFeed === "function") publishWidgetFeed();
+    }).then(function() {
+        // Once the local template is current, sweep any reminder_times row for a deleted card/item.
+        if (typeof pushCleanupOrphanReminders === "function") return pushCleanupOrphanReminders();
     });
 }
 

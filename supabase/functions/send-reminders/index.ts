@@ -28,6 +28,13 @@ const FIELD_LABELS: Record<string, string> = {
   health: "Healthy Lifestyle",
 };
 
+// Resolve a reminder's `field` to a human label for the notification body. Base cards have fixed
+// labels; a custom card's field is its `c_*` id, looked up in the user's ht_cards; prayers/unknown
+// fall through to the raw field. Without this a custom-card reminder printed its raw id ("c_8ivntv").
+function cardLabel(field: string, cardMap: Map<string, string>): string {
+  return FIELD_LABELS[field] ?? cardMap.get(field) ?? field;
+}
+
 function localHHMM(timezone: string, date: Date): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
@@ -78,9 +85,9 @@ Deno.serve(async (_req: Request) => {
 
   const { data: reminderData, error: dataErr } = await supabase
     .from("user_data")
-    .select("user_id, value")
+    .select("user_id, key, value")
     .in("user_id", userIds)
-    .eq("key", "ht_reminders");
+    .in("key", ["ht_reminders", "ht_cards"]);
   if (dataErr) return new Response(JSON.stringify({ error: dataErr.message }), { status: 500 });
 
   const subsByUser = new Map<string, any[]>();
@@ -104,6 +111,17 @@ Deno.serve(async (_req: Request) => {
     const nowMinutes = timeToMinutes(localHHMM(timezone, now));
     const today = localDateStr(timezone, now);
 
+    const cardsRow = ((reminderData || []) as any[]).find(
+      (row) => row.user_id === userId && row.key === "ht_cards"
+    );
+    const cardMap = new Map<string, string>();
+    const cards = Array.isArray(cardsRow?.value) ? cardsRow.value : [];
+    for (const card of cards) {
+      if (typeof card?.id === "string" && typeof card?.name === "string") {
+        cardMap.set(card.id, card.name);
+      }
+    }
+
     const userReminders = ((reminders || []) as any[]).filter((r) => r.user_id === userId);
     for (const reminder of userReminders) {
       if (!isDueInWindow(reminder.time, nowMinutes, 5)) continue;
@@ -120,7 +138,7 @@ Deno.serve(async (_req: Request) => {
 
       const payload = JSON.stringify({
         title: "Habit Tracker Reminder",
-        body: `${FIELD_LABELS[reminder.field] || reminder.field}: ${reminder.name}`,
+        body: `${cardLabel(reminder.field, cardMap)}: ${reminder.name}`,
         field: reminder.field,
         name: reminder.name,
       });
@@ -147,7 +165,9 @@ Deno.serve(async (_req: Request) => {
       );
     }
 
-    const customRow = ((reminderData || []) as any[]).find((row) => row.user_id === userId);
+    const customRow = ((reminderData || []) as any[]).find(
+      (row) => row.user_id === userId && row.key === "ht_reminders"
+    );
     const customReminders = Array.isArray(customRow?.value) ? customRow.value : [];
     for (const reminder of customReminders) {
       if (!isDateReminderDue(reminder, today)) continue;

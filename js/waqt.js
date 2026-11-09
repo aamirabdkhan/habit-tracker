@@ -1371,22 +1371,58 @@ function applyImportSchedule(preview, rawTimes) {
     saveReminders(existing);
   }
 }
+// Interactive AI planner prompt. The copied text turns the user's AI into a planner that runs a
+// short interview (anchors -> named study/work blocks -> micro-habits -> opt-in reminders) BEFORE
+// emitting the schedule JSON. The JSON schema is unchanged, so the existing parser still applies.
+// Prayers off => zero prayer references (plain clock times). Reminders are opt-in: this directly
+// fixes the "AI invented a pile of reminders" bug.
 function importPrompt() {
   var prayers = prayersOn();
-  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Study","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[{"name":"Service scooty","every":3,"unit":"months"}]}';
-  // Fix 3 — every rule below exists because live testing caught the AI breaking it: inventing
-  // cards while leaving mine empty, emitting Class three times instead of days:[...], renaming
-  // blocks the app already disambiguates, and splitting a 120m block into 85m of pieces.
-  var instruction = "Create a recurring weekly plan. " + (prayers ? "Anchor the day around the prayer times; " : "") + "do not overlap blocks. Place study, exercise, and commitments where I describe them; apply day-of-week scoping when I say on Saturday/Sunday. Assign realistic durations so each item is a block. Timed items render on a visual timeline called the Pehar, from dawn to night; briefly show me how my day will flow."
-    + "\n\nRULES, follow these exactly:"
-    + "\n1. USE THE CARDS IN MY CURRENT PROFILE BELOW. Put each activity on the card it fits. Only invent a new card when nothing fits at all, and never leave a card I already have empty in order to invent one. 5 cards maximum in total, including Daily Goals."
+  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[{"name":"Service scooty","every":3,"unit":"months"}]}';
+  var interview = prayers
+    ? "\n1. Fixed anchors: confirm five daily prayers, then ask about weekly classes, physio, and other fixed commitments with their days."
+      + "\n2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
+      + "\n3. Ask about small post-prayer micro-habits, such as Fajr dhikr after Fajr, plus any other fixed micro-habits."
+    : "\n1. Fixed anchors: ask about clock-time commitments, weekly classes, physio, and other fixed commitments with their days."
+      + "\n2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
+      + "\n3. Ask about small fixed micro-habits.";
+  var instruction = "You are an interactive weekly planner. Read CURRENT PROFILE first. Run a short interview of about 4-6 questions in this exact order. Ask before building JSON."
+    + interview
+    + "\n4. Ask exactly: \"Do you want reminders, and for which items?\" Default is none."
+    + "\nOnly after interview, emit final schedule JSON. If user instead pastes their whole day at once, infer missing details conservatively and emit JSON."
+    + "\n\nRULES:"
+    + "\n1. Do not overlap blocks. Place commitments where user describes them. Use day-of-week scoping for weekly items."
     + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. For several times use slots:[{time,days?}]; never duplicate the activity."
-    + "\n3. DO NOT RENAME my activities (no \"CEH Morning\"/\"CEH Afternoon\"). The app adds a -2 suffix itself when the same name repeats."
-    + (prayers ? "\n4. You MAY split a block that runs across a prayer into two pieces, and it helps. THE PIECES MUST ADD UP TO THE DURATION I ASKED FOR. If a 120m block loses 35m to a prayer, the second piece runs 35m longer, it does not disappear. Keep the same name for both pieces." : "\n4. Never shorten a block below the duration I asked for.")
-    + "\n5. REPORT EVERY CHANGE. Any block you split, move, shorten or merge gets a short \"note\" on that item saying what you did and why. Put an overall summary of how the day flows in a top-level \"notes\" string."
-    + "\n6. Put date/interval reminders in top-level reminders: [{name,every,unit}] (unit days/weeks/months), or [{name,date}] using YYYY-MM-DD. They are not Pehar blocks."
+    + "\n3. DO NOT RENAME user activities. Keep real names exactly; app adds a -2 suffix itself when needed."
+    + (prayers
+      ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to requested duration. If 120m loses 35m, second piece runs 35m longer; never lose time."
+      : "\n4. Use plain clock times only. Never shorten a block below requested duration.")
+    + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put day-flow summary in top-level notes."
+    + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders."
     + "\n\nReturn JSON only.";
-  return instruction + "\n\nOUTPUT FORMAT:\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; prayer duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons. Reply with ONLY the JSON object. No code fence, no explanation before or after.\n\nEXAMPLE:\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nNOW DESCRIBE YOUR DAY OR WEEK BELOW in plain words. Give times, and which days for weekly things (e.g. \"Gym 6:30–7:30am\", \"Team meeting Mon/Wed 10–11am\"). Turn it into the format above:\n\n";
+  return instruction + "\n\nOUTPUT FORMAT:\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons. Reply with ONLY the JSON object. No code fence, no explanation before or after.\n\nEXAMPLE:\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nSTART INTERVIEW OR, IF USER ALREADY PROVIDED THEIR WHOLE DAY, BUILD THE SCHEDULE:\n\n";
+}
+// Self-check for the interactive AI planner prompt (run at #aipromptcheck).
+function _aiPromptSelfCheck() {
+  if (location.hash !== "#aipromptcheck") return;
+  var savedPrayers = prayersOn();
+  function assert(ok, reason) { console.assert(ok, reason); if (!ok) throw new Error(reason); }
+  try {
+    setPrayersOn(true);
+    var on = importPrompt();
+    assert(/fixed anchors/i.test(on), "prompt: missing anchors interview cue");
+    assert(/real name/i.test(on) && /generic "Study"/i.test(on), "prompt: missing study-by-name cue");
+    assert(/micro-habits/i.test(on), "prompt: missing micro-habits cue");
+    assert(/Do you want reminders, and for which items\?/i.test(on), "prompt: missing reminders question");
+    assert(/only add reminders the user explicitly asks for/i.test(on), "prompt: reminders are not opt-in");
+    assert(on.indexOf("OUTPUT FORMAT:") !== -1, "prompt: missing output marker");
+    assert(/Return JSON only/i.test(on), "prompt: missing JSON-only instruction");
+    setPrayersOn(false);
+    var off = importPrompt();
+    assert(!/Fajr|prayer/i.test(off), "prompt: prayer text remains while prayers are off");
+    console.log("AIPROMPTCHECK PASS");
+  } catch (e) { console.log("AIPROMPTCHECK FAIL: " + e.message); }
+  finally { setPrayersOn(savedPrayers); }
 }
 function copyImportPrompt() {
   var value = importPrompt();

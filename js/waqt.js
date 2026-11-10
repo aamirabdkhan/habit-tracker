@@ -1909,10 +1909,13 @@ function importSummaryText() {
   var head = parts.length ? 'Adds ' + parts.join(' · ') : 'Nothing new';
   return head + ' · ' + pl(cf, 'conflict') + ' to resolve.';
 }
-function renderImportPanel() {
-  var h = '<div class="sch-importbox" id="schedule-import">';
-  h += renderImportGuide();
-  if (importTab === "type") {
+// kind: "ai" renders only the AI-setup flow, "type" only the parser flow (each in its own Settings
+// group); no kind keeps the original two-tab panel (used by the self-checks and the no-arg path).
+function renderImportPanel(kind) {
+  var h = '<div class="sch-importbox" id="' + (kind === "ai" ? "ai-setup" : "schedule-import") + '">';
+  if (kind === undefined) h += renderImportGuide();
+  var showType = kind === "type" || (kind === undefined && importTab === "type");
+  if (showType) {
     h += renderParserPanel();
   } else {
     h += '<div style="margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)">';
@@ -1921,8 +1924,8 @@ function renderImportPanel() {
     if (importError) h += '<p class="sch-importerr">' + esc(importError) + '</p>';
     h += '</div>';
   }
-  // Preview table renders below either tab — it's the shared destination both paths land in.
-  if (importPreview) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' group' + (importPreview.folded === 1 ? '' : 's') + ' merged into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
+  // Preview renders beside the method that produced it (AI vs Type); no-arg shows it for either.
+  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' group' + (importPreview.folded === 1 ? '' : 's') + ' merged into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
   return h + '</div>';
 }
 
@@ -2316,8 +2319,10 @@ function rPrefs() {
       h += '<p class="sch-remempty">No reminders set</p>';
     }
   }
-  h += settClose() + settOpen('Schedule data', false);
-  h += renderImportPanel();
+  h += settClose() + settOpen('Set up with AI', false);
+  h += renderImportPanel("ai");
+  h += settClose() + settOpen('Type your day', false);
+  h += renderImportPanel("type");
 
   h += '<div class="cd"><div class="sec-t">Reset</div>';
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn)" data-a="resetschedule"><i class="fas fa-trash-can mr-1.5"></i>Reset schedule</button>';
@@ -3501,7 +3506,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       } else setTimeout(reload, 800);
       return;
     }
-    if (a === "setupwithai") { view = "prefs"; importError = ""; importTab = "ai"; aiStep = 0; render(); setTimeout(function() { var panel = document.getElementById("schedule-import"); if (panel) panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); }, 0); return; }
+    if (a === "setupwithai") { view = "prefs"; importError = ""; aiStep = 0; render(); setTimeout(function() { var panel = document.getElementById("ai-setup"); if (panel) { var det = panel.closest("details"); if (det) det.open = true; panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); } }, 0); return; }
     if (a === "importpreview") {
       var importInput = document.getElementById("import-json"); importDraft = importInput ? importInput.value : importDraft;
       var parsedImport = parseImportSchedule(importDraft);

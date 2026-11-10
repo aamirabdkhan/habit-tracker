@@ -121,10 +121,8 @@
       emptyLabel.textColor = new Color(MUTED);
       w.addSpacer();
     } else {
-      // A large widget has room for more rows than a medium one. Whatever the family, if there are
-      // still more priorities than fit, the last line becomes "+N more" so the fourth (and beyond)
-      // are never silently invisible.
-      const cap = fam === "large" ? 8 : 4;
+      // Large lists every priority; medium caps and reserves the final row for a "+N more" count.
+      const cap = fam === "large" ? priorityList.length : 4;
       const overflow = priorityList.length > cap;
       const visible = priorityList.slice(0, overflow ? cap - 1 : cap);
       for (let i = 0; i < visible.length; i++) {

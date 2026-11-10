@@ -160,7 +160,21 @@
     const statsStack = top.addStack();
     statsStack.centerAlignContent();
 
-    if (counts.length === 0) {
+    if (fam === "small") {
+      // Compact: one combined total instead of per-card columns (ring + Next line render regardless).
+      let totalDone = 0, totalCount = 0;
+      for (let i = 0; i < counts.length; i++) {
+        totalDone += typeof counts[i].done === "number" ? counts[i].done : 0;
+        totalCount += typeof counts[i].total === "number" ? counts[i].total : 0;
+      }
+      const total = statsStack.addText(`${totalDone}/${totalCount}`);
+      total.font = Font.boldSystemFont(17);
+      total.textColor = new Color(TEXT);
+      statsStack.addSpacer(5);
+      const totalLabel = statsStack.addText("TODAY");
+      totalLabel.font = monoFont(7, "medium");
+      totalLabel.textColor = new Color(MUTED);
+    } else if (counts.length === 0) {
       const noCounts = statsStack.addText(feed.error ? "Open Waqt to sync" : "No active counts");
       noCounts.font = Font.systemFont(12);
       noCounts.textColor = new Color(MUTED);

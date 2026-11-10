@@ -53,19 +53,27 @@ function pushSaveReminderTime(field, name, time) {
 // whose template still holds that item name. Used to sweep orphaned reminders (deleted cards/items
 // whose cloud rows kept firing). Every lookup is guarded so a missing helper never throws.
 function pushReminderIsLive(field, name) {
-  var prayers, tracked, cards, items;
+  var prayers, items, isBase, cards;
   if (field === "prayers") {
     prayers = (typeof PRAYERS !== "undefined" && Array.isArray(PRAYERS)) ? PRAYERS.slice() : [];
-    if (typeof trackedVoluntaryPrayers === "function") {
-      try { tracked = trackedVoluntaryPrayers(); if (Array.isArray(tracked)) prayers = prayers.concat(tracked); } catch (e) {}
-    }
+    // Voluntary tracking (htn_track_*) is device-local, so a second device's sweep can't see it —
+    // never orphan a Duha/Tahajjud reminder just because this device doesn't track it. Count the set.
+    if (typeof VOLUNTARY_PRAYERS !== "undefined" && Array.isArray(VOLUNTARY_PRAYERS)) prayers = prayers.concat(VOLUNTARY_PRAYERS);
     return prayers.indexOf(name) !== -1;
   }
-  if (typeof getCardMeta !== "function" || typeof cardTemplateArr !== "function" || typeof itemName !== "function") return false;
-  try { cards = getCardMeta(); } catch (e) { return false; }
-  if (!Array.isArray(cards) || !cards.some(function(card) { return card && card.id === field; })) return false;
-  try { items = cardTemplateArr(field); } catch (e) { return false; }
-  return Array.isArray(items) && items.some(function(it) { try { return itemName(it) === name; } catch (e) { return false; } });
+  // Base cards (habits/extra/health) hold items in ht_d (cardTemplateArr), independent of the ht_cards
+  // meta list — never gate them on getCardMeta, which may be empty before migrateCardsIfNeeded runs.
+  isBase = (typeof isBaseCard === "function") ? isBaseCard(field) : (field === "habits" || field === "extra" || field === "health");
+  if (!isBase) {
+    if (typeof getCardMeta !== "function") return true;        // can't inspect -> fail OPEN, keep the reminder
+    try { cards = getCardMeta(); } catch (e) { return true; }
+    if (!Array.isArray(cards)) return true;
+    if (!cards.some(function(card) { return card && card.id === field; })) return false; // custom card truly gone
+  }
+  if (typeof cardTemplateArr !== "function" || typeof itemName !== "function") return true; // fail OPEN
+  try { items = cardTemplateArr(field); } catch (e) { return true; }
+  if (!Array.isArray(items)) return true;                      // fail OPEN
+  return items.some(function(it) { try { return itemName(it) === name; } catch (e) { return false; } });
 }
 
 // Delete any reminder_times row that no longer maps to a live item. Called after syncDown (template

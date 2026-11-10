@@ -186,12 +186,14 @@ function syncDown() {
                 // Republish the widget feed after every sign-in/foreground sync so the Scriptable
                 // widgets always read current data, even when the app opens with no edits made.
                 if (typeof publishWidgetFeed === "function") publishWidgetFeed();
+                // Sweep orphaned reminders ONLY after a successful sync merged the template — never on
+                // the res.error path (line ~130 returns early), where a stale/empty local template
+                // would make the sweep wrongly delete every live cloud reminder.
+                if (typeof pushCleanupOrphanReminders === "function") return pushCleanupOrphanReminders();
             });
         }
         if (typeof view !== "undefined" && view === "settings" && typeof render === "function") render();
         if (typeof publishWidgetFeed === "function") publishWidgetFeed();
-    }).then(function() {
-        // Once the local template is current, sweep any reminder_times row for a deleted card/item.
         if (typeof pushCleanupOrphanReminders === "function") return pushCleanupOrphanReminders();
     });
 }

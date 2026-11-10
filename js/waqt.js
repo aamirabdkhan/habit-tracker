@@ -844,8 +844,10 @@ function _reminderTeardownSelfCheck() {
     deletedKey = notifKey(card.id, "Deleted item");
     times = {}; times[liveKey] = "10:00"; times[deletedKey] = "11:00";
     saveNotifTimesMap(times);
-    ok = pushReminderIsLive(live.id, "Still here") && !pushReminderIsLive(card.id, "Deleted item");
-    console.assert(ok, "orphan predicate must keep live item and flag deleted item", times);
+    ok = pushReminderIsLive(live.id, "Still here") && !pushReminderIsLive(card.id, "Deleted item")
+      && pushReminderIsLive("prayers", "Duha")      // voluntary prayer must count as live even when not tracked on THIS device
+      && pushReminderIsLive("prayers", "Fajr");     // fard prayer always live
+    console.assert(ok, "orphan predicate must keep live items (incl. voluntary prayers) and flag only deleted ones", times);
     console.log(ok ? "REMINDERCLEANUPCHECK PASS" : "REMINDERCLEANUPCHECK FAIL");
   } catch (e) {
     console.log("REMINDERCLEANUPCHECK FAIL: " + e.message);
@@ -889,6 +891,8 @@ function _reminderSettingsSelfCheck() {
     keys.forEach(function(key) { if (saved[key] === null) localStorage.removeItem(key); else localStorage.setItem(key, saved[key]); });
   }
 }
+_reminderTeardownSelfCheck();
+_reminderSettingsSelfCheck();
 // ---- self-check (run with the page open at #cardscheck) ----
 function _cardsSelfCheck() {
   if (location.hash !== "#cardscheck") return;
@@ -1456,7 +1460,7 @@ function applyImportSchedule(preview, rawTimes) {
 // fixes the "AI invented a pile of reminders" bug.
 function importPrompt() {
   var prayers = prayersOn();
-  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[{"name":"Service scooty","every":3,"unit":"months"}]}';
+  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[]}';
   var interview = prayers
     ? "\n1. Fixed anchors: confirm five daily prayers, then ask about weekly classes, physio, and other fixed commitments with their days."
       + "\n2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
@@ -1502,6 +1506,7 @@ function _aiPromptSelfCheck() {
   } catch (e) { console.log("AIPROMPTCHECK FAIL: " + e.message); }
   finally { setPrayersOn(savedPrayers); }
 }
+_aiPromptSelfCheck();
 function copyImportPrompt() {
   var value = importPrompt();
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(function() { toast("Copied!"); }, function() { copyImportFallback(value); }); else copyImportFallback(value);
@@ -2289,7 +2294,7 @@ function rPrefs() {
       var time = getNotifTimesMap()[key], meta, cardName;
       if (!time || !getItemBell(field, name)) return;
       if (field === "prayers") {
-        if (!prayersOn() || PRAYERS.indexOf(name) === -1) return;
+        if (!prayersOn() || (PRAYERS.indexOf(name) === -1 && VOLUNTARY_PRAYERS.indexOf(name) === -1)) return;
         cardName = "Prayers";
       } else {
         if (!cardTemplateArr(field).some(function(item) { return itemName(item) === name; })) return;

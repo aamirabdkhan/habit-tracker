@@ -32,7 +32,11 @@ const FIELD_LABELS: Record<string, string> = {
 // labels; a custom card's field is its `c_*` id, looked up in the user's ht_cards; prayers/unknown
 // fall through to the raw field. Without this a custom-card reminder printed its raw id ("c_8ivntv").
 function cardLabel(field: string, cardMap: Map<string, string>): string {
-  return FIELD_LABELS[field] ?? cardMap.get(field) ?? field;
+  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+  const custom = (cardMap.get(field) || "").trim();
+  if (custom) return custom;
+  // ht_cards not synced yet, or the card was deleted while its row lingered: never show the raw c_* id.
+  return field.indexOf("c_") === 0 ? "Reminder" : field;
 }
 
 function localHHMM(timezone: string, date: Date): string {

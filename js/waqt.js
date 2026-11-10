@@ -55,7 +55,7 @@ var schAddCard = null;       // cardId whose "Add for today" form is open (or nu
 var schQuickGap = null;      // {start, cardId} for the Free time quick-add form
 var schGestSwipedAt = 0;     // Date.now() of the last swipe-completed gesture — guards the schtog
                               // click handler against the browser's post-touch synthetic click (Task 8)
-var onbStep = 1;             // Setup onboarding: 1 = prayer choice, 2 = prayer setup, 3 = finish
+var onbStep = 0;             // 0 = new/returning choice; 1+ = new-user setup steps
 
 // ---- Help & tutorial (help/tour/AI-walkthrough) state — spec 2026-08-12-waqt-help-tutorial-design ----
 var helpTopic = null;        // key into HELP_TOPICS, or null when the ? overlay is closed
@@ -2148,7 +2148,11 @@ function finishOnboarding() {
 function rOnboarding() {
   var h = '<div class="sch-view sch-onb">';
   h += '<div class="sch-onbprog"><i class="' + (onbStep >= 1 ? 'on' : '') + '"></i><i class="' + (onbStep >= 2 ? 'on' : '') + '"></i><i class="' + (onbStep >= 3 ? 'on' : '') + '"></i><i class="' + (onbStep >= 4 ? 'on' : '') + '"></i></div>';
-  if (onbStep === 1) {
+  if (onbStep === 0) {
+    h += '<h1 class="sch-onbtitle">Welcome to Waqt</h1>';
+    h += '<p class="sch-onblede">Setting up for the first time, or bringing your existing data to this device?</p>';
+    h += '<div class="sch-onbfoot"><button class="sch-onbskip" data-a="onbreturn">Returning</button><button class="sch-onbgo" data-a="onbnew">New here</button></div>';
+  } else if (onbStep === 1) {
     h += '<h1 class="sch-onbtitle">What do you want to track?</h1>';
     h += '<p class="sch-onblede">Waqt anchors your day to fixed times. Pick what shows up in your feed. You can change any of these later in Settings.</p>';
     h += '<div class="sch-onbtrack">';
@@ -3511,7 +3515,36 @@ document.getElementById("app").addEventListener("click", function(e) {
       rebuildImportPreview(); render(); return;
     }
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
-    if (a === "resetschedule") { if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return; saveCards(seedCardsForState(false), true); localStorage.removeItem(CARD_ITEMS_KEY); if (typeof dbSave === "function") dbSave(CARD_ITEMS_KEY, {}); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY); importPreview = null; aiStep = 0; render(); toast("Schedule reset"); return; }
+    if (a === "resetschedule") {
+      if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return;
+      // Cancel remote reminders before deleting their cards/items (same teardown deleteCard uses).
+      getCards().forEach(function(card) {
+        cardItemsFor(card.id).forEach(function(item) {
+          if (typeof pushSaveReminderTime === "function") pushSaveReminderTime(card.id, itemName(item), "");
+        });
+      });
+      // Write the SAME explicit fresh profile the erase path writes (so seed/recovery can't re-add the
+      // old 3 base cards + their items) — but day history keys ht_YYYY-MM-DD are never touched, and no
+      // cloud-wide delete. This finally makes "Reset schedule" land on one empty Daily Goals card.
+      saveCards([{ id:"habits", name:"Daily Goals", icon:"fa-bullseye", color:"#e0a33a", base:true }], true);
+      saveCardItemsStore({}, true);
+      sDef({ habits:[], ex:[], hl:[], rd:[], wt:8, prayers:[] });
+      localStorage.setItem(CARDS_V1_KEY, "true");
+      localStorage.setItem("ht_migrated_v3", "true");
+      localStorage.removeItem(NOTIF_TIMES_KEY);
+      localStorage.removeItem(HTN_DUR_KEY);
+      localStorage.removeItem(NOTIF_DAYS_KEY);
+      localStorage.removeItem(NOTIF_SLOTS_KEY);
+      localStorage.removeItem(ITEM_BELL_KEY);
+      saveOptionalMap({});
+      if (typeof dbSave === "function") dbSave(OPTIONAL_KEY, {});
+      importPreview = null;
+      aiStep = 0;
+      cData = gDay(dk(cDate));
+      render();
+      toast("Schedule reset");
+      return;
+    }
     if (a === "resetall") {
       var signedIn = typeof sbClient !== "undefined" && sbClient && typeof currentUser !== "undefined" && currentUser;
       // When signed out there's no account to delete from, so be honest: this only clears the device,
@@ -3869,6 +3902,8 @@ document.getElementById("app").addEventListener("click", function(e) {
       else if (k === "weight") setWeightOn(!weightOn());
       render(); return;
     }
+    if (a === "onbnew") { onbStep = 1; render(); return; }
+    if (a === "onbreturn") { finishOnboarding(); return; }
     if (a === "onbstep1") { onbStep = 2; render(); return; }
     if (a === "onbstep2") { onbStep = prayersOn() ? 3 : 4; render(); return; }
     if (a === "onbskip1")  { onbStep = 4; render(); return; }

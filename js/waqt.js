@@ -195,8 +195,8 @@ function widgetLoaderText() {
   return 'var TOKEN="' + token + '";\n'
     + 'var SUPABASE_URL="' + SUPABASE_URL + '";\n'
     + 'var ANON_KEY="' + SUPABASE_ANON_KEY + '";\n'
-    + 'var WIDGETS={pehar:"pehar-widget",stats:"stats-widget",priority:"priority-widget",nextprayer:"next-prayer-widget"};\n'
-    + 'var ALIAS={pehar:"pehar",today:"pehar",timeline:"pehar",stats:"stats",stat:"stats",summary:"stats",priority:"priority",priorities:"priority",commitment:"priority",commitments:"priority",nextprayer:"nextprayer",next:"nextprayer",prayer:"nextprayer",prayers:"nextprayer",salah:"nextprayer"};\n'
+    + 'var WIDGETS={pehar:"pehar-widget",stats:"stats-widget",priority:"priority-widget",nextprayer:"next-prayer-widget",hadith:"hadith-widget"};\n'
+    + 'var ALIAS={pehar:"pehar",today:"pehar",timeline:"pehar",stats:"stats",stat:"stats",summary:"stats",priority:"priority",priorities:"priority",commitment:"priority",commitments:"priority",nextprayer:"nextprayer",next:"nextprayer",prayer:"nextprayer",prayers:"nextprayer",salah:"nextprayer",hadith:"hadith",hadees:"hadith",hadis:"hadith",hadith_of_the_day:"hadith"};\n'
     + 'var P=((typeof args!=="undefined"&&args.widgetParameter)||"pehar").toLowerCase().replace(/[^a-z]/g,"");\n'
     + 'var file=WIDGETS[ALIAS[P]||"pehar"]||"pehar-widget";\n'
     + 'const src=await new Request("' + location.origin + '/"+file+".js?t="+Date.now()).loadString();\n'
@@ -2335,7 +2335,7 @@ function rPrefs() {
       + '<li>Install <b>Scriptable</b> (free, from the App Store).</li>'
       + '<li>Tap <b>Copy widget script</b> above.</li>'
       + '<li>Open Scriptable, tap <b>+</b> for a new script, paste, and name it <b>Waqt</b>.</li>'
-      + '<li>Long-press your home screen → <b>+</b> → <b>Scriptable</b> → add a widget. Then long-press it → <b>Edit Widget</b> → set <b>Script</b> = <b>Waqt</b> and <b>Parameter</b> to one of: <b>pehar</b> (Large), <b>stats</b> (Medium), <b>priority</b> (Medium), <b>nextprayer</b> (Medium).</li>'
+      + '<li>Long-press your home screen → <b>+</b> → <b>Scriptable</b> → add a widget. Then long-press it → <b>Edit Widget</b> → set <b>Script</b> = <b>Waqt</b> and <b>Parameter</b> to one of: <b>pehar</b> (Large), <b>stats</b> (Medium), <b>priority</b> (Medium/Large), <b>nextprayer</b> (Medium), <b>hadith</b> (any size / lock screen).</li>'
       + '<li>Repeat for each widget you want — same <b>Waqt</b> script, a different <b>Parameter</b> each time.</li>'
       + '</ol>';
     h += '<p class="sch-parsehint">Lock-screen widgets work too (same script + parameter), but iOS shows them in white only. Anyone with the script can see your schedule, so keep it to your own devices.</p>';

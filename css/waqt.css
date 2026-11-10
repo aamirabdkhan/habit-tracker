@@ -362,6 +362,13 @@ body::before{display:none!important}
 .sch-ovstreak{font-family:var(--smono);font-size:10px;color:#e0a35c}
 .sch-ovrow{display:flex;align-items:flex-start;gap:4px;margin-bottom:3px}
 .sch-ovrowlbl{width:84px;flex-shrink:0;font-size:10.5px;line-height:1.3;color:var(--stext);padding-top:1px}
+.sch-ovvoluntary{margin:10px 0 6px 88px;font-family:var(--smono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--smut);border-top:1px dashed var(--line);padding-top:8px}
+.sch-ovprioritylist{display:flex;flex-direction:column;gap:7px}
+.sch-ovpriority{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--stext)}
+.sch-ovpriority>i{width:13px;color:var(--smut)}
+.sch-ovpriority.done>i{color:#82a06e}
+.sch-ovpriority.done>span{text-decoration:line-through;color:var(--smut)}
+.sch-ovpriority em{margin-left:auto;font-family:var(--smono);font-size:9px;font-style:normal;letter-spacing:.05em;color:#e0a35c}
 .sch-ovlegend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
 .sch-ovlegenditem{display:flex;align-items:center;gap:5px;font-size:10.5px;color:var(--smut)}
 

@@ -2432,7 +2432,7 @@ function renderWeightTrendCard(md) {
 }
 
 function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, prayerStreak) {
-  var days = md.length;
+  var days = md.length, voluntary = (typeof trackedVoluntaryPrayers === "function") ? trackedVoluntaryPrayers() : [];
   var h = '<div class="sch-ovcard"><h3>Prayer Consistency</h3>';
   h += '<div class="sch-ovrow"><div class="sch-ovrowlbl"></div><div class="phg" style="--cols:' + days + '">';
   for (var d = 0; d < days; d++) h += '<div class="phn">' + (((d + 1) % 5 === 1) || d === 0 ? (d + 1) : '') + '</div>';
@@ -2444,6 +2444,19 @@ function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, pray
       h += '<div class="phc" style="background:' + (on ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + PRAYERS[p] + ' Day ' + (dd + 1) + ': ' + (on ? 'Done' : 'Missed') + '"></div>';
     }
     h += '</div></div>';
+  }
+  // Voluntary prayers (Duha/Tahajjud) the user tracks, shown separately below the 5 fard. They never
+  // affect the fard %/streak numbers above (those use prayerGrid/prayerCounts, untouched here).
+  if (voluntary.length) {
+    h += '<p class="sch-ovvoluntary">Voluntary</p>';
+    voluntary.forEach(function(name) {
+      h += '<div class="sch-ovrow"><div class="sch-ovrowlbl">' + esc(name) + '</div><div class="phg" style="--cols:' + days + '">';
+      for (var vd = 0; vd < days; vd++) {
+        var vdone = !!(md[vd].data.prayers && md[vd].data.prayers[name]);
+        h += '<div class="phc" style="background:' + (vdone ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + esA(name) + ' Day ' + (vd + 1) + ': ' + (vdone ? 'Done' : 'Missed') + '"></div>';
+      }
+      h += '</div></div>';
+    });
   }
   h += '<div class="sch-ovlegend">';
   h += '<div class="sch-ovlegenditem"><span><i class="fas fa-fire"></i></span><strong style="color:#e0a35c">' + prayerStreak.current + 'd &middot; best ' + prayerStreak.best + 'd</strong></div>';
@@ -2549,6 +2562,23 @@ function rOverview() {
   md.forEach(function(d) { var sc = dScore(d.key); if (sc >= 50) { curStreak++; if (curStreak > bestStreak) bestStreak = curStreak; } else curStreak = 0; });
 
   var prayerStreak = streakFromBoolArray(allFiveArr);
+  // Priorities (starred one-time tasks) made visible on Overview: today's active carries + done ones.
+  var todayPriorityKey = dk(cDate), todayPriorityDay = gDay(todayPriorityKey);
+  var overviewPriorities = priorityItemsForDay(todayPriorityDay, todayPriorityKey).map(function(item) {
+    return { name:item.name, age:item.age, done:false };
+  });
+  if (Array.isArray(todayPriorityDay.oneDay)) {
+    todayPriorityDay.oneDay.forEach(function(item) {
+      if (item.priority && item.done) overviewPriorities.push({ name:item.name, age:priorityAge(item.createdOn, todayPriorityKey), done:true });
+    });
+  } else {
+    Object.keys(todayPriorityDay.onedayPriority || {}).forEach(function(key) {
+      var parts = priorityKeyParts(key), doneMap;
+      if (!parts || !hasDayItem(todayPriorityDay, parts.cardId, parts.name)) return;
+      doneMap = isBaseCard(parts.cardId) ? todayPriorityDay[parts.cardId] : todayPriorityDay.cards && todayPriorityDay.cards[parts.cardId];
+      if (doneMap && doneMap[parts.name]) overviewPriorities.push({ name:parts.name, age:priorityAge(todayPriorityDay.onedayPriority[key], todayPriorityKey), done:true });
+    });
+  }
 
   var h = '<div class="sch-view">';
   // The month steppers sit ON the month title, not in a detached row — an unlabelled pair of
@@ -2560,6 +2590,13 @@ function rOverview() {
 
   h += '<div class="al"></div>';
   h += renderOverviewStats({ tracked: tracked, avgPrayer: avgPrayer, avgTasks: avgTasks, lastW: lastW, wChange: wChange, bestStreak: bestStreak });
+  if (overviewPriorities.length) {
+    h += '<div class="sch-ovcard sch-ovpriorities"><h3>Priorities</h3><div class="sch-ovprioritylist">';
+    overviewPriorities.forEach(function(item) {
+      h += '<div class="sch-ovpriority' + (item.done ? ' done' : '') + '"><i class="fas fa-' + (item.done ? 'circle-check' : 'circle') + '"></i><span>' + esc(item.name) + '</span><em>' + (item.done ? 'done' : (item.age ? item.age + 'd late' : 'today')) + '</em></div>';
+    });
+    h += '</div></div>';
+  }
   h += renderHeatmapCard(md);
   if (weightOn()) h += renderWeightTrendCard(md);
   if (prayersOn()) h += renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, prayerStreak);

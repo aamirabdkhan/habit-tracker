@@ -500,6 +500,16 @@ body::before{display:none!important}
 .sch-settbody{padding:0 2px 6px}
 .sch-settbody .cd{margin-top:0;margin-bottom:10px}
 .sch-settbody .cd:first-child{margin-top:0}
+/* Settings -> Reminders rows */
+.sch-remrow{display:flex;align-items:center;gap:9px;padding:10px 12px;border-top:1px solid var(--line);background:var(--ink2)}
+.sch-remrow:first-child{border-top:0}
+.sch-reminfo{flex:1;min-width:0}
+.sch-remname{display:block;color:var(--stext);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sch-remcard{display:block;margin-top:2px;color:var(--smut);font-family:var(--smono);font-size:10px;letter-spacing:.04em}
+.sch-remtime{width:96px;flex:none;background:var(--ink);border:1px solid var(--line);border-radius:8px;color:var(--stext);color-scheme:dark;font-family:var(--smono);font-size:12px;padding:6px 7px}
+.sch-remoff{flex:none;padding:6px 9px}
+.sch-remall{display:block;margin:10px 12px 4px auto}
+.sch-remempty{margin:4px 12px 10px;color:var(--smut);font-size:12px;text-align:center}
 @media (prefers-reduced-motion:reduce){.sch-settchev{transition:none}}
 /* Prayer-times (Deen-style) window table */
 .sch-pwincard{padding:6px}

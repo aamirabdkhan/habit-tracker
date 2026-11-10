@@ -854,6 +854,41 @@ function _reminderTeardownSelfCheck() {
     keys.forEach(function(key) { if (saved[key] === null) localStorage.removeItem(key); else localStorage.setItem(key, saved[key]); });
   }
 }
+// Self-check: the Settings "Reminders" section lists active reminders with controls, an empty
+// state, and a signed-out note (run at #reminderuicheck).
+function _reminderSettingsSelfCheck() {
+  if (location.hash !== "#reminderuicheck") return;
+  var keys = [NOTIF_TIMES_KEY, ITEM_BELL_KEY, CARDS_KEY, CARD_ITEMS_KEY];
+  var saved = {}, savedUser = currentUser;
+  function assert(ok, reason) { if (!ok) throw new Error(reason); }
+  keys.forEach(function(key) { saved[key] = localStorage.getItem(key); });
+  try {
+    currentUser = { email: "reminder-check@example.test" };
+    saveCards([
+      { id:"c_remcheck_a", name:"Check Card A", icon:"fa-star", color:"#e0a33a" },
+      { id:"c_remcheck_b", name:"Check Card B", icon:"fa-star", color:"#4090d6" }
+    ]);
+    saveCardItemsStore({ c_remcheck_a:[{ n:"First reminder" }], c_remcheck_b:[{ n:"Second reminder" }] });
+    saveNotifTimesMap({ "c_remcheck_a::First reminder":"07:15", "c_remcheck_b::Second reminder":"20:45" });
+    saveItemBells({ "c_remcheck_a::First reminder":true, "c_remcheck_b::Second reminder":true });
+    var html = rPrefs();
+    assert(html.indexOf("First reminder") !== -1 && html.indexOf("07:15") !== -1, "first reminder row missing");
+    assert(html.indexOf("Second reminder") !== -1 && html.indexOf("20:45") !== -1, "second reminder row missing");
+    assert((html.match(/data-a="reminderoff"/g) || []).length === 2, "each reminder needs an off control");
+    assert(html.indexOf('data-a="remindersalloff"') !== -1, "turn-off-all control missing");
+    saveNotifTimesMap({}); saveItemBells({});
+    html = rPrefs();
+    assert(html.indexOf("No reminders set") !== -1, "empty reminders state missing");
+    currentUser = null;
+    html = rPrefs();
+    assert(html.indexOf("Connect Cloud Sync to manage reminders") !== -1, "signed-out note missing");
+    console.log("REMINDERUICHECK PASS");
+  } catch (e) { console.log("REMINDERUICHECK FAIL: " + e.message); }
+  finally {
+    currentUser = savedUser;
+    keys.forEach(function(key) { if (saved[key] === null) localStorage.removeItem(key); else localStorage.setItem(key, saved[key]); });
+  }
+}
 // ---- self-check (run with the page open at #cardscheck) ----
 function _cardsSelfCheck() {
   if (location.hash !== "#cardscheck") return;
@@ -2244,6 +2279,34 @@ function rPrefs() {
   }
   h += '</div>';
 
+  h += settClose() + settOpen('Reminders', false);
+  if (typeof currentUser === "undefined" || !currentUser) {
+    h += '<p class="sch-remempty">Connect Cloud Sync to manage reminders</p>';
+  } else {
+    var reminderRows = [];
+    Object.keys(getNotifTimesMap()).forEach(function(key) {
+      var splitAt = key.indexOf("::"), field = key.slice(0, splitAt), name = key.slice(splitAt + 2);
+      var time = getNotifTimesMap()[key], meta, cardName;
+      if (!time || !getItemBell(field, name)) return;
+      if (field === "prayers") {
+        if (!prayersOn() || PRAYERS.indexOf(name) === -1) return;
+        cardName = "Prayers";
+      } else {
+        if (!cardTemplateArr(field).some(function(item) { return itemName(item) === name; })) return;
+        if (field === "habits") cardName = "Daily Goals";
+        else if (field === "extra") cardName = "Extra Deeds";
+        else if (field === "health") cardName = "Healthy Lifestyle";
+        else { meta = getCardMeta().filter(function(card) { return card.id === field; })[0]; cardName = meta ? meta.name : field; }
+      }
+      reminderRows.push('<div class="sch-remrow"><div class="sch-reminfo"><b class="sch-remname">' + esc(name) + '</b><small class="sch-remcard">' + esc(cardName) + '</small></div><input type="time" class="sch-remtime" value="' + esA(time) + '" data-a="remindertime" data-f="' + esA(field) + '" data-k="' + esA(name) + '" aria-label="Reminder time for ' + esA(name) + '"><button type="button" class="sch-del sch-remoff" data-a="reminderoff" data-f="' + esA(field) + '" data-k="' + esA(name) + '">Off</button></div>');
+    });
+    if (reminderRows.length) {
+      h += reminderRows.join("");
+      h += '<button type="button" class="sch-del sch-remall" data-a="remindersalloff">Turn off all reminders</button>';
+    } else {
+      h += '<p class="sch-remempty">No reminders set</p>';
+    }
+  }
   h += settClose() + settOpen('Schedule data', false);
   h += renderImportPanel();
 
@@ -3531,6 +3594,13 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "reminderadd") { addReminderFromPrompt(dk(cDate)); render(); return; }
     if (a === "reminderdone") { completeReminder(t.dataset.id, dk(cDate)); render(); return; }
     if (a === "reminderlater") { var tm = new Date(cDate); tm.setDate(tm.getDate() + 1); snoozeReminder(t.dataset.id, dk(tm)); render(); return; }
+    if (a === "reminderoff") { setItemBell(t.dataset.f, t.dataset.k, false); syncItemReminder(t.dataset.f, t.dataset.k); render(); toast("Reminder turned off"); return; }
+    if (a === "remindersalloff") {
+      var reminderOffButtons = document.querySelectorAll('[data-a="reminderoff"]');
+      if (!reminderOffButtons.length || !confirm("Turn off all reminders?")) return;
+      Array.prototype.forEach.call(reminderOffButtons, function(button) { setItemBell(button.dataset.f, button.dataset.k, false); syncItemReminder(button.dataset.f, button.dataset.k); });
+      render(); toast("All reminders turned off"); return;
+    }
     if (a === "wkprev") { cDate.setDate(cDate.getDate() - 7); render(); return; }
     if (a === "wknext") { cDate.setDate(cDate.getDate() + 7); render(); return; }
     if (a === "wkday") {
@@ -3825,6 +3895,8 @@ document.getElementById("app").addEventListener("change", function(e) {
   }
   var msel = e.target.closest('[data-a="prayermethod"]');
   if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
+  var reminderTime = e.target.closest('[data-a="remindertime"]');
+  if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast("Reminder time updated"); return; }
   var dinp = e.target.closest(".sch-durinp");
   if (dinp && dinp.dataset.field) {
     var mins = parseInt(dinp.value, 10);

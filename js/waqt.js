@@ -3522,12 +3522,18 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
     if (a === "resetschedule") {
       if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return;
-      // Cancel remote reminders before deleting their cards/items (same teardown deleteCard uses).
+      // Cancel remote reminders before deleting their cards/items (same teardown deleteCard uses),
+      // AND for every prayer (fard + voluntary) — the reset clears prayer times too, so their
+      // reminder_times rows + the prayer bell map must go or old prayer alarms keep firing.
       getCards().forEach(function(card) {
         cardItemsFor(card.id).forEach(function(item) {
           if (typeof pushSaveReminderTime === "function") pushSaveReminderTime(card.id, itemName(item), "");
         });
       });
+      PRAYERS.concat((typeof VOLUNTARY_PRAYERS !== "undefined") ? VOLUNTARY_PRAYERS : []).forEach(function(p) {
+        if (typeof pushSaveReminderTime === "function") pushSaveReminderTime("prayers", p, "");
+      });
+      localStorage.removeItem(PRAYER_BELL_KEY);
       // Write the SAME explicit fresh profile the erase path writes (so seed/recovery can't re-add the
       // old 3 base cards + their items) — but day history keys ht_YYYY-MM-DD are never touched, and no
       // cloud-wide delete. This finally makes "Reset schedule" land on one empty Daily Goals card.
@@ -3536,6 +3542,10 @@ document.getElementById("app").addEventListener("click", function(e) {
       sDef({ habits:[], ex:[], hl:[], rd:[], wt:8, prayers:[] });
       localStorage.setItem(CARDS_V1_KEY, "true");
       localStorage.setItem("ht_migrated_v3", "true");
+      // Drop the fresh-seed flag: kept day history still has habits/extra/health keys, so
+      // remigrateIfLegacyArrivedLate() would otherwise see "fresh single seed + legacy history" and
+      // re-add the full 3-card base, resurrecting the cards this reset just removed.
+      localStorage.removeItem(CARDS_FRESH_KEY);
       localStorage.removeItem(NOTIF_TIMES_KEY);
       localStorage.removeItem(HTN_DUR_KEY);
       localStorage.removeItem(NOTIF_DAYS_KEY);

@@ -1869,6 +1869,104 @@ function renderHelpOverlay() {
   h += '</div></div>';
   return h;
 }
+
+// ---- Guide (Settings > Guide): a browsable, full-screen reference to every feature. Separate from
+// the contextual "?" help above — this is the "I want to learn what this app does" entry point. Each
+// topic is what-it-is / how / why + a jump to the screen it lives on. guideView: null | "index" | key.
+var guideView = null;
+var GUIDE_GROUPS = [
+  { label: "Daily use", keys: ["today", "pehar", "priority"] },
+  { label: "Building your plan", keys: ["cards", "ai", "type"] },
+  { label: "Prayers", keys: ["prayers"] },
+  { label: "Staying on track", keys: ["reminders", "overview"] },
+  { label: "Setup & extras", keys: ["sync", "widgets", "appearance", "weight"] }
+];
+var GUIDE_TOPICS = {
+  today: { icon: "fa-circle-check", title: "Today & tracking", hook: "tap or swipe-right to complete", jump: "daily", jumpLabel: "Today",
+    what: "Today is your checklist for the day — every habit, prayer and task you’re tracking, in one place.",
+    how: "Tap a task to mark it done, or swipe it right. Use the arrows to move between days.",
+    why: "One clear screen for “what do I need to do today”, without the noise of the whole week." },
+  pehar: { icon: "fa-stream", title: "Pehar timeline", hook: "your whole day, on one line", jump: "pehar", jumpLabel: "Pehar",
+    what: "The Pehar lays your day out as a single timeline — prayers and timed tasks in order, with a line marking now and the free gaps between them.",
+    how: "Open the Pehar tab. Tap a free gap to drop a task into it, or tap a task to change its time. “Copy yesterday” reuses a day you liked.",
+    why: "It turns a flat list into a day you can see — so you plan around real time, not a pile of to-dos." },
+  priority: { icon: "fa-star", title: "Priorities", hook: "flag what matters today", jump: "daily", jumpLabel: "Today",
+    what: "A priority is a one-time task you don’t want to slip — a deadline, an errand, a one-off.",
+    how: "On Today, add a one-time task, then tap its ★. If you don’t finish it, it carries to tomorrow with an age tag (“2d late”) until it’s done.",
+    why: "The few things that truly matter today stay visible instead of drowning in routine habits." },
+  cards: { icon: "fa-layer-group", title: "Cards & items", hook: "times, repeat days, optional", jump: "settings", jumpLabel: "Plan",
+    what: "Your Plan holds up to five cards (like Daily Goals, Learning, Health), each a group of recurring items.",
+    how: "On the Plan tab, add a card, then add items with a time and the weekdays they repeat. Mark some optional, or merge duplicates.",
+    why: "Set a routine once and it repeats every day automatically — no re-adding." },
+  ai: { icon: "fa-wand-magic-sparkles", title: "Set up with AI", hook: "let AI build your week", jump: "settings", jumpLabel: "Plan",
+    what: "Set up with AI builds your whole schedule from a plain chat with ChatGPT, Claude or Gemini.",
+    how: "On the Plan tab, open Set up with AI and copy the prompt. Paste it into your AI; it asks a few questions, shows your week to confirm, then gives a code. Paste that back to import.",
+    why: "Describe your week in words instead of adding every item by hand." },
+  type: { icon: "fa-keyboard", title: "Type your day", hook: "paste your day in words", jump: "settings", jumpLabel: "Plan",
+    what: "Type your day reads a plain-text schedule you write and turns it into tasks — no AI needed, fully offline.",
+    how: "On the Plan tab, open Type your day, type lines like 6:30 gym 1h, and run it. Fix any lines it didn’t catch; it remembers your phrasing next time.",
+    why: "The fastest way to enter a day you already know, with nothing leaving your phone." },
+  prayers: { icon: "fa-mosque", title: "Prayers", hook: "times, Duha, First Takbīr", jump: "settings", jumpLabel: "Plan",
+    what: "Track the five daily prayers, plus optional Duha and Tahajjud, and the First Takbīr 40-day streak.",
+    how: "Turn prayers on in Settings. Set times by hand, or let the app calculate them from your location. Tap a prayer done each day; tap its star for First Takbīr.",
+    why: "Your prayers anchor the Pehar and feed your consistency stats, kept with the rest of your day." },
+  reminders: { icon: "fa-bell", title: "Reminders", hook: "how task alerts work", jump: "daily", jumpLabel: "Today",
+    what: "A task reminds you automatically once it has a time — there’s no separate reminder to set up.",
+    how: "Give a task a time in your Plan and turn Notifications on in Settings. To stop a reminder, clear or change that task’s time.",
+    why: "One less thing to manage — the time you already set is the reminder." },
+  overview: { icon: "fa-chart-simple", title: "Overview", hook: "heatmap, streaks, consistency", jump: "overview", jumpLabel: "Overview",
+    what: "Overview is your month at a glance — a completion heatmap, prayer and habit consistency, streaks, priorities and weight trend.",
+    how: "Open the Overview tab. Pick which items get a streak grid with the pencil on each card.",
+    why: "See honest patterns over time — which days you’re strong, where things slip — not just today." },
+  sync: { icon: "fa-cloud", title: "Cloud sync", hook: "backup + unlock widgets", jump: "prefs", jumpLabel: "Settings",
+    what: "Cloud Sync backs up your data and keeps it in step across your devices.",
+    how: "In Settings, connect Cloud Sync and sign in. Then Sync Now any time.",
+    why: "Your history is safe, and it unlocks notifications and home-screen widgets." },
+  widgets: { icon: "fa-table-cells-large", title: "Home-screen widgets", hook: "Pehar, stats, next prayer", jump: "prefs", jumpLabel: "Settings",
+    what: "Home-screen widgets show your Pehar, stats, next prayer, priorities or a hadith — without opening the app.",
+    how: "In Settings (after Cloud Sync), copy the widget script into the free Scriptable app and add a widget, setting its Parameter to the one you want.",
+    why: "A glance at your home screen tells you what’s next." },
+  appearance: { icon: "fa-circle-half-stroke", title: "Appearance", hook: "light or dark", jump: "prefs", jumpLabel: "Settings",
+    what: "Waqt comes in a warm beige light theme and a dark theme.",
+    how: "In Settings → Appearance, pick System (match your phone), Light or Dark.",
+    why: "Comfortable to read whatever the time of day or your phone’s setting." },
+  weight: { icon: "fa-weight-scale", title: "Weight", hook: "optional daily log", jump: "prefs", jumpLabel: "Settings",
+    what: "An optional daily weight log with a trend line on your Overview.",
+    how: "Turn Weight on in Settings, then enter today’s weight on the Today screen.",
+    why: "Track a number that matters to you alongside your habits, with no extra app." }
+};
+function renderGuideOverlay() {
+  if (!guideView) return '';
+  var h = '<div class="sch-guidescreen"><div class="sch-view" style="max-width:560px;margin:0 auto">';
+  if (guideView === "index") {
+    h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="guideclose" aria-label="Close"><i class="fas fa-xmark"></i></button><p class="sch-eyebrow">LEARN</p><h1 class="sch-dayname sch-datefull">Guide</h1><p class="sch-sub">everything Waqt can do</p></header>';
+    h += '<div class="al"></div>';
+    GUIDE_GROUPS.forEach(function(g) {
+      h += '<p class="sch-anylbl" style="margin:18px 0 8px">' + esc(g.label.toUpperCase()) + '</p>';
+      g.keys.forEach(function(k) {
+        var t = GUIDE_TOPICS[k]; if (!t) return;
+        h += '<button type="button" class="sch-gdrow" data-a="guidetopic" data-k="' + esA(k) + '"><span class="sch-gdic"><i class="fas ' + t.icon + '"></i></span><span class="sch-gdtx"><b>' + esc(t.title) + '</b><small>' + esc(t.hook) + '</small></span><i class="fas fa-chevron-right sch-gdch"></i></button>';
+      });
+    });
+  } else {
+    var t = GUIDE_TOPICS[guideView];
+    if (!t) { guideView = "index"; return renderGuideOverlay(); }
+    h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="guideback" aria-label="Back to guide"><i class="fas fa-arrow-left"></i></button><p class="sch-eyebrow">GUIDE</p></header>';
+    h += '<div class="al"></div>';
+    h += '<div class="sch-gddetic"><i class="fas ' + t.icon + '"></i></div>';
+    h += '<h1 class="sch-gddettitle">' + esc(t.title) + '</h1>';
+    h += '<div class="cd">';
+    h += '<div class="sch-gdsec"><h4>What it is</h4><p>' + esc(t.what) + '</p></div>';
+    h += '<div class="sch-gdsec"><h4>How to use it</h4><p>' + esc(t.how) + '</p></div>';
+    h += '<div class="sch-gdsec sch-gdsec-last"><h4>Why it helps</h4><p>' + esc(t.why) + '</p></div>';
+    h += '</div>';
+    h += '<button type="button" class="sch-gdtake" data-a="guidejump" data-v="' + esA(t.jump) + '"><i class="fas fa-arrow-right"></i> Take me to ' + esc(t.jumpLabel) + '</button>';
+  }
+  return h + '</div></div>';
+}
+// Self-check: every grouped key must resolve to a topic, or a row renders blank.
+(function() { try { GUIDE_GROUPS.forEach(function(g) { g.keys.forEach(function(k) { if (!GUIDE_TOPICS[k]) console.error("GUIDE: missing topic " + k); }); }); } catch (e) {} })();
+
 // Overview stats picker as a real modal (the inline panel was cramped/ugly). Opened by a card's
 // pencil (ovStatsEdit = cardId); lists that card's items with on/off toggle rows.
 function renderOvStatsModal() {
@@ -2229,10 +2327,20 @@ function rOnboarding() {
     h += '<div class="sch-onbfoot"><button class="sch-onbskip" data-a="onbskip1">Skip for now</button><button class="sch-onbgo" data-a="onbcontinue">Continue</button></div>';
   } else {
     h += '<h1 class="sch-onbtitle">You’re set</h1>';
-    h += '<p class="sch-onblede">Your day lives on the Pehar. Plan recurring goals on your Plan page.</p>';
+    h += '<p class="sch-onblede">Here’s where things live — open the full guide any time from Settings.</p>';
+    h += '<div class="sch-onbcards">';
+    h += onbWhatCard("fa-circle-check", "Today", "Check off your day — tap or swipe a task done.");
+    h += onbWhatCard("fa-stream", "Pehar", "Your day as a timeline; tap a free gap to add a task.");
+    h += onbWhatCard("fa-chart-simple", "Overview", "Heatmap, streaks and honest patterns over time.");
+    h += '</div>';
+    h += '<p class="sch-onbguidehint"><i class="fas fa-book-open mr-1.5"></i>More — <b>Set up with AI</b>, priorities, reminders — lives in the <b>Guide</b> under Settings.</p>';
     h += '<div class="sch-onbfoot"><button class="sch-onbgo" data-a="onbfinish">Get started</button></div>';
   }
   return h + '</div>';
+}
+// Onboarding "what you can do" card: icon + title + one line. Points at where a feature lives.
+function onbWhatCard(icon, title, sub) {
+  return '<div class="sch-onbwhat"><span class="sch-onbwhatic"><i class="fas ' + icon + '"></i></span><div class="txt"><b>' + esc(title) + '</b><small>' + esc(sub) + '</small></div></div>';
 }
 
 // Onboarding "what to track" row: label + reused switch. Flips the matching on/off key live.
@@ -2295,6 +2403,8 @@ function rPrefs() {
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vset" aria-label="Back to your plan"><i class="fas fa-xmark"></i></button><p class="sch-eyebrow">SETTINGS</p><h1 class="sch-dayname sch-datefull">Settings</h1></header>';
   h += '<div class="al"></div>';
+
+  h += '<button type="button" class="sch-guideopen" data-a="openguide"><span class="sch-guideopenic"><i class="fas fa-book-open"></i></span><span class="sch-guideopentx"><b>Guide</b><small>learn every feature of Waqt</small></span><i class="fas fa-chevron-right sch-gdch"></i></button>';
 
   h += settOpen('Tracking', true);
   h += '<div class="cd" style="margin-top:14px"><div class="sec-t">What you track</div>';
@@ -2721,7 +2831,7 @@ render = function() {
   else if (view === "prefs") h = rPrefs();
   else if (view === "prayertimes") { document.getElementById("content").innerHTML = rPrayerTimes(); return; }
   else { originalRender(); return; }
-  document.getElementById("content").innerHTML = h + renderTabBar(view) + renderHelpOverlay() + renderOvStatsModal();
+  document.getElementById("content").innerHTML = h + renderTabBar(view) + renderHelpOverlay() + renderGuideOverlay() + renderOvStatsModal();
 };
 
 // Bottom tab bar — replaces the old top segment nav (renderNav). Maps the 5 spec
@@ -3504,6 +3614,11 @@ document.getElementById("app").addEventListener("click", function(e) {
     var a = t.dataset.a;
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
+    if (a === "openguide")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
+    if (a === "guidetopic") { guideView = t.dataset.k; render(); window.scrollTo(0, 0); return; }
+    if (a === "guideback")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
+    if (a === "guideclose") { guideView = null; render(); return; }
+    if (a === "guidejump")  { guideView = null; view = t.dataset.v || "daily"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
     if (a === "importtab") { importTab = t.dataset.tab; aiStep = 0; render(); return; }
     if (a === "aiopen") {
       var svc = AI_SERVICES.filter(function(x) { return x.id === t.dataset.svc; })[0];

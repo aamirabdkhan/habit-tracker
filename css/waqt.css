@@ -579,3 +579,40 @@ body::before{display:none!important}
   color-scheme:light;
 }
 [data-theme="light"] .sch-methodsel{color-scheme:light}
+
+/* ============================================================
+   GUIDE (Settings > Guide) + onboarding "what you can do" cards. All token-driven, so light
+   and dark both work from the palettes above.
+   ============================================================ */
+.sch-guidescreen{position:fixed;inset:0;overflow:auto;z-index:200;background:var(--bg);padding:20px 16px 48px;-webkit-overflow-scrolling:touch}
+.sch-gdrow{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:13px 14px;margin-bottom:8px;cursor:pointer;font-family:inherit;transition:border-color .15s,transform .1s}
+.sch-gdrow:active{transform:scale(.99)}
+.sch-gdic{width:34px;height:34px;flex-shrink:0;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--acd);color:var(--ac)}
+.sch-gdic i{font-size:14px}
+.sch-gdtx{flex:1;min-width:0}
+.sch-gdtx b{display:block;color:var(--stext,var(--fg));font-size:15px;font-weight:600;line-height:1.2}
+.sch-gdtx small{color:var(--smut,var(--mt));font-size:12px}
+.sch-gdch{color:var(--smut,var(--mt));font-size:12px;flex-shrink:0}
+.sch-gddetic{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--acd);color:var(--ac);margin:4px auto 14px}
+.sch-gddetic i{font-size:22px}
+.sch-gddettitle{text-align:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:26px;color:var(--stext,var(--fg));margin:0 0 22px;letter-spacing:-.02em}
+.sch-gdsec{margin:0 0 18px}
+.sch-gdsec-last{margin-bottom:0}
+.sch-gdsec h4{font-family:var(--smono,monospace);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--smut,var(--mt));margin:0 0 5px}
+.sch-gdsec p{color:var(--stext,var(--fg));font-size:14.5px;line-height:1.55;margin:0}
+.sch-gdtake{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--ac);color:#fff;border:none;border-radius:12px;padding:14px;font:600 15px 'Space Grotesk',sans-serif;cursor:pointer;margin-top:14px;transition:transform .1s}
+.sch-gdtake:active{transform:scale(.99)}
+.sch-guideopen{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:15px 16px;margin:0 0 14px;cursor:pointer;font-family:inherit;transition:border-color .15s,transform .1s}
+.sch-guideopen:active{transform:scale(.995)}
+.sch-guideopenic{width:38px;height:38px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--acd);color:var(--ac)}
+.sch-guideopenic i{font-size:16px}
+.sch-guideopentx{flex:1}
+.sch-guideopentx b{display:block;color:var(--fg);font-size:16px;font-weight:600}
+.sch-guideopentx small{color:var(--mt);font-size:12.5px}
+.sch-onbcards{display:flex;flex-direction:column;gap:10px;margin:8px 0 18px}
+.sch-onbwhat{display:flex;align-items:center;gap:13px;background:var(--cd);border:1px solid var(--bd);border-radius:12px;padding:13px 14px}
+.sch-onbwhatic{width:36px;height:36px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--acd);color:var(--ac)}
+.sch-onbwhatic i{font-size:15px}
+.sch-onbwhat .txt b{display:block;color:var(--fg);font-size:15px}
+.sch-onbwhat .txt small{color:var(--mt);font-size:12.5px}
+.sch-onbguidehint{color:var(--mt);font-size:12.5px;line-height:1.5;text-align:center;margin:0 0 4px}

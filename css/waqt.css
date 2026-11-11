@@ -553,3 +553,29 @@ body::before{display:none!important}
 
 /* Prayer calculation-method select (Settings) */
 .sch-methodsel{width:100%;background:var(--ink2,#1A1A1A);color:var(--stext,#E8E2D9);border:1px solid var(--line,#2A2725);border-radius:10px;padding:10px 12px;font:14px 'Space Grotesk',sans-serif;color-scheme:dark;appearance:none;cursor:pointer}
+
+/* ============================================================
+   LIGHT MODE — Seijaku beige. Warm cream paper, deep ink text, the same gold identity
+   (deepened for contrast on light), a restrained brick-red danger. [data-theme="light"]
+   beats the bare :root dark base by specificity, so file/load order doesn't matter.
+   ============================================================ */
+:root[data-theme="light"]{
+  --bg:#F0E9DA;--sf:#FAF6EC;--cd:#FAF6EC;--bd:#DED2BE;
+  --fg:#211C16;--mt:#6B6153;
+  --ac:#B07B2C;--ach:#C9943E;--acd:rgba(176,123,44,.16);
+  --ok:#3E7A4E;
+  --pr:#5F7E50;--prd:rgba(95,126,80,.15);
+  --wa:#2F6F86;--wad:rgba(47,111,134,.14);
+  --hl:#9C5E24;--hld:rgba(156,94,36,.14);
+  --dn:#B5452E;
+}
+[data-theme="light"] body{background:radial-gradient(120% 60% at 50% -10%,#FBF3E4 0%,transparent 60%),#F0E9DA!important}
+[data-theme="light"] .sch-view{
+  /* --ink/--ink2 are SURFACE tokens (near-black in dark), not text — map them to light paper, or
+     inputs/accordion bars render as dark boxes. Text comes from --stext/--smut. */
+  --ink:#EDE4D3;--ink2:#FAF6EC;--surface:rgba(255,252,245,.78);--line:#DED2BE;
+  --stext:#211C16;--smut:#6B6153;
+  --noon:#B07B2C;--afternoon:#C08C34;--study:#B07B2C;--move:#5F7E50;
+  color-scheme:light;
+}
+[data-theme="light"] .sch-methodsel{color-scheme:light}

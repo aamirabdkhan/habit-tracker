@@ -60,6 +60,47 @@ var onbStep = 0;             // 0 = new/returning choice; 1+ = new-user setup st
 // ---- Help & tutorial (help/tour/AI-walkthrough) state — spec 2026-08-12-waqt-help-tutorial-design ----
 var helpTopic = null;        // key into HELP_TOPICS, or null when the ? overlay is closed
 
+// In-app confirm. Native confirm()/alert() are suppressed inside installed PWAs (Chrome standalone),
+// so destructive actions silently no-op on mobile — this replaces them. Callback style (render() loop
+// + data-a delegation), reuses the .auth-overlay/.auth-card styling. opts: {title, confirmText,
+// cancelText, danger=true, secondMessage, secondConfirmText, secondTitle}. Two-step when secondMessage set.
+function uiConfirm(message, onConfirm, opts) {
+  opts = opts || {};
+  var app = document.getElementById("app"), second = !!opts.secondMessage;
+  var title = opts.title || "Confirm", confirmText = opts.confirmText || "Confirm", cancelText = opts.cancelText || "Cancel";
+  var ov = document.createElement("div");
+  ov.className = "auth-overlay active";
+  app.appendChild(ov);
+  function close() { ov.remove(); }
+  function show(text, buttonText, final) {
+    ov.innerHTML = '<div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="ui-confirm-title">'
+      + '<h2 class="auth-title" id="ui-confirm-title">' + esc(final ? title : (opts.secondTitle || title)) + '</h2>'
+      + '<p style="color:var(--mt);line-height:1.5;margin:-.75rem 0 1.5rem;text-align:center">' + esc(text) + '</p>'
+      + '<div style="display:flex;justify-content:flex-end;gap:.6rem"><button class="bt" type="button">' + esc(cancelText) + '</button>'
+      + '<button class="bt bta" type="button" style="background:' + (opts.danger === false ? "var(--ac)" : "var(--dn)") + ';border-color:' + (opts.danger === false ? "var(--ac)" : "var(--dn)") + '">' + esc(buttonText) + '</button></div></div>';
+    var buttons = ov.querySelectorAll("button");
+    buttons[0].addEventListener("click", close);
+    buttons[1].addEventListener("click", function() { if (final) { close(); onConfirm(); } else show(opts.secondMessage, opts.secondConfirmText || confirmText, true); });
+  }
+  show(message, confirmText, !second);
+}
+
+// ---- Theme (light / dark / system). CSS :root is the dark base; [data-theme="light"] overrides it
+// plus the .sch-view local tokens. An inline script in index.html sets the attribute pre-paint to
+// avoid a flash; this keeps it in sync, drives the Settings toggle, and follows the OS while "system".
+var THEME_KEY = "ht_theme";
+function getTheme() { try { return localStorage.getItem(THEME_KEY) || "system"; } catch (e) { return "system"; } }
+function effectiveTheme(t) { t = t || getTheme(); return (t === "dark" || (t === "system" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches)) ? "dark" : "light"; }
+function applyTheme() {
+  var eff = effectiveTheme();
+  document.documentElement.setAttribute("data-theme", eff);
+  var meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", eff === "light" ? "#F4EEE2" : "#0C0C0C");
+}
+function setTheme(t) { try { localStorage.setItem(THEME_KEY, t); } catch (e) {} applyTheme(); }
+applyTheme();
+if (window.matchMedia) { try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function() { if (getTheme() === "system") applyTheme(); }); } catch (e) {} }
+
 // Toggle done-state for prayers, base-card items, or new-card items alike. Single code path shared
 // by the tap-to-toggle click handler (data-a="schtog") and the swipe-right-to-complete gesture (Task 8).
 function schToggle(f, k) {
@@ -1461,28 +1502,32 @@ function applyImportSchedule(preview, rawTimes) {
 function importPrompt() {
   var prayers = prayersOn();
   var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[]}';
-  var interview = prayers
-    ? "\n1. Fixed anchors: confirm five daily prayers, then ask about weekly classes, physio, and other fixed commitments with their days."
-      + "\n2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
-      + "\n3. Ask about small post-prayer micro-habits, such as Fajr dhikr after Fajr, plus any other fixed micro-habits."
-    : "\n1. Fixed anchors: ask about clock-time commitments, weekly classes, physio, and other fixed commitments with their days."
-      + "\n2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
-      + "\n3. Ask about small fixed micro-habits.";
-  var instruction = "You are an interactive weekly planner. Read CURRENT PROFILE first. Run a short interview of about 4-6 questions in this exact order. Ask before building JSON."
-    + interview
-    + "\n4. Ask exactly: \"Do you want reminders, and for which items?\" Default is none."
-    + "\nOnly after interview, emit final schedule JSON. If user instead pastes their whole day at once, infer missing details conservatively and emit JSON."
+  var anchors = prayers
+    ? "\n   1. Fixed anchors: confirm the five daily prayer times, then ask about weekly classes, physio, and other fixed commitments with their days."
+    : "\n   1. Fixed anchors: ask about clock-time commitments, weekly classes, physio, and other fixed commitments with their days.";
+  var micro = prayers
+    ? "\n   3. Small post-prayer micro-habits (such as Fajr dhikr after Fajr) and any other fixed micro-habits."
+    : "\n   3. Small fixed micro-habits.";
+  var instruction = "You help build a weekly schedule. Work in THREE steps. Keep every message short — no long paragraphs."
+    + "\n\nSTEP 1 — ASK (one message). Read CURRENT PROFILE first. Ask ALL your questions at once as one short numbered list, then stop and wait. Cover, in this order:"
+    + anchors
+    + "\n   2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
+    + micro
+    + "\n   4. Ask exactly: \"Do you want reminders, and for which items? (default: none)\""
+    + "\n   Output NO JSON in this step."
+    + "\n\nSTEP 2 — CONFIRM (after they answer). Show the finished week as plain text, day by day. Below it, list every change you made, one short line each. Then ask exactly: \"Reply 'yes' for the code, or tell me what to fix.\" Still output NO JSON in this step."
+    + "\n\nSTEP 3 — CODE (only after they reply yes). Output ONLY the JSON object shown under OUTPUT FORMAT — no code fence, no words before or after."
+    + "\n\nIf the user already pasted their whole day up front, skip Step 1 and go straight to Step 2, then Step 3."
     + "\n\nRULES:"
-    + "\n1. Do not overlap blocks. Place commitments where user describes them. Use day-of-week scoping for weekly items."
+    + "\n1. Do not overlap blocks. Place commitments where the user describes them. Use day-of-week scoping for weekly items."
     + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. For several times use slots:[{time,days?}]; never duplicate the activity."
-    + "\n3. DO NOT RENAME user activities. Keep real names exactly; app adds a -2 suffix itself when needed."
+    + "\n3. DO NOT RENAME user activities. Keep real names exactly; the app adds a -2 suffix itself when needed."
     + (prayers
-      ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to requested duration. If 120m loses 35m, second piece runs 35m longer; never lose time."
-      : "\n4. Use plain clock times only. Never shorten a block below requested duration.")
-    + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put day-flow summary in top-level notes."
-    + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders."
-    + "\n\nReturn JSON only.";
-  return instruction + "\n\nOUTPUT FORMAT:\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons. Reply with ONLY the JSON object. No code fence, no explanation before or after.\n\nEXAMPLE:\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nSTART INTERVIEW OR, IF USER ALREADY PROVIDED THEIR WHOLE DAY, BUILD THE SCHEDULE:\n\n";
+      ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to the requested duration. If 120m loses 35m, the second piece runs 35m longer; never lose time."
+      : "\n4. Use plain clock times only. Never shorten a block below its requested duration.")
+    + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put the day-flow summary in top-level notes."
+    + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders.";
+  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin with Step 1 now.\n\n";
 }
 // Self-check for the interactive AI planner prompt (run at #aipromptcheck).
 function _aiPromptSelfCheck() {
@@ -1497,8 +1542,11 @@ function _aiPromptSelfCheck() {
     assert(/micro-habits/i.test(on), "prompt: missing micro-habits cue");
     assert(/Do you want reminders, and for which items\?/i.test(on), "prompt: missing reminders question");
     assert(/only add reminders the user explicitly asks for/i.test(on), "prompt: reminders are not opt-in");
-    assert(on.indexOf("OUTPUT FORMAT:") !== -1, "prompt: missing output marker");
-    assert(/Return JSON only/i.test(on), "prompt: missing JSON-only instruction");
+    assert(on.indexOf("OUTPUT FORMAT") !== -1, "prompt: missing output marker");
+    assert(/Output ONLY the JSON object/i.test(on), "prompt: missing JSON-only (step 3) instruction");
+    assert(/STEP 1/.test(on) && /STEP 2/.test(on) && /STEP 3/.test(on), "prompt: missing 3-step structure");
+    assert(/Ask ALL your questions at once/i.test(on), "prompt: questions not batched into one message");
+    assert(/Reply 'yes' for the code/.test(on), "prompt: missing plain-text confirm step");
     setPrayersOn(false);
     var off = importPrompt();
     assert(!/Fajr|prayer/i.test(off), "prompt: prayer text remains while prayers are off");
@@ -1744,8 +1792,8 @@ function renderParserPanel() {
 var IMPORT_GUIDE_STEPS = [
   "Tap Copy my template (copies a prompt with your current schedule).",
   "Open your AI (Claude, ChatGPT, etc.), paste it, and describe your week in plain words.",
-  "The AI replies with your schedule in the right format.",
-  "Copy that reply, tap Import schedule below to open the paste box, and paste it in.",
+  "It asks a few questions, then shows your week as plain text — check it, reply ‘yes’ and it sends the code.",
+  "Copy that code, tap Import schedule below to open the paste box, and paste it in.",
   "Tap Preview, check the table, then Apply."
 ];
 var aiStep = 0;   // 0 = copy the prompt, 1 = bring the reply back, 2 = check the preview
@@ -1760,7 +1808,7 @@ var AI_SERVICES = [
 ];
 var AI_STEP_TEXT = [
   "Copy the prompt, then paste it into your AI.",
-  "Describe your week, then copy the reply.",
+  "Answer its questions, confirm your week, then copy the code.",
   "Check the preview below, then apply."
 ];
 function renderImportGuide() {
@@ -2227,6 +2275,12 @@ function rTemplate() {
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vprefs" aria-label="Settings"><i class="fas fa-gear"></i></button><p class="sch-eyebrow">PLAN</p><h1 class="sch-dayname sch-datefull">Your plan</h1><p class="sch-sub">set a time and repeat days once, it repeats every day</p></header>';
   h += '<div class="al"></div>';
+  // Build-your-tracker: the fast ways to fill the plan live here (not buried in Settings), so a new
+  // user discovers they can let AI build it or type their day. Collapsed by default — two slim rows.
+  h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">BUILD YOUR TRACKER</p></div>';
+  h += '<p class="t-xs" style="color:var(--mt);margin:0 0 10px">Fill your week fast — let AI build it from a quick chat, or type your day in plain words.</p>';
+  h += settOpen('Set up with AI', false) + renderImportPanel("ai") + settClose();
+  h += settOpen('Type your day', false) + renderImportPanel("type") + settClose();
   if (prayersOn()) h += renderPrayersCard();
   h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">YOUR PLAN</p></div>';
   h += getCards().map(renderPlanCard).join('');
@@ -2291,39 +2345,22 @@ function rPrefs() {
   }
   h += '</div>';
 
-  h += settClose() + settOpen('Reminders', false);
-  if (typeof currentUser === "undefined" || !currentUser) {
-    h += '<p class="sch-remempty">Connect Cloud Sync to manage reminders</p>';
-  } else {
-    var reminderRows = [];
-    Object.keys(getNotifTimesMap()).forEach(function(key) {
-      var splitAt = key.indexOf("::"), field = key.slice(0, splitAt), name = key.slice(splitAt + 2);
-      var time = getNotifTimesMap()[key], meta, cardName;
-      if (!time || !getItemBell(field, name)) return;
-      if (field === "prayers") {
-        if (!prayersOn() || (PRAYERS.indexOf(name) === -1 && VOLUNTARY_PRAYERS.indexOf(name) === -1)) return;
-        cardName = "Prayers";
-      } else {
-        if (!cardTemplateArr(field).some(function(item) { return itemName(item) === name; })) return;
-        if (field === "habits") cardName = "Daily Goals";
-        else if (field === "extra") cardName = "Extra Deeds";
-        else if (field === "health") cardName = "Healthy Lifestyle";
-        else { meta = getCardMeta().filter(function(card) { return card.id === field; })[0]; cardName = meta ? meta.name : field; }
-      }
-      reminderRows.push('<div class="sch-remrow"><div class="sch-reminfo"><b class="sch-remname">' + esc(name) + '</b><small class="sch-remcard">' + esc(cardName) + '</small></div><input type="time" class="sch-remtime" value="' + esA(time) + '" data-a="remindertime" data-f="' + esA(field) + '" data-k="' + esA(name) + '" aria-label="Reminder time for ' + esA(name) + '"><button type="button" class="sch-del sch-remoff" data-a="reminderoff" data-f="' + esA(field) + '" data-k="' + esA(name) + '">Off</button></div>');
-    });
-    if (reminderRows.length) {
-      h += reminderRows.join("");
-      h += '<button type="button" class="sch-del sch-remall" data-a="remindersalloff">Turn off all reminders</button>';
-    } else {
-      h += '<p class="sch-remempty">No reminders set</p>';
-    }
-  }
-  h += settClose() + settOpen('Set up with AI', false);
-  h += renderImportPanel("ai");
-  h += settClose() + settOpen('Type your day', false);
-  h += renderImportPanel("type");
+  // Reminders aren't managed here anymore — a task reminds you automatically once it has a time, so a
+  // separate "Reminders" list only confused people. One line in Alerts explains where they come from.
+  h += '<div class="cd"><div class="sec-t"><i class="fas fa-clock mr-1.5" style="color:var(--ac)"></i>Reminders</div>';
+  h += '<p class="t-xs" style="color:var(--mt)">A task reminds you automatically once you give it a time in your plan. To change or stop a reminder, edit that task’s time. (Notifications above must be on.)</p></div>';
 
+  h += settClose() + settOpen('Appearance', false);
+  h += '<div class="cd"><div class="sec-t"><i class="fas fa-circle-half-stroke mr-1.5" style="color:var(--ac)"></i>Theme</div>';
+  h += '<p class="t-xs mb-3" style="color:var(--mt)">Match your device, or pick light or dark.</p>';
+  h += '<div class="flx gap-1">';
+  var curTheme = getTheme();
+  [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].forEach(function(o) {
+    h += '<button type="button" class="sch-durchip' + (curTheme === o[0] ? ' on' : '') + '" data-a="settheme" data-t="' + o[0] + '">' + o[1] + '</button>';
+  });
+  h += '</div></div>';
+
+  h += settClose() + settOpen('Reset', false);
   h += '<div class="cd"><div class="sec-t">Reset</div>';
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn)" data-a="resetschedule"><i class="fas fa-trash-can mr-1.5"></i>Reset schedule</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p>';
@@ -2605,6 +2642,11 @@ function rOverview() {
       h += '<div class="sch-ovpriority' + (item.done ? ' done' : '') + '"><i class="fas fa-' + (item.done ? 'circle-check' : 'circle') + '"></i><span>' + esc(item.name) + '</span><em>' + (item.done ? 'done' : (item.age ? item.age + 'd late' : 'today')) + '</em></div>';
     });
     h += '</div></div>';
+  } else {
+    // Empty-state teaches the feature instead of hiding it — a first-time user otherwise never
+    // learns priorities exist (the star only appears once a one-time task is added on Today).
+    h += '<div class="sch-ovcard sch-ovpriorities sch-ovprioritieshint"><h3>Priorities</h3>'
+      + '<p style="color:var(--smut);font-size:12.5px;line-height:1.5;margin:6px 0 0">On <b>Today</b>, add a one-time task, then tap its <i class="fas fa-star" style="color:var(--ac)"></i> to flag it as a priority. Flagged tasks show here, so the few things that matter today stay in view.</p></div>';
   }
   h += renderHeatmapCard(md);
   if (weightOn()) h += renderWeightTrendCard(md);
@@ -3521,7 +3563,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
     if (a === "resetschedule") {
-      if (!confirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.")) return;
+      uiConfirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.", function() {
       // Cancel remote reminders before deleting their cards/items (same teardown deleteCard uses),
       // AND for every prayer (fard + voluntary) — the reset clears prayer times too, so their
       // reminder_times rows + the prayer bell map must go or old prayer alarms keep firing.
@@ -3558,6 +3600,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       cData = gDay(dk(cDate));
       render();
       toast("Schedule reset");
+      }, { title: "Reset schedule?", confirmText: "Reset" });
       return;
     }
     if (a === "resetall") {
@@ -3567,8 +3610,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       var firstMsg = signedIn
         ? "Start completely fresh?\n\nThis erases EVERYTHING — every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone."
         : "Start fresh on THIS device?\n\nYou're signed out, so this clears only this device. Any data saved to your cloud account stays and will sync back if you sign in again.\n\nThis cannot be undone.";
-      if (!confirm(firstMsg)) return;
-      if (!confirm("Are you sure? All your tracked history will be permanently deleted.")) return;
+      uiConfirm(firstMsg, function() {
       var wipeLocalAndReload = function() {
         try {
           var kill = [];
@@ -3609,15 +3651,22 @@ document.getElementById("app").addEventListener("click", function(e) {
         // closing it fully needs a server-side atomic reset RPC, overkill for a 1-2 device user who
         // isn't editing mid-erase. The .catch releases the guard so a network failure can't wedge sync.
         sbClient.from("user_data").delete().eq("user_id", uid).then(function(res) {
-          if (res && res.error) { window.htResetting = false; alert("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
+          if (res && res.error) { window.htResetting = false; toast("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
           return sbClient.from("user_data").select("key").eq("user_id", uid).then(function(chk) {
-            if (chk && chk.error) { window.htResetting = false; alert("Couldn't confirm the cloud was cleared (" + chk.error.message + "). Nothing was erased — try again."); return; }
+            if (chk && chk.error) { window.htResetting = false; toast("Couldn't confirm the cloud was cleared (" + chk.error.message + "). Nothing was erased — try again."); return; }
             var left = (chk && chk.data) ? chk.data.filter(function(r) { return typeof isSyncableKey === "function" ? isSyncableKey(r.key) : true; }) : [];
-            if (left.length) { window.htResetting = false; alert("Couldn't fully clear your cloud data (" + left.length + " item(s) remain) — likely a missing delete permission on the database. Nothing was erased on this device."); return; }
+            if (left.length) { window.htResetting = false; toast("Couldn't fully clear your cloud data (" + left.length + " item(s) remain) — likely a missing delete permission on the database. Nothing was erased on this device."); return; }
             wipeLocalAndReload();
           });
-        }).catch(function(err) { window.htResetting = false; alert("Couldn't reach the cloud to erase (" + (err && err.message ? err.message : "network error") + "). Nothing was erased — try again."); });
+        }).catch(function(err) { window.htResetting = false; toast("Couldn't reach the cloud to erase (" + (err && err.message ? err.message : "network error") + "). Nothing was erased — try again."); });
       } else { wipeLocalAndReload(); }
+      }, {
+        title: "Start fresh?",
+        confirmText: "Continue",
+        secondTitle: "Erase everything?",
+        secondMessage: "Are you sure? All your tracked history will be permanently deleted.",
+        secondConfirmText: "Erase everything"
+      });
       return;
     }
     if (a === "importapply") { if (!importPreview) return; applyImportSchedule(importPreview, false); importPreview = null; importDraft = ""; importError = ""; aiStep = 0; parseText = ""; parseUnread = []; render(); toast("Schedule imported"); return; }
@@ -3654,7 +3703,9 @@ document.getElementById("app").addEventListener("click", function(e) {
       }
       // Feature 4, trigger 1: a corrected unread line — confirm once, then learn it.
       var retryPhrase = retryResult.name.toLowerCase();
-      if (confirm('Remember "' + retryPhrase + '" = ' + retryResult.time + '?')) setLearnedPhrase(retryPhrase, retryResult.time, retryResult.duration);
+      uiConfirm('Remember "' + retryPhrase + '" = ' + retryResult.time + '?', function() {
+        setLearnedPhrase(retryPhrase, retryResult.time, retryResult.duration);
+      }, { title: "Remember this?", confirmText: "Remember", danger: false });
       render();
       return;
     }
@@ -3667,9 +3718,13 @@ document.getElementById("app").addEventListener("click", function(e) {
         prowRow.incoming.time = prowTime;   // row.incoming IS the payload item, no lookup needed
         // Feature 4, trigger 2: editing a parsed row's time before applying — confirm once, then learn it.
         var prowPhrase = prowRow.incoming.name.toLowerCase();
-        if (confirm('Remember "' + prowPhrase + '" = ' + prowTime + '?')) setLearnedPhrase(prowPhrase, prowTime, prowRow.incoming.duration);
         rebuildImportPreview();   // a new time can create or clear an overlap flag
         toast("Time updated");
+        render();
+        uiConfirm('Remember "' + prowPhrase + '" = ' + prowTime + '?', function() {
+          setLearnedPhrase(prowPhrase, prowTime, prowRow.incoming.duration);
+        }, { title: "Remember this?", confirmText: "Remember", danger: false });
+        return;
       }
       render();
       return;
@@ -3687,9 +3742,12 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "reminderoff") { setItemBell(t.dataset.f, t.dataset.k, false); syncItemReminder(t.dataset.f, t.dataset.k); render(); toast("Reminder turned off"); return; }
     if (a === "remindersalloff") {
       var reminderOffButtons = document.querySelectorAll('[data-a="reminderoff"]');
-      if (!reminderOffButtons.length || !confirm("Turn off all reminders?")) return;
-      Array.prototype.forEach.call(reminderOffButtons, function(button) { setItemBell(button.dataset.f, button.dataset.k, false); syncItemReminder(button.dataset.f, button.dataset.k); });
-      render(); toast("All reminders turned off"); return;
+      if (!reminderOffButtons.length) return;
+      uiConfirm("Turn off all reminders?", function() {
+        Array.prototype.forEach.call(reminderOffButtons, function(button) { setItemBell(button.dataset.f, button.dataset.k, false); syncItemReminder(button.dataset.f, button.dataset.k); });
+        render(); toast("All reminders turned off");
+      }, { title: "Turn off reminders?", confirmText: "Turn off" });
+      return;
     }
     if (a === "wkprev") { cDate.setDate(cDate.getDate() - 7); render(); return; }
     if (a === "wknext") { cDate.setDate(cDate.getDate() + 7); render(); return; }
@@ -3788,21 +3846,22 @@ document.getElementById("app").addEventListener("click", function(e) {
       var mergePanel = t.closest(".sch-mergepanel"), mergeNames = Array.prototype.slice.call(mergePanel.querySelectorAll("[data-merge-item]:checked")).map(function(input) { return input.value; });
       var mergeKeep = mergePanel.querySelector("[data-merge-keep]").value;
       if (mergeNames.length < 2 || mergeNames.indexOf(mergeKeep) === -1) { toast("Pick 2+ items and a kept name"); return; }
-      if (!confirm('Merge ' + mergeNames.length + ' items into "' + mergeKeep + '"? Other names will be removed.')) return;
-      var mergeSlots = mergeSlotLists.apply(null, mergeNames.map(function(name) { return getItemSlots(t.dataset.c, name); }));
-      setItemSlots(t.dataset.c, mergeKeep, mergeSlots);
-      // Preserve today's completion: if any merged duplicate was ticked today, keep the result ticked.
-      var mcid = t.dataset.c, mdone = isBaseCard(mcid) ? (cData[mcid] || {}) : ((cData.cards && cData.cards[mcid]) || {});
-      if (mergeNames.some(function(name) { return !!mdone[name]; })) {
-        if (isBaseCard(mcid)) { if (!cData[mcid]) cData[mcid] = {}; cData[mcid][mergeKeep] = true; }
-        else { if (!cData.cards) cData.cards = {}; if (!cData.cards[mcid]) cData.cards[mcid] = {}; cData.cards[mcid][mergeKeep] = true; }
-        sDay();
-      }
-      mergeNames.forEach(function(name) { if (name !== mergeKeep) removeCardItem(t.dataset.c, name); });
-      tplMergeCard = null; tplItemEdit = null; render();
-      // Make the result legible: say how many kept times resulted, and nudge to add more via the pencil.
-      var n = mergeSlots.length;
-      toast(n ? ("Merged into " + mergeKeep + " · " + n + " time" + (n === 1 ? "" : "s") + " kept") : ("Merged into " + mergeKeep + " · no times — add them with the pencil"));
+      uiConfirm('Merge ' + mergeNames.length + ' items into "' + mergeKeep + '"? Other names will be removed.', function() {
+        var mergeSlots = mergeSlotLists.apply(null, mergeNames.map(function(name) { return getItemSlots(t.dataset.c, name); }));
+        setItemSlots(t.dataset.c, mergeKeep, mergeSlots);
+        // Preserve today's completion: if any merged duplicate was ticked today, keep the result ticked.
+        var mcid = t.dataset.c, mdone = isBaseCard(mcid) ? (cData[mcid] || {}) : ((cData.cards && cData.cards[mcid]) || {});
+        if (mergeNames.some(function(name) { return !!mdone[name]; })) {
+          if (isBaseCard(mcid)) { if (!cData[mcid]) cData[mcid] = {}; cData[mcid][mergeKeep] = true; }
+          else { if (!cData.cards) cData.cards = {}; if (!cData.cards[mcid]) cData.cards[mcid] = {}; cData.cards[mcid][mergeKeep] = true; }
+          sDay();
+        }
+        mergeNames.forEach(function(name) { if (name !== mergeKeep) removeCardItem(t.dataset.c, name); });
+        tplMergeCard = null; tplItemEdit = null; render();
+        // Make the result legible: say how many kept times resulted, and nudge to add more via the pencil.
+        var n = mergeSlots.length;
+        toast(n ? ("Merged into " + mergeKeep + " · " + n + " time" + (n === 1 ? "" : "s") + " kept") : ("Merged into " + mergeKeep + " · no times — add them with the pencil"));
+      }, { title: "Merge items?", confirmText: "Merge" });
       return;
     }
     // ---- Template: card management (add/rename/restyle/delete) ----
@@ -3830,9 +3889,9 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "ovintroclose")  { localStorage.setItem(OV_INTRO_KEY, "true"); render(); return; }
     if (a === "ovstatstoggle") { setItemShow(t.dataset.c, t.dataset.k, !getItemShow(t.dataset.c, t.dataset.k)); render(); return; }
     if (a === "carddel")      {
-      if (confirm("Delete this card? Its items will be removed from your plan.")) {
+      uiConfirm("Delete this card? Its items will be removed from your plan.", function() {
         deleteCard(t.dataset.c); render(); toast("Card deleted");
-      }
+      }, { title: "Delete card?", confirmText: "Delete" });
       return;
     }
     // ---- Template: item scheduling (time set via .sch-timeinp change handler) ----
@@ -3859,6 +3918,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     // ---- Item editor (Task 12): duration presets, overview-stats switch ----
+    if (a === "settheme") { setTheme(t.dataset.t || "system"); render(); return; }
     if (a === "weighttoggle") { setWeightOn(!weightOn()); render(); return; }
     if (a === "takbeertoggle") { setTakbeerOn(!takbeerOn()); render(); return; }
     if (a === "prayerautotoggle") {

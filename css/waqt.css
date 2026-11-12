@@ -453,6 +453,21 @@ body::before{display:none!important}
 .sch-ovhead h2{font-size:16px;margin:0}
 .sch-ovsteps{margin:0 0 14px;padding:0 0 0 18px;font-size:13px;line-height:1.7;color:var(--stext,var(--fg))}
 
+/* Share composer (Pehar sharing, Task 1) */
+.share-open{margin-left:2px}
+.share-backdrop{z-index:70}
+.share-composer{max-width:620px;padding:0;overflow:hidden}
+.share-composer .sch-ovhead{padding:20px 20px 14px;margin:0;border-bottom:1px solid var(--bd)}
+.share-composer .sch-ovhead h2{color:var(--fg)}
+.share-kicker{margin:0 0 4px;font-family:ui-monospace,"SF Mono",monospace;font-size:10px;letter-spacing:.16em;color:var(--ac);font-weight:700}
+.share-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:12px 14px 0;border-bottom:1px solid var(--bd)}
+.share-tab{appearance:none;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--mt);padding:10px 5px 12px;cursor:pointer;font:600 11px/1.2 ui-monospace,"SF Mono",monospace;letter-spacing:.03em;transition:.15s}
+.share-tab:hover{color:var(--fg)}
+.share-tab.on{color:var(--ac);border-bottom-color:var(--ac)}
+.share-pane{min-height:180px;padding:24px 20px;color:var(--mt);font-size:13px;line-height:1.5}
+.share-pane p{margin:0}
+@media (max-width:420px){.share-backdrop{padding:12px}.share-composer{max-height:calc(100vh - 24px)}.share-composer .sch-ovhead{padding:18px 16px 12px}.share-tabs{padding-left:8px;padding-right:8px}.share-tab{font-size:10px}.share-pane{padding:20px 16px}}
+
 /* Bottom tab bar (replaces the old top .sch-nav segment tabs) */
 .waqt-tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(4px + env(safe-area-inset-bottom));z-index:50;display:flex;justify-content:space-around;gap:4px;width:calc(100% - 28px);max-width:520px;padding:6px;background:var(--cd,#1A1A1A);border:1px solid var(--bd);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 /* clear the fixed bar so the last content isn't hidden behind it */

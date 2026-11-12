@@ -3361,6 +3361,51 @@ function renderWeekStrip(selKey) {
   return h;
 }
 
+// ---- Sharing (Pehar sharing, Task 1) ---------------------------------------------------------
+var SHARE_PREFS_KEY = "ht_share_prefs";
+var shareOpen = false;
+var shareState = { tab:"day", style:"rail", mode:"progress", caption:"", theme:"paper", wk:"cols", off:{}, sectionsOff:{} };
+function loadSharePrefs() {
+  try {
+    var prefs = JSON.parse(localStorage.getItem(SHARE_PREFS_KEY));
+    if (!prefs || typeof prefs !== "object") return;
+    ["style", "mode", "theme", "wk"].forEach(function(key) {
+      if (typeof prefs[key] === "string") shareState[key] = prefs[key];
+    });
+  } catch (e) {}
+}
+function saveSharePrefs() {
+  try { localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify({ style:shareState.style, mode:shareState.mode, theme:shareState.theme, wk:shareState.wk })); } catch (e) {}
+}
+function shareDayData(date) {
+  var d = date || cDate, key = dk(d), day = gDay(key), items = buildTimeline(getCards(), day, dowOf(key));
+  return items.map(function(item) {
+    return { t:item.t, n:item.name, c:item.kc, dur:item.dur, done:item.done, section:item.id };
+  });
+}
+function shareWeekData() {
+  return wkDays(cDate).map(function(d) { return [DOW_FULL[d.getDay()], dk(d), shareDayData(d)]; });
+}
+function openShare() { loadSharePrefs(); shareOpen = true; render(); }
+function closeShare() { shareOpen = false; render(); }
+function rShareComposer() {
+  var tabs = [["day", "Day image"], ["ctrl", "What to share"], ["week", "Week PDF"]];
+  var h = '<div class="sch-ovbackdrop share-backdrop" data-a="shareclose">';
+  h += '<section class="sch-ovsheet share-composer" role="dialog" aria-modal="true" aria-labelledby="share-title">';
+  h += '<div class="sch-ovhead"><div><p class="share-kicker">PEHAR SHARE</p><h2 id="share-title">Share your schedule</h2></div><button type="button" class="sch-ib" data-a="shareclose" aria-label="Close share composer"><i class="fas fa-xmark"></i></button></div>';
+  h += '<div class="share-tabs" role="tablist" aria-label="Share options">';
+  tabs.forEach(function(tab) {
+    var on = shareState.tab === tab[0];
+    h += '<button type="button" class="share-tab' + (on ? ' on' : '') + '" data-a="sharetab" data-tab="' + esA(tab[0]) + '" role="tab" aria-selected="' + (on ? 'true' : 'false') + '">' + esc(tab[1]) + '</button>';
+  });
+  h += '</div><div class="share-pane" role="tabpanel">';
+  if (shareState.tab === "day") h += '<p>Day image preview will appear here.</p>';
+  else if (shareState.tab === "ctrl") h += '<p>Choose what to include here.</p>';
+  else h += '<p>Week PDF preview will appear here.</p>';
+  h += '</div></section></div>';
+  return h;
+}
+
 function rSchedule() {
   var key = dk(cDate);
   cData = gDay(key);
@@ -3408,6 +3453,7 @@ function rSchedule() {
   h += '<button type="button" class="dnb" data-a="prevday" aria-label="Previous day"><i class="fas fa-chevron-left t-xs"></i></button>';
   if (!td) h += '<button type="button" class="bt t-xs" data-a="today">Today</button>';
   h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
+  h += '<button type="button" class="dnb share-open" data-a="shareopen" aria-label="Share this day"><i class="fas fa-share-nodes t-xs"></i></button>';
   h += '</div>';
   h += '</header>';
 
@@ -3451,6 +3497,7 @@ function rSchedule() {
   h += renderReminders(key);
 
   h += '</div>';
+  if (shareOpen) h += rShareComposer();
   return h;
 }
 
@@ -3693,6 +3740,9 @@ document.getElementById("app").addEventListener("click", function(e) {
   var t = e.target.closest("[data-a]");
   if (t) {
     var a = t.dataset.a;
+    if (a === "shareopen") { openShare(); return; }
+    if (a === "shareclose") { if (t.tagName === "BUTTON" || e.target === t) closeShare(); return; }
+    if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); render(); return; }
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
     if (a === "priorityexplainerclose") { render(); return; }

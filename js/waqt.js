@@ -3180,7 +3180,11 @@ function renderCard(card, items) {
         h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
         h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(cardColor(card.color)) + '">';
         h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
-        h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (it.priority && isT(cDate) ? ' <span class="sch-priorityage">' + (priorityAge(it.priorityCreatedOn, dk(cDate)) ? priorityAge(it.priorityCreatedOn, dk(cDate)) + 'd late' : 'today') + '</span>' : '') + '</span>';
+        // One-day items get exactly ONE day badge (no stacked "TODAY"+"today"): a priority shows the
+        // single colored, card-tinted badge that also counts days late; a plain one-day item shows grey "today".
+        var _page = it.priority ? priorityAge(it.priorityCreatedOn, dk(cDate)) : 0;
+        var _dayBadge = it.oneday ? (it.priority ? ' <span class="sch-priorityage">' + (_page ? _page + 'd late' : 'today') + '</span>' : ' <span class="sch-todaytag">today</span>') : '';
+        h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + _dayBadge + '</span>';
         if (it.oneday) h += '<button type="button" class="sch-edit' + (it.priority ? ' on' : '') + '" data-a="odpriority" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="' + (it.priority ? 'Remove priority from ' : 'Prioritize ') + esA(it.n) + '"><i class="fas fa-star"></i></button><button type="button" class="sch-edit" data-a="oddel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Remove ' + esA(it.n) + '"><i class="fas fa-xmark"></i></button>';
         h += '</div>';
         h += '</div>';
@@ -3732,7 +3736,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       } else setTimeout(reload, 800);
       return;
     }
-    if (a === "setupwithai") { view = "prefs"; importError = ""; aiStep = 0; render(); setTimeout(function() { var panel = document.getElementById("ai-setup"); if (panel) { var det = panel.closest("details"); if (det) det.open = true; panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); } }, 0); return; }
+    if (a === "setupwithai") { view = "settings"; buildPanel = "ai"; importError = ""; aiStep = 0; render(); setTimeout(function() { var panel = document.querySelector(".sch-buildpanel"); if (panel) panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); }, 0); return; }
     if (a === "importpreview") {
       var importInput = document.getElementById("import-json"); importDraft = importInput ? importInput.value : importDraft;
       var parsedImport = parseImportSchedule(importDraft);
@@ -3772,6 +3776,10 @@ document.getElementById("app").addEventListener("click", function(e) {
       // remigrateIfLegacyArrivedLate() would otherwise see "fresh single seed + legacy history" and
       // re-add the full 3-card base, resurrecting the cards this reset just removed.
       localStorage.removeItem(CARDS_FRESH_KEY);
+      // Also block the one-shot stale-seed recovery: it re-adds the 3 base cards whenever it sees a lone
+      // Daily Goals seed next to legacy ex/hl history (which kept day records still carry). Marking it
+      // done here is why Extra Deeds / Healthy Lifestyle can no longer resurrect after a reset.
+      localStorage.setItem(CARDS_RECOVER_KEY, "1");
       localStorage.removeItem(NOTIF_TIMES_KEY);
       localStorage.removeItem(HTN_DUR_KEY);
       localStorage.removeItem(NOTIF_DAYS_KEY);
@@ -4247,7 +4255,7 @@ document.getElementById("app").addEventListener("change", function(e) {
     return;
   }
   var msel = e.target.closest('[data-a="prayermethod"]');
-  if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
+  if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); setTimeout(render, 0); return; }
   var reminderTime = e.target.closest('[data-a="remindertime"]');
   if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast("Reminder time updated"); return; }
   var dinp = e.target.closest(".sch-durinp");
@@ -4265,11 +4273,19 @@ document.getElementById("app").addEventListener("change", function(e) {
     // so their flag is left alone here.
     if (inp.dataset.field !== "prayers") setItemBell(inp.dataset.field, inp.dataset.name, !!inp.value);
     syncItemReminder(inp.dataset.field, inp.dataset.name);
-    render();
+    // No render() here: on mobile the native time picker fires `change` live as the wheel turns, so a
+    // re-render would destroy the open <input> and snap the picker shut (reported bug). We render on
+    // blur instead — once the user dismisses the picker — via the capture-phase listener below.
     return;
   }
   // weight (#wi) handled by production's own change listener on #content
 });
+// Render timed state only after the native time picker is dismissed (blur), never mid-spin, so the
+// open <input type="time"> is no longer destroyed under the user's finger. blur doesn't bubble -> capture.
+document.getElementById("app").addEventListener("blur", function(e) {
+  var inp = e.target && e.target.closest && e.target.closest(".sch-timeinp");
+  if (inp && inp.dataset.field) render();
+}, true);
 // Duration slider (Task 12) — commits via setItemDur on every drag tick ("input", not "change"),
 // live-patching just the readout + preset highlight in place rather than calling render(), since a
 // full re-render would destroy/recreate the <input type="range"> mid-drag and drop the gesture.

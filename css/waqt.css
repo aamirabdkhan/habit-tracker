@@ -507,7 +507,7 @@ body::before{display:none!important}
 
 /* Export must avoid color-mix(), which html2canvas 1.4.1 drops. */
 .share-halo{background:radial-gradient(130% 55% at 50% -8%,rgba(190,139,46,.16),transparent 62%)}
-.share-agenda .share-item{background:rgba(190,139,46,.12)}
+.share-agenda .share-item{background:var(--share-bg)}
 .share-duration{border:1px solid rgba(190,139,46,.45)}
 .share-export-day .share-rail .share-item{grid-template-columns:112px minmax(0,1fr) auto;gap:24px;padding:14px 0}
 .share-export-day .share-lines .share-item{grid-template-columns:8px 112px minmax(0,1fr) auto;gap:24px;padding:18px 4px}
@@ -516,6 +516,16 @@ body::before{display:none!important}
 .share-export-week .share-weekstack{position:relative;column-gap:24px;row-gap:0}
 .share-export-week .share-weekstack:after{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:#E0D4BF;transform:translateX(-.5px)}
 .share-export-week .share-weekscrollnote{display:none}
+
+/* Share audit fixes: export geometry, readable week rows, and fixed paper type. */
+.share-panelnote,.share-hint{margin:0 2px!important;text-align:center;font-size:12px;color:var(--mt)}
+.share-check b{display:inline-block;width:58px}
+.share-theme.theme-gradient i{background:linear-gradient(158deg,#FDF5E2,#EFDFC0)}
+.share-weekgrid{min-width:990px}.share-weekgridrow{grid-template-columns:78px repeat(7,minmax(130px,1fr))}
+.share-weekcell .share-weekitem{grid-template-columns:6px minmax(0,1fr);gap:4px}.share-weekcell .share-weekitem i{grid-row:1 / span 2}.share-weekcell .share-weektime,.share-weekcell .share-weekname{grid-column:2}.share-weekcell .share-weekname{overflow-wrap:normal}
+.share-export-day,.share-export-week{font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif}
+.share-export-day{color-scheme:light;background:#FAF6EC;color:#2A2216}.share-export-day .share-rail:before{width:4px}.share-export-day .share-rail .share-item:before{width:18px;height:18px;left:-22px;top:16px;border-width:4px}.share-export-day .share-daypart h4{font-size:32px}.share-export-day .share-lines .share-item:before{width:6px}
+.share-export-week .share-weekfoot .share-qr svg{width:100px;height:100px}
 
 /* PDF mount is paper by itself. Never inherit app dark/light tokens. */
 .share-export-week{color-scheme:light;background:#FAF6EC;color:#2A2216}

@@ -1126,6 +1126,7 @@ ct.addEventListener("change",function(e){
 });
 
 document.addEventListener("keydown",function(e){
+    if(typeof shareOpen !== "undefined" && shareOpen){if(e.key==="Escape"){e.preventDefault();closeShare()}return}
     // Close modal on Escape
     if(e.key==="Escape"){
         if(document.getElementById("rfl-modal")){closeReflModal();return}

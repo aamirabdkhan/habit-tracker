@@ -3412,6 +3412,7 @@ function renderShareControls() {
   });
   if (bySection.prayers) sections.unshift({ id:"prayers", name:"Prayers" });
   var h = '<div class="share-controls">';
+  h += '<p class="share-panelnote">Tick the items you want on the share. Untick anything private.</p>';
   h += '<label class="share-captionfield" for="share-caption"><span>Caption <small>optional · 60 max</small></span><input id="share-caption" class="inp" type="text" maxlength="60" placeholder="Add a note to your day" value="' + esA(shareState.caption) + '" data-a="sharecaption"></label>';
   h += '<div class="share-controlgroup"><p class="share-controltitle">Sections &amp; items</p>';
   sections.forEach(function(card) {
@@ -3419,7 +3420,7 @@ function renderShareControls() {
     if (!sectionItems || !sectionItems.length) return;
     var sectionOn = !shareState.sectionsOff[card.id];
     h += '<section class="share-section' + (sectionOn ? '' : ' off') + '">';
-    h += '<label class="share-toggle"><span><b>' + esc(card.name) + '</b><small>' + esc(String(sectionItems.length)) + ' item' + (sectionItems.length === 1 ? '' : 's') + '</small></span><input type="checkbox" data-a="sharesection" data-section="' + esA(card.id) + '"' + (sectionOn ? ' checked' : '') + ' aria-label="Include ' + esA(card.name) + '"><i aria-hidden="true"></i></label>';
+    h += '<label class="share-toggle" data-a="sharesection" data-section="' + esA(card.id) + '"><span><b>' + esc(card.name) + '</b><small>' + esc(String(sectionItems.length)) + ' item' + (sectionItems.length === 1 ? '' : 's') + '</small></span><input type="checkbox"' + (sectionOn ? ' checked' : '') + ' aria-label="Include ' + esA(card.name) + '"><i aria-hidden="true"></i></label>';
     h += '<div class="share-checklist">';
     sectionItems.forEach(function(item) {
       var itemKey = item.section + '|' + item.n, itemOn = !shareState.off[itemKey];
@@ -3433,14 +3434,13 @@ function renderShareControls() {
     h += '<button type="button" class="share-theme theme-' + esA(theme[0]) + (on ? ' on' : '') + '" data-a="sharetheme" data-theme="' + esA(theme[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><i aria-hidden="true"></i>' + esc(theme[1]) + '</button>';
   });
   h += '</div></div><p class="share-always"><i class="fas fa-circle-info" aria-hidden="true"></i><span><b>Always included</b> Times, durations, date, Waqt badge, and referral QR.</span></p>';
-  h += '<div id="share-day-poster" class="share-controlpreview">' + renderDayPoster() + '</div>';
   return h + '</div>';
 }
 function referralUrl() {
   try {
     var origin = typeof location !== "undefined" && location.origin ? location.origin : "";
     var userId = typeof currentUser !== "undefined" && currentUser && currentUser.id ? String(currentUser.id) : "";
-    return userId ? origin + "/?ref=" + encodeURIComponent(userId.slice(0, 8).toLowerCase()) : origin;
+    return userId ? location.origin + location.pathname + "?ref=" + encodeURIComponent(userId.slice(0, 8).toLowerCase()) : origin;
   } catch (e) { return ""; }
 }
 function renderQr(url, size) {
@@ -3453,7 +3453,7 @@ function renderQr(url, size) {
     for (row = 0; row < modules; row++) for (col = 0; col < modules; col++) {
       if (code.isDark(row, col)) rects += '<rect x="' + col + '" y="' + row + '" width="1" height="1"></rect>';
     }
-    size = size === 40 ? 40 : 48;
+    size = Number(size) || 48;
     return '<svg width="' + size + '" height="' + size + '" viewBox="-4 -4 ' + (modules + 8) + ' ' + (modules + 8) + '" role="img" aria-label="Referral QR code" shape-rendering="crispEdges"><rect x="-4" y="-4" width="' + (modules + 8) + '" height="' + (modules + 8) + '" fill="#fff"></rect><g fill="#141210">' + rects + '</g></svg>';
   } catch (e) { return ""; }
 }
@@ -3463,10 +3463,16 @@ function renderDayPoster() {
   var pct = items.length ? Math.round(done / items.length * 100) : 0;
   var date = DOW_FULL[cDate.getDay()] + " " + cDate.getDate();
   var month = cDate.toLocaleDateString(undefined, { month:"long" });
+  var shareTint = function(color) {
+    var hex = String(color || "").replace("#", ""), r, g, b;
+    if (/^[0-9a-f]{3}$/i.test(hex)) hex = hex.split("").map(function(ch) { return ch + ch; }).join("");
+    if (/^[0-9a-f]{6}$/i.test(hex)) { r = parseInt(hex.slice(0, 2), 16); g = parseInt(hex.slice(2, 4), 16); b = parseInt(hex.slice(4, 6), 16); return "rgba(" + r + "," + g + "," + b + ",.12)"; }
+    return "rgba(190,139,46,.12)";
+  };
   var itemHtml = function(item) {
     var cls = "share-item" + (progress && item.done ? " done" : "");
     var tick = progress ? '<span class="share-tick" aria-hidden="true">' + (item.done ? '&#10003;' : '') + '</span>' : '';
-    return '<div class="' + cls + '" style="--share-c:' + esA(item.c) + '">' + tick + '<span class="share-time">' + esc(prettyTime(item.t)) + '</span><span class="share-name">' + esc(item.n) + '</span><span class="share-duration">' + esc(fmtDur(item.dur)) + '</span></div>';
+    return '<div class="' + cls + '" style="--share-c:' + esA(item.c) + ';--share-bg:' + esA(shareTint(item.c)) + '">' + tick + '<span class="share-time">' + esc(prettyTime(item.t)) + '</span><span class="share-name">' + esc(item.n) + '</span><span class="share-duration">' + esc(fmtDur(item.dur)) + '</span></div>';
   };
   var body = '';
   if (!items.length) body = '<p class="share-empty">Nothing selected for this day.</p>';
@@ -3481,9 +3487,9 @@ function renderDayPoster() {
   } else body = '<div class="share-rail">' + items.map(itemHtml).join('') + '</div>';
   var h = '<article class="share-frame t-' + esA(shareState.theme) + ' share-' + esA(shareState.style) + '"><span class="share-halo" aria-hidden="true"></span>';
   h += '<header class="share-posterhead"><h3 class="share-pdate">' + esc(date) + '</h3><p class="share-overline">' + esc(month) + ' · my pehar</p>';
-  if (shareState.caption) h += '<p class="share-caption">“' + esc(shareState.caption) + '”</p>';
+  if (shareState.caption.trim()) h += '<p class="share-caption">“' + esc(shareState.caption.trim()) + '”</p>';
   h += '</header>';
-  if (progress) h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 74 74" aria-hidden="true"><circle class="share-ringtrack" cx="37" cy="37" r="30"></circle><circle class="share-ringfill" cx="37" cy="37" r="30" pathLength="100" stroke-dasharray="' + pct + ' 100"></circle></svg><b>' + pct + '%</b></div><p class="share-ringlabel">day complete</p>';
+  if (progress) { var circumference = 2 * Math.PI * 30, arc = circumference * pct / 100; h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 74 74" aria-hidden="true"><circle class="share-ringtrack" cx="37" cy="37" r="30"></circle><circle class="share-ringfill" cx="37" cy="37" r="30" stroke-dasharray="' + arc.toFixed(3) + ' ' + circumference.toFixed(3) + '"></circle></svg><b>' + pct + '%</b></div><p class="share-ringlabel">day complete</p>'; }
   h += '<div class="share-posterbody">' + body + '</div><footer class="share-posterfoot"><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl()) + '</span></footer></article>';
   return h;
 }
@@ -3495,7 +3501,7 @@ function renderWeekSheet() {
     return '<div class="share-weekitem" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span class="share-weektime">' + esc(prettyTime(item.t)) + '</span><span class="share-weekname">' + esc(item.n) + '</span>' + (duration ? '<span class="share-weekdur">' + esc(fmtDur(item.dur)) + '</span>' : '') + '</div>';
   };
   var dayHead = function(day) {
-    return '<header class="share-weekdayhead"><b>' + esc(day.label) + '</b><span>' + esc(day.date) + '</span><small>' + esc(String(day.items.length)) + ' item' + (day.items.length === 1 ? '' : 's') + '</small></header>';
+    return '<header class="share-weekdayhead"><b>' + esc(day.label) + '</b><span>' + esc(shareWeekDate(day.date)) + '</span><small>' + esc(String(day.items.length)) + ' item' + (day.items.length === 1 ? '' : 's') + '</small></header>';
   };
   var empty = '<p class="share-weekempty">Nothing selected.</p>';
   if (shareState.wk === "rows") {
@@ -3507,7 +3513,7 @@ function renderWeekSheet() {
       if (part === "Evening") return hour >= 17 && hour <= 20;
       return hour >= 21 || hour <= 4;
     };
-    var grid = '<div class="share-weekgrid"><div class="share-weekgridrow share-weekgridhead"><div class="share-weekpart">Time</div>' + week.map(function(day) { return '<div class="share-weekgridday"><b>' + esc(day.label) + '</b><span>' + esc(day.date) + '</span></div>'; }).join('') + '</div>';
+    var grid = '<div class="share-weekgrid"><div class="share-weekgridrow share-weekgridhead"><div class="share-weekpart">Time</div>' + week.map(function(day) { return '<div class="share-weekgridday"><b>' + esc(day.label) + '</b><span>' + esc(shareWeekDate(day.date)) + '</span></div>'; }).join('') + '</div>';
     parts.forEach(function(part) {
       grid += '<div class="share-weekgridrow"><div class="share-weekpart">' + esc(part) + '</div>' + week.map(function(day) {
         var items = day.items.filter(function(item) { return inPart(item, part); });
@@ -3524,6 +3530,9 @@ function renderWeekSheet() {
   return '<div class="share-weekcols">' + week.map(function(day) {
     return '<section class="share-weekcol">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, false); }).join('') : empty) + '</div></section>';
   }).join('') + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
+}
+function shareWeekDate(dateKey) {
+  return new Date(dateKey + "T00:00:00").toLocaleDateString(undefined, { month:"short", day:"numeric" });
 }
 function shareDownload(blob, filename) {
   var url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3569,7 +3578,7 @@ async function exportWeekPdf() {
   if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   var mount, exportDate = dk(cDate);
   try {
-    mount = mountShareExport("share-export-week", 1100, '<section class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></section>');
+    mount = mountShareExport("share-export-week", 1100, '<section class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 100) + '</span></footer></section>');
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
     var canvas = await html2canvas(mount, { scale:3, backgroundColor:"#FAF6EC", useCORS:true });
     var pdf = new window.jspdf.jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
@@ -3587,9 +3596,10 @@ async function exportWeekPdf() {
 }
 function openShare() { loadSharePrefs(); shareState.caption = ""; shareState.off = {}; shareState.sectionsOff = {}; shareOpen = true; render(); }
 function closeShare() { shareOpen = false; render(); }
-function renderSharePreservingScroll() {
+function renderSharePreservingScroll(preserve) {
   var pane = document.querySelector(".share-pane"), scrollTop = pane ? pane.scrollTop : 0;
   render();
+  if (!preserve) return;
   requestAnimationFrame(function() {
     var nextPane = document.querySelector(".share-pane");
     if (nextPane) nextPane.scrollTop = scrollTop;
@@ -3611,7 +3621,7 @@ function rShareComposer() {
     [["progress", "With progress"], ["plan", "Plan only"]].forEach(function(mode) { h += '<button type="button" class="share-mode' + (shareState.mode === mode[0] ? ' on' : '') + '" data-a="sharemode" data-mode="' + esA(mode[0]) + '" aria-pressed="' + (shareState.mode === mode[0] ? 'true' : 'false') + '">' + esc(mode[1]) + '</button>'; });
     h += '</div><div class="share-looks" role="group" aria-label="Day poster look">';
     [["rail", "Rail"], ["lines", "Clean lines"], ["agenda", "Agenda blocks"], ["dayparts", "Day-parts"]].forEach(function(style) { h += '<button type="button" class="share-look' + (shareState.style === style[0] ? ' on' : '') + '" data-a="sharestyle" data-style="' + esA(style[0]) + '" aria-pressed="' + (shareState.style === style[0] ? 'true' : 'false') + '">' + esc(style[1]) + '</button>'; });
-    h += '</div></div><button type="button" class="bt bta" data-a="shareexportimg">Save / share image</button><div id="share-day-poster">' + renderDayPoster() + '</div>';
+    h += '</div></div><p class="share-hint">“Plan only” = bare schedule. “With progress” = ticks + ring.</p><button type="button" class="bt bta" data-a="shareexportimg">Save / share image</button><div id="share-day-poster">' + renderDayPoster() + '</div>';
   }
   else if (shareState.tab === "ctrl") h += renderShareControls();
   else {
@@ -3962,13 +3972,13 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "shareclose") { if (t.tagName === "BUTTON" || e.target === t) closeShare(); return; }
     if (a === "shareexportimg") { exportDayImage(); return; }
     if (a === "shareexportpdf") { exportWeekPdf(); return; }
-    if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); renderSharePreservingScroll(); return; }
-    if (a === "sharemode") { shareState.mode = t.dataset.mode; saveSharePrefs(); renderSharePreservingScroll(); return; }
-    if (a === "sharestyle") { shareState.style = t.dataset.style; saveSharePrefs(); renderSharePreservingScroll(); return; }
-    if (a === "sharewk") { shareState.wk = t.dataset.wk; saveSharePrefs(); renderSharePreservingScroll(); return; }
-    if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; renderSharePreservingScroll(); return; }
-    if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; renderSharePreservingScroll(); return; }
-    if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); renderSharePreservingScroll(); return; }
+    if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); renderSharePreservingScroll(false); return; }
+    if (a === "sharemode") { shareState.mode = t.dataset.mode; saveSharePrefs(); renderSharePreservingScroll(true); return; }
+    if (a === "sharestyle") { shareState.style = t.dataset.style; saveSharePrefs(); renderSharePreservingScroll(true); return; }
+    if (a === "sharewk") { shareState.wk = t.dataset.wk; saveSharePrefs(); renderSharePreservingScroll(true); return; }
+    if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; renderSharePreservingScroll(true); return; }
+    if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; renderSharePreservingScroll(true); return; }
+    if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); renderSharePreservingScroll(true); return; }
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
     if (a === "priorityexplainerclose") { render(); return; }

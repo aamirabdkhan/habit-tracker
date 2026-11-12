@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v79';
+const CACHE = 'habit-tracker-v80';
 const URLS = [
   './',
   'index.html',
@@ -12,6 +12,8 @@ const URLS = [
   'js/manifest.js',
   'js/push-client.js',
   'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
+  'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
+  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];

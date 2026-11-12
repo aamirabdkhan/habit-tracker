@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v78';
+const CACHE = 'habit-tracker-v79';
 const URLS = [
   './',
   'index.html',
@@ -11,6 +11,7 @@ const URLS = [
   'js/supabase-sync.js',
   'js/manifest.js',
   'js/push-client.js',
+  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
 ];

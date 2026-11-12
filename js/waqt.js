@@ -2902,7 +2902,10 @@ render = function() {
   else if (view === "prefs") h = rPrefs();
   else if (view === "prayertimes") { document.getElementById("content").innerHTML = rPrayerTimes(); return; }
   else { originalRender(); return; }
+  // Share dialog belongs to shell, not Daily. Pehar can therefore open it on
+  // its first click, and its poster continues to read the current cDate.
   var _body = h + renderTabBar(view) + renderHelpOverlay() + renderGuideOverlay() + renderReminderEditor() + renderOvStatsModal();
+  if (shareOpen) _body += rShareComposer();
   // First time the priority star appears on screen, teach it once (like the Pehar intro).
   if (_body.indexOf('data-a="odpriority"') !== -1 && !localStorage.getItem("ht_priority_explainer_seen")) {
     _body += renderPriorityExplainer();
@@ -3549,13 +3552,13 @@ function mountShareExport(className, width, html) {
 }
 async function exportDayImage() {
   if (typeof html2canvas !== "function") { toast("Image export unavailable. Reload and try again."); return; }
-  var mount;
+  var mount, exportDate = dk(cDate);
   try {
     mount = mountShareExport("share-export-day", 1080, renderDayPoster());
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    var canvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
-    var file = new File([await canvasPngBlob(canvas)], "waqt-" + dk(cDate) + ".png", { type:"image/png" });
-    if (navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"My Pehar" });
+    var canvas = await html2canvas(mount, { scale:3, backgroundColor:null, useCORS:true });
+    var file = new File([await canvasPngBlob(canvas)], "waqt-" + exportDate + ".png", { type:"image/png" });
+    if (navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"My Pehar", text:"My Pehar, tracked with Waqt. Create your own daily schedule:", url:referralUrl() });
     else shareDownload(file, file.name);
     toast("Image ready.");
   } catch (e) { if (!e || (e.name !== "AbortError" && e.name !== "NotAllowedError")) toast("Could not export image."); }
@@ -3564,26 +3567,20 @@ async function exportDayImage() {
 async function exportWeekPdf() {
   if (typeof html2canvas !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
-  var mount;
+  var mount, exportDate = dk(cDate);
   try {
     mount = mountShareExport("share-export-week", 1100, '<section class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></section>');
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    var canvas = await html2canvas(mount, { scale:2, backgroundColor:"#FAF6EC", useCORS:true });
+    var canvas = await html2canvas(mount, { scale:3, backgroundColor:"#FAF6EC", useCORS:true });
     var pdf = new window.jspdf.jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
     var pageWidth = pdf.internal.pageSize.getWidth(), pageHeight = pdf.internal.pageSize.getHeight(), margin = 24;
     var printWidth = pageWidth - margin * 2, printHeight = pageHeight - margin * 2;
-    var sourcePageHeight = Math.max(1, Math.floor(printHeight * canvas.width / printWidth)), sourceY = 0;
-    while (sourceY < canvas.height) {
-      var sourceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
-      var pageCanvas = document.createElement("canvas"), pageContext = pageCanvas.getContext("2d");
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = sourceHeight;
-      pageContext.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-      if (sourceY) pdf.addPage();
-      pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, printWidth, sourceHeight * printWidth / canvas.width);
-      sourceY += sourceHeight;
-    }
-    pdf.save("waqt-week-" + dk(cDate) + ".pdf");
+    // One complete paper sheet: aspect-ratio fit prevents arbitrary image bands
+    // from cutting through days, rows, or text.
+    var fitScale = Math.min(printWidth / canvas.width, printHeight / canvas.height);
+    var fitWidth = canvas.width * fitScale, fitHeight = canvas.height * fitScale;
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", (pageWidth - fitWidth) / 2, (pageHeight - fitHeight) / 2, fitWidth, fitHeight);
+    pdf.save("waqt-week-" + exportDate + ".pdf");
     toast("PDF saved.");
   } catch (e) { toast("Could not export PDF."); }
   finally { if (mount) mount.remove(); }
@@ -3718,7 +3715,6 @@ function rSchedule() {
   h += renderReminders(key);
 
   h += '</div>';
-  if (shareOpen) h += rShareComposer();
   return h;
 }
 

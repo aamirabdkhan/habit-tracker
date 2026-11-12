@@ -3470,12 +3470,12 @@ function renderDayPoster() {
       return rows.length ? '<section class="share-daypart"><h4>' + esc(part[0]) + '</h4>' + rows.map(itemHtml).join('') + '</section>' : '';
     }).join('') + '</div>';
   } else body = '<div class="share-rail">' + items.map(itemHtml).join('') + '</div>';
-  var h = '<article class="share-frame t-' + esA(shareState.theme) + ' share-' + esA(shareState.style) + '">';
-  h += '<header class="share-posterhead"><div><p class="share-overline">PEHAR / DAY PLAN</p><h3>' + esc(date) + '</h3>';
-  if (shareState.caption) h += '<p class="share-caption">' + esc(shareState.caption) + '</p>';
-  h += '</div>';
-  if (progress) h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 44 44" aria-hidden="true"><circle class="share-ringtrack" cx="22" cy="22" r="18"></circle><circle class="share-ringfill" cx="22" cy="22" r="18" pathLength="100" stroke-dasharray="' + pct + ' 100"></circle></svg><b>' + pct + '%</b></div>';
-  h += '</header><div class="share-posterbody">' + body + '</div><footer class="share-posterfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl()) + '</span></footer></article>';
+  var h = '<article class="share-frame t-' + esA(shareState.theme) + ' share-' + esA(shareState.style) + '"><span class="share-halo" aria-hidden="true"></span>';
+  h += '<header class="share-posterhead"><h3 class="share-pdate">' + esc(date) + '</h3><p class="share-overline">MY PEHAR / DAY PLAN</p>';
+  if (shareState.caption) h += '<p class="share-caption">“' + esc(shareState.caption) + '”</p>';
+  h += '</header>';
+  if (progress) h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 74 74" aria-hidden="true"><circle class="share-ringtrack" cx="37" cy="37" r="30"></circle><circle class="share-ringfill" cx="37" cy="37" r="30" pathLength="100" stroke-dasharray="' + pct + ' 100"></circle></svg><b>' + pct + '%</b></div><p class="share-ringlabel">day complete</p>';
+  h += '<div class="share-posterbody">' + body + '</div><footer class="share-posterfoot"><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl()) + '</span></footer></article>';
   return h;
 }
 function renderWeekSheet() {
@@ -3533,38 +3533,49 @@ function canvasPngBlob(canvas) {
     }, "image/png");
   });
 }
+function mountShareExport(className, width, html) {
+  var mount = document.createElement("div");
+  mount.className = "share-export-surface " + className;
+  mount.style.width = width + "px";
+  mount.innerHTML = html;
+  document.body.appendChild(mount);
+  return mount;
+}
 async function exportDayImage() {
   if (typeof html2canvas !== "function") { toast("Image export unavailable. Reload and try again."); return; }
-  var node = document.querySelector("#share-day-poster .share-frame");
-  if (!node) { toast("Day poster unavailable."); return; }
+  var mount;
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    var canvas = await html2canvas(node, { scale:2, backgroundColor:null, useCORS:true });
+    mount = mountShareExport("share-export-day", 1080, renderDayPoster());
+    var canvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
     var file = new File([await canvasPngBlob(canvas)], "waqt-" + dk(cDate) + ".png", { type:"image/png" });
     if (navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"My Pehar" });
     else shareDownload(file, file.name);
     toast("Image ready.");
   } catch (e) { toast("Could not export image."); }
+  finally { if (mount) mount.remove(); }
 }
 async function exportWeekPdf() {
   if (typeof html2canvas !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
-  var node = document.querySelector(".share-weeksheet");
-  if (!node) { toast("Week sheet unavailable."); return; }
+  var mount;
   try {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    var canvas = await html2canvas(node, { scale:2, backgroundColor:null, useCORS:true });
+    mount = mountShareExport("share-export-week", 1100, '<section class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></section>');
+    var canvas = await html2canvas(mount, { scale:2, backgroundColor:"#FAF6EC", useCORS:true });
     var pdf = new window.jspdf.jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
-    var pageWidth = pdf.internal.pageSize.getWidth(), pageHeight = pdf.internal.pageSize.getHeight();
-    var imageHeight = canvas.height * pageWidth / canvas.width, image = canvas.toDataURL("image/png"), offset = 0;
+    var pageWidth = pdf.internal.pageSize.getWidth(), pageHeight = pdf.internal.pageSize.getHeight(), margin = 24;
+    var printWidth = pageWidth - margin * 2, printHeight = pageHeight - margin * 2;
+    var imageHeight = canvas.height * printWidth / canvas.width, image = canvas.toDataURL("image/png"), offset = 0;
     do {
       if (offset) pdf.addPage();
-      pdf.addImage(image, "PNG", 0, -offset, pageWidth, imageHeight);
-      offset += pageHeight;
+      pdf.addImage(image, "PNG", margin, margin - offset, printWidth, imageHeight);
+      offset += printHeight;
     } while (offset < imageHeight);
     pdf.save("waqt-week-" + dk(cDate) + ".pdf");
     toast("PDF saved.");
   } catch (e) { toast("Could not export PDF."); }
+  finally { if (mount) mount.remove(); }
 }
 function openShare() { loadSharePrefs(); shareOpen = true; render(); }
 function closeShare() { shareOpen = false; render(); }
@@ -3591,7 +3602,7 @@ function rShareComposer() {
     h += '<div class="share-weekintro"><p><b>Your selected week, ready for a PDF.</b> Pick a layout, then choose what to include from What to share.</p></div>';
     h += '<div class="share-looks share-weeklooks" role="group" aria-label="Week PDF layout">';
     [["cols", "Day columns"], ["rows", "Time rows"], ["stack", "Stacked days"]].forEach(function(layout) { var on = shareState.wk === layout[0]; h += '<button type="button" class="share-look' + (on ? ' on' : '') + '" data-a="sharewk" data-wk="' + esA(layout[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(layout[1]) + '</button>'; });
-    h += '</div><button type="button" class="bt bta" data-a="shareexportpdf">Save PDF</button><div class="share-weeksheet">' + renderWeekSheet() + '</div><footer class="share-weekfoot"><span class="share-badge">Generated by <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer>';
+    h += '</div><button type="button" class="bt bta" data-a="shareexportpdf">Save PDF</button><div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></div>';
   }
   h += '</div></section></div>';
   return h;
@@ -3714,6 +3725,7 @@ function rPehar() {
   h += '<button type="button" class="dnb" data-a="prevday" aria-label="Previous day"><i class="fas fa-chevron-left t-xs"></i></button>';
   if (!td) h += '<button type="button" class="bt t-xs" data-a="today">Today</button>';
   h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
+  h += '<button type="button" class="dnb share-open" data-a="shareopen" aria-label="Share this day"><i class="fas fa-share-nodes t-xs"></i></button>';
   h += '</div></header>';
   h += '<div class="al"></div>';
   h += renderWeekStrip(key);

@@ -1109,6 +1109,7 @@ function renderReminders(todayISO) {
       '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(meta) + '</p>' +
       (r.note ? '<p class="rem-meta">' + esc(r.note) + '</p>' : '') + '</div>' +
       (isDue ? '<div class="rem-acts"><button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button><button type="button" class="rem-later" data-a="reminderlater" data-id="' + esA(r.id) + '">Later</button></div>' : '') +
+      '<button type="button" class="rem-del" data-a="reminderdel" data-id="' + esA(r.id) + '" aria-label="Delete reminder ' + esA(r.name) + '"><i class="fas fa-xmark"></i></button>' +
       '</div>';
   });
   h += '<button type="button" class="rem-add" data-a="reminderadd"><i class="fas fa-plus"></i> Add reminder</button>';
@@ -2389,8 +2390,8 @@ function rTemplate() {
   h += '<div class="sch-buildhero">';
   h += '<div class="sch-bhtop"><span class="sch-bhic"><i class="fas fa-bolt"></i></span><div class="sch-bhtx"><b>Build your tracker</b><p>Set your whole week at once — don’t add tasks one by one.</p></div></div>';
   h += '<div class="sch-bhbtns">';
-  h += '<button type="button" class="sch-bhb sch-bhb-fill' + (buildPanel === "ai" ? " on" : "") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i> With AI</button>';
-  h += '<button type="button" class="sch-bhb sch-bhb-ghost' + (buildPanel === "type" ? " on" : "") + '" data-a="buildpick" data-k="type"><i class="fas fa-keyboard"></i> Type it</button>';
+  h += '<button type="button" class="sch-bhb ' + (buildPanel === "ai" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i> With AI</button>';
+  h += '<button type="button" class="sch-bhb ' + (buildPanel === "type" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="type"><i class="fas fa-keyboard"></i> Type it</button>';
   h += '</div></div>';
   if (buildPanel === "ai") h += '<div class="sch-buildpanel">' + renderImportPanel("ai") + '</div>';
   else if (buildPanel === "type") h += '<div class="sch-buildpanel">' + renderImportPanel("type") + '</div>';
@@ -3718,6 +3719,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (typeof dbSave === "function") dbSave(OPTIONAL_KEY, {});
       importPreview = null;
       aiStep = 0;
+      if (typeof saveReminders === "function") saveReminders([]); // custom reminders are part of the schedule — clear them too
       cData = gDay(dk(cDate));
       render();
       toast("Schedule reset");
@@ -3860,6 +3862,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "reminderadd") { addReminderFromPrompt(dk(cDate)); render(); return; }
     if (a === "reminderdone") { completeReminder(t.dataset.id, dk(cDate)); render(); return; }
     if (a === "reminderlater") { var tm = new Date(cDate); tm.setDate(tm.getDate() + 1); snoozeReminder(t.dataset.id, dk(tm)); render(); return; }
+    if (a === "reminderdel") { var rid = t.dataset.id; uiConfirm("Delete this reminder?", function() { saveReminders(getReminders().filter(function(r) { return r.id !== rid; })); render(); toast("Reminder deleted"); }, { title: "Delete reminder?", confirmText: "Delete" }); return; }
     if (a === "reminderoff") { setItemBell(t.dataset.f, t.dataset.k, false); syncItemReminder(t.dataset.f, t.dataset.k); render(); toast("Reminder turned off"); return; }
     if (a === "remindersalloff") {
       var reminderOffButtons = document.querySelectorAll('[data-a="reminderoff"]');

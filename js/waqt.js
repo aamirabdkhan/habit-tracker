@@ -3391,6 +3391,38 @@ function visibleDayItems() {
     return !shareState.sectionsOff[item.section] && !shareState.off[item.section + "|" + item.n];
   });
 }
+function renderShareControls() {
+  var items = shareDayData(cDate), bySection = {}, sections = getCards().slice();
+  items.forEach(function(item) {
+    if (!bySection[item.section]) bySection[item.section] = [];
+    bySection[item.section].push(item);
+  });
+  if (bySection.prayers) sections.unshift({ id:"prayers", name:"Prayers" });
+  var h = '<div class="share-controls">';
+  h += '<label class="share-captionfield" for="share-caption"><span>Caption <small>optional · 60 max</small></span><input id="share-caption" class="inp" type="text" maxlength="60" placeholder="Add a note to your day" value="' + esA(shareState.caption) + '" data-a="sharecaption"></label>';
+  h += '<div class="share-controlgroup"><p class="share-controltitle">Sections &amp; items</p>';
+  sections.forEach(function(card) {
+    var sectionItems = bySection[card.id];
+    if (!sectionItems || !sectionItems.length) return;
+    var sectionOn = !shareState.sectionsOff[card.id];
+    h += '<section class="share-section' + (sectionOn ? '' : ' off') + '">';
+    h += '<label class="share-toggle"><span><b>' + esc(card.name) + '</b><small>' + esc(String(sectionItems.length)) + ' item' + (sectionItems.length === 1 ? '' : 's') + '</small></span><input type="checkbox" data-a="sharesection" data-section="' + esA(card.id) + '"' + (sectionOn ? ' checked' : '') + ' aria-label="Include ' + esA(card.name) + '"><i aria-hidden="true"></i></label>';
+    h += '<div class="share-checklist">';
+    sectionItems.forEach(function(item) {
+      var itemKey = item.section + '|' + item.n, itemOn = !shareState.off[itemKey];
+      h += '<label class="share-check' + (itemOn ? '' : ' off') + '"><input type="checkbox" data-a="shareitem" data-key="' + esA(itemKey) + '"' + (itemOn ? ' checked' : '') + (sectionOn ? '' : ' disabled') + '><span><b>' + esc(prettyTime(item.t)) + '</b> ' + esc(item.n) + '<small>' + esc(fmtDur(item.dur)) + '</small></span></label>';
+    });
+    h += '</div></section>';
+  });
+  h += '</div><div class="share-controlgroup"><p class="share-controltitle">Poster theme</p><div class="share-themes" role="group" aria-label="Poster theme">';
+  [["paper", "Paper"], ["midnight", "Midnight"], ["gradient", "Gradient"]].forEach(function(theme) {
+    var on = shareState.theme === theme[0];
+    h += '<button type="button" class="share-theme theme-' + esA(theme[0]) + (on ? ' on' : '') + '" data-a="sharetheme" data-theme="' + esA(theme[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><i aria-hidden="true"></i>' + esc(theme[1]) + '</button>';
+  });
+  h += '</div></div><p class="share-always"><i class="fas fa-circle-info" aria-hidden="true"></i><span><b>Always included</b> Times, durations, date, Waqt badge, and referral QR.</span></p>';
+  h += '<div id="share-day-poster" class="share-controlpreview">' + renderDayPoster() + '</div>';
+  return h + '</div>';
+}
 function renderDayPoster() {
   var items = visibleDayItems(), progress = shareState.mode === "progress";
   var done = items.filter(function(item) { return item.done; }).length;
@@ -3438,9 +3470,9 @@ function rShareComposer() {
     [["progress", "With progress"], ["plan", "Plan only"]].forEach(function(mode) { h += '<button type="button" class="share-mode' + (shareState.mode === mode[0] ? ' on' : '') + '" data-a="sharemode" data-mode="' + esA(mode[0]) + '" aria-pressed="' + (shareState.mode === mode[0] ? 'true' : 'false') + '">' + esc(mode[1]) + '</button>'; });
     h += '</div><div class="share-looks" role="group" aria-label="Day poster look">';
     [["rail", "Rail"], ["lines", "Clean lines"], ["agenda", "Agenda blocks"], ["dayparts", "Day-parts"]].forEach(function(style) { h += '<button type="button" class="share-look' + (shareState.style === style[0] ? ' on' : '') + '" data-a="sharestyle" data-style="' + esA(style[0]) + '" aria-pressed="' + (shareState.style === style[0] ? 'true' : 'false') + '">' + esc(style[1]) + '</button>'; });
-    h += '</div></div>' + renderDayPoster();
+    h += '</div></div><div id="share-day-poster">' + renderDayPoster() + '</div>';
   }
-  else if (shareState.tab === "ctrl") h += '<p>Choose what to include here.</p>';
+  else if (shareState.tab === "ctrl") h += renderShareControls();
   else h += '<p>Week PDF preview will appear here.</p>';
   h += '</div></section></div>';
   return h;
@@ -3785,6 +3817,9 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); render(); return; }
     if (a === "sharemode") { shareState.mode = t.dataset.mode; saveSharePrefs(); render(); return; }
     if (a === "sharestyle") { shareState.style = t.dataset.style; saveSharePrefs(); render(); return; }
+    if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; render(); return; }
+    if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; render(); return; }
+    if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); render(); return; }
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
     if (a === "priorityexplainerclose") { render(); return; }
@@ -4399,6 +4434,12 @@ document.getElementById("app").addEventListener("input", function(e) {
   // of truth the moment it changes, and no re-render can lose what the user typed.
   if (e.target.id === "parse-text") { parseText = e.target.value; return; }
   if (e.target.id === "import-json") { importDraft = e.target.value; return; }
+  if (e.target.matches('[data-a="sharecaption"]')) {
+    shareState.caption = e.target.value;
+    var poster = document.getElementById("share-day-poster");
+    if (poster) poster.innerHTML = renderDayPoster();
+    return;
+  }
 });
 // Enter in a card's "add for today"/"add a recurring goal" name field saves;
 // Enter in a card-rename input blurs (triggers the focusout save below).

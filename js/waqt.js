@@ -1874,6 +1874,7 @@ function renderHelpOverlay() {
 // the contextual "?" help above — this is the "I want to learn what this app does" entry point. Each
 // topic is what-it-is / how / why + a jump to the screen it lives on. guideView: null | "index" | key.
 var guideView = null;
+var buildPanel = null; // Template "Build your tracker" hero: null | "ai" | "type" (which panel is open)
 var GUIDE_GROUPS = [
   { label: "Daily use", keys: ["today", "pehar", "priority"] },
   { label: "Building your plan", keys: ["cards", "ai", "type"] },
@@ -2383,12 +2384,16 @@ function rTemplate() {
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vprefs" aria-label="Settings"><i class="fas fa-gear"></i></button><p class="sch-eyebrow">PLAN</p><h1 class="sch-dayname sch-datefull">Your plan</h1><p class="sch-sub">set a time and repeat days once, it repeats every day</p></header>';
   h += '<div class="al"></div>';
-  // Build-your-tracker: the fast ways to fill the plan live here (not buried in Settings), so a new
-  // user discovers they can let AI build it or type their day. Collapsed by default — two slim rows.
-  h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">BUILD YOUR TRACKER</p></div>';
-  h += '<p class="t-xs" style="color:var(--mt);margin:0 0 10px">Fill your week fast — let AI build it from a quick chat, or type your day in plain words.</p>';
-  h += settOpen('Set up with AI', false) + renderImportPanel("ai") + settClose();
-  h += settOpen('Type your day', false) + renderImportPanel("type") + settClose();
+  // Build-your-tracker: one eye-catching hero (not buried accordions) so a new user spots the fast
+  // ways to fill the plan. The two buttons toggle the matching panel inline. buildPanel: null|ai|type.
+  h += '<div class="sch-buildhero">';
+  h += '<div class="sch-bhtop"><span class="sch-bhic"><i class="fas fa-bolt"></i></span><div class="sch-bhtx"><b>Build your tracker</b><p>Set your whole week at once — don’t add tasks one by one.</p></div></div>';
+  h += '<div class="sch-bhbtns">';
+  h += '<button type="button" class="sch-bhb sch-bhb-fill' + (buildPanel === "ai" ? " on" : "") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i> With AI</button>';
+  h += '<button type="button" class="sch-bhb sch-bhb-ghost' + (buildPanel === "type" ? " on" : "") + '" data-a="buildpick" data-k="type"><i class="fas fa-keyboard"></i> Type it</button>';
+  h += '</div></div>';
+  if (buildPanel === "ai") h += '<div class="sch-buildpanel">' + renderImportPanel("ai") + '</div>';
+  else if (buildPanel === "type") h += '<div class="sch-buildpanel">' + renderImportPanel("type") + '</div>';
   if (prayersOn()) h += renderPrayersCard();
   h += '<div class="sch-planhead"><p class="sch-anylbl" style="margin:0">YOUR PLAN</p></div>';
   h += getCards().map(renderPlanCard).join('');
@@ -3619,6 +3624,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "guideback")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
     if (a === "guideclose") { guideView = null; render(); return; }
     if (a === "guidejump")  { guideView = null; view = t.dataset.v || "daily"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
+    if (a === "buildpick")  { buildPanel = (buildPanel === t.dataset.k) ? null : t.dataset.k; render(); return; }
     if (a === "importtab") { importTab = t.dataset.tab; aiStep = 0; render(); return; }
     if (a === "aiopen") {
       var svc = AI_SERVICES.filter(function(x) { return x.id === t.dataset.svc; })[0];

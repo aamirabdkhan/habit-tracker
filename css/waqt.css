@@ -616,3 +616,20 @@ body::before{display:none!important}
 .sch-onbwhat .txt b{display:block;color:var(--fg);font-size:15px}
 .sch-onbwhat .txt small{color:var(--mt);font-size:12.5px}
 .sch-onbguidehint{color:var(--mt);font-size:12.5px;line-height:1.5;text-align:center;margin:0 0 4px}
+
+/* "Build your tracker" hero on the Template tab — the eye-catching entry to AI setup / Type-your-day.
+   Warm single-hue gold→copper (on-brand, not generic-SaaS), white text, works in light + dark. */
+.sch-buildhero{background:linear-gradient(135deg,var(--ac),var(--hl));border-radius:16px;padding:17px 17px 16px;margin-bottom:12px;box-shadow:0 8px 22px -12px rgba(176,123,44,.7)}
+.sch-bhtop{display:flex;gap:13px;align-items:flex-start}
+.sch-bhic{width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.18);color:#fff;font-size:17px}
+.sch-bhtx b{display:block;color:#fff;font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.2}
+.sch-bhtx p{color:rgba(255,255,255,.85);font-size:12.5px;line-height:1.45;margin:3px 0 0}
+.sch-bhbtns{display:flex;gap:10px;margin-top:15px}
+.sch-bhb{flex:1;border:none;border-radius:11px;padding:12px;font:600 14px 'Space Grotesk',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:transform .1s}
+.sch-bhb:active{transform:scale(.97)}
+.sch-bhb-fill{background:#fff;color:var(--hl)}
+.sch-bhb-ghost{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.45)}
+.sch-bhb.on{outline:2px solid #fff;outline-offset:2px}
+.sch-buildpanel{margin:0 0 14px;animation:bhslide .2s ease}
+@media (prefers-reduced-motion:reduce){.sch-buildpanel{animation:none}.sch-bhb:active{transform:none}}
+@keyframes bhslide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}

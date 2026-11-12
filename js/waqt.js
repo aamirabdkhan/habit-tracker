@@ -3397,10 +3397,15 @@ function visibleWeekItems(items) {
   });
 }
 function renderShareControls() {
-  var items = shareDayData(cDate), bySection = {}, sections = getCards().slice();
-  items.forEach(function(item) {
-    if (!bySection[item.section]) bySection[item.section] = [];
-    bySection[item.section].push(item);
+  var bySection = {}, seen = {}, sections = getCards().slice();
+  shareWeekData().forEach(function(day) {
+    day[2].forEach(function(item) {
+      var itemKey = item.section + "|" + item.n;
+      if (seen[itemKey]) return;
+      seen[itemKey] = true;
+      if (!bySection[item.section]) bySection[item.section] = [];
+      bySection[item.section].push(item);
+    });
   });
   if (bySection.prayers) sections.unshift({ id:"prayers", name:"Prayers" });
   var h = '<div class="share-controls">';
@@ -3453,7 +3458,8 @@ function renderDayPoster() {
   var items = visibleDayItems(), progress = shareState.mode === "progress";
   var done = items.filter(function(item) { return item.done; }).length;
   var pct = items.length ? Math.round(done / items.length * 100) : 0;
-  var date = typeof fLong === "function" ? fLong(cDate) : cDate.toDateString();
+  var date = DOW_FULL[cDate.getDay()] + " " + cDate.getDate();
+  var month = cDate.toLocaleDateString(undefined, { month:"long" });
   var itemHtml = function(item) {
     var cls = "share-item" + (progress && item.done ? " done" : "");
     var tick = progress ? '<span class="share-tick" aria-hidden="true">' + (item.done ? '&#10003;' : '') + '</span>' : '';
@@ -3471,7 +3477,7 @@ function renderDayPoster() {
     }).join('') + '</div>';
   } else body = '<div class="share-rail">' + items.map(itemHtml).join('') + '</div>';
   var h = '<article class="share-frame t-' + esA(shareState.theme) + ' share-' + esA(shareState.style) + '"><span class="share-halo" aria-hidden="true"></span>';
-  h += '<header class="share-posterhead"><h3 class="share-pdate">' + esc(date) + '</h3><p class="share-overline">MY PEHAR / DAY PLAN</p>';
+  h += '<header class="share-posterhead"><h3 class="share-pdate">' + esc(date) + '</h3><p class="share-overline">' + esc(month) + ' · my pehar</p>';
   if (shareState.caption) h += '<p class="share-caption">“' + esc(shareState.caption) + '”</p>';
   h += '</header>';
   if (progress) h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 74 74" aria-hidden="true"><circle class="share-ringtrack" cx="37" cy="37" r="30"></circle><circle class="share-ringfill" cx="37" cy="37" r="30" pathLength="100" stroke-dasharray="' + pct + ' 100"></circle></svg><b>' + pct + '%</b></div><p class="share-ringlabel">day complete</p>';
@@ -3505,7 +3511,7 @@ function renderWeekSheet() {
         return '<div class="share-weekcell">' + (items.length ? items.map(function(item) { return itemHtml(item, false); }).join('') : '<span class="share-weeknone">—</span>') + '</div>';
       }).join('') + '</div>';
     });
-    return '<div class="share-weekgridscroll">' + grid + '</div>';
+    return '<div class="share-weekgridscroll">' + grid + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
   }
   if (shareState.wk === "stack") {
     return '<div class="share-weekstack">' + week.map(function(day) {
@@ -3514,7 +3520,7 @@ function renderWeekSheet() {
   }
   return '<div class="share-weekcols">' + week.map(function(day) {
     return '<section class="share-weekcol">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, false); }).join('') : empty) + '</div></section>';
-  }).join('') + '</div>';
+  }).join('') + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
 }
 function shareDownload(blob, filename) {
   var url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -3545,14 +3551,14 @@ async function exportDayImage() {
   if (typeof html2canvas !== "function") { toast("Image export unavailable. Reload and try again."); return; }
   var mount;
   try {
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     mount = mountShareExport("share-export-day", 1080, renderDayPoster());
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     var canvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
     var file = new File([await canvasPngBlob(canvas)], "waqt-" + dk(cDate) + ".png", { type:"image/png" });
     if (navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"My Pehar" });
     else shareDownload(file, file.name);
     toast("Image ready.");
-  } catch (e) { toast("Could not export image."); }
+  } catch (e) { if (!e || (e.name !== "AbortError" && e.name !== "NotAllowedError")) toast("Could not export image."); }
   finally { if (mount) mount.remove(); }
 }
 async function exportWeekPdf() {
@@ -3560,25 +3566,38 @@ async function exportWeekPdf() {
   if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   var mount;
   try {
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     mount = mountShareExport("share-export-week", 1100, '<section class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></section>');
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
     var canvas = await html2canvas(mount, { scale:2, backgroundColor:"#FAF6EC", useCORS:true });
     var pdf = new window.jspdf.jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
     var pageWidth = pdf.internal.pageSize.getWidth(), pageHeight = pdf.internal.pageSize.getHeight(), margin = 24;
     var printWidth = pageWidth - margin * 2, printHeight = pageHeight - margin * 2;
-    var imageHeight = canvas.height * printWidth / canvas.width, image = canvas.toDataURL("image/png"), offset = 0;
-    do {
-      if (offset) pdf.addPage();
-      pdf.addImage(image, "PNG", margin, margin - offset, printWidth, imageHeight);
-      offset += printHeight;
-    } while (offset < imageHeight);
+    var sourcePageHeight = Math.max(1, Math.floor(printHeight * canvas.width / printWidth)), sourceY = 0;
+    while (sourceY < canvas.height) {
+      var sourceHeight = Math.min(sourcePageHeight, canvas.height - sourceY);
+      var pageCanvas = document.createElement("canvas"), pageContext = pageCanvas.getContext("2d");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sourceHeight;
+      pageContext.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+      if (sourceY) pdf.addPage();
+      pdf.addImage(pageCanvas.toDataURL("image/png"), "PNG", margin, margin, printWidth, sourceHeight * printWidth / canvas.width);
+      sourceY += sourceHeight;
+    }
     pdf.save("waqt-week-" + dk(cDate) + ".pdf");
     toast("PDF saved.");
   } catch (e) { toast("Could not export PDF."); }
   finally { if (mount) mount.remove(); }
 }
-function openShare() { loadSharePrefs(); shareOpen = true; render(); }
+function openShare() { loadSharePrefs(); shareState.caption = ""; shareState.off = {}; shareState.sectionsOff = {}; shareOpen = true; render(); }
 function closeShare() { shareOpen = false; render(); }
+function renderSharePreservingScroll() {
+  var pane = document.querySelector(".share-pane"), scrollTop = pane ? pane.scrollTop : 0;
+  render();
+  requestAnimationFrame(function() {
+    var nextPane = document.querySelector(".share-pane");
+    if (nextPane) nextPane.scrollTop = scrollTop;
+  });
+}
 function rShareComposer() {
   var tabs = [["day", "Day image"], ["ctrl", "What to share"], ["week", "Week PDF"]];
   var h = '<div class="sch-ovbackdrop share-backdrop" data-a="shareclose">';
@@ -3947,13 +3966,13 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "shareclose") { if (t.tagName === "BUTTON" || e.target === t) closeShare(); return; }
     if (a === "shareexportimg") { exportDayImage(); return; }
     if (a === "shareexportpdf") { exportWeekPdf(); return; }
-    if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); render(); return; }
-    if (a === "sharemode") { shareState.mode = t.dataset.mode; saveSharePrefs(); render(); return; }
-    if (a === "sharestyle") { shareState.style = t.dataset.style; saveSharePrefs(); render(); return; }
-    if (a === "sharewk") { shareState.wk = t.dataset.wk; saveSharePrefs(); render(); return; }
-    if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; render(); return; }
-    if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; render(); return; }
-    if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); render(); return; }
+    if (a === "sharetab") { shareState.tab = t.dataset.tab; saveSharePrefs(); renderSharePreservingScroll(); return; }
+    if (a === "sharemode") { shareState.mode = t.dataset.mode; saveSharePrefs(); renderSharePreservingScroll(); return; }
+    if (a === "sharestyle") { shareState.style = t.dataset.style; saveSharePrefs(); renderSharePreservingScroll(); return; }
+    if (a === "sharewk") { shareState.wk = t.dataset.wk; saveSharePrefs(); renderSharePreservingScroll(); return; }
+    if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; renderSharePreservingScroll(); return; }
+    if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; renderSharePreservingScroll(); return; }
+    if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); renderSharePreservingScroll(); return; }
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
     if (a === "priorityexplainerclose") { render(); return; }

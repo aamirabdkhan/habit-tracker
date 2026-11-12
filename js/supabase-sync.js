@@ -6,6 +6,7 @@ var isSyncing = false;
 
 try {
     var pendingReferral = new URLSearchParams(location.search).get("ref");
+    pendingReferral = pendingReferral ? pendingReferral.trim().toLowerCase() : "";
     if (pendingReferral) {
         localStorage.setItem("ht_ref_pending", pendingReferral);
         var referralLocation = new URL(location.href);
@@ -289,6 +290,7 @@ if (sbClient) {
             try {
                 pendingReferral = localStorage.getItem("ht_ref_pending");
             } catch (e) {}
+            pendingReferral = pendingReferral ? pendingReferral.trim().toLowerCase() : "";
             if (pendingReferral) {
                 try {
                     var ownReferralCode = currentUser.id.slice(0, 8).toLowerCase();
@@ -297,11 +299,14 @@ if (sbClient) {
                             referrer_code: pendingReferral,
                             new_user_id: currentUser.id
                         });
-                        if (referralInsert && typeof referralInsert.catch === "function") referralInsert.catch(function() {});
+                        if (referralInsert && typeof referralInsert.then === "function") referralInsert.then(function(res) {
+                            if (!res.error || res.error.code === "23505") {
+                                try { localStorage.removeItem("ht_ref_pending"); } catch (e) {}
+                            }
+                        }).catch(function() {});
                     }
                 }
                 catch (e) {}
-                try { localStorage.removeItem("ht_ref_pending"); } catch (e) {}
             }
             subscribeRealtime();
             if (typeof resyncPrayerReminders === "function") resyncPrayerReminders();

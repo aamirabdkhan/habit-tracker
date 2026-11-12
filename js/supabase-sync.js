@@ -5,6 +5,16 @@ var currentUser = null;
 var isSyncing = false;
 
 try {
+    var pendingReferral = new URLSearchParams(location.search).get("ref");
+    if (pendingReferral) {
+        localStorage.setItem("ht_ref_pending", pendingReferral);
+        var referralLocation = new URL(location.href);
+        referralLocation.searchParams.delete("ref");
+        history.replaceState(history.state, "", referralLocation.pathname + referralLocation.search + referralLocation.hash);
+    }
+} catch (e) {}
+
+try {
     if (SUPABASE_URL !== "YOUR_SUPABASE_URL" && window.supabase) {
         sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     }
@@ -275,6 +285,24 @@ if (sbClient) {
         if (session) {
             var oldUser = currentUser;
             currentUser = session.user;
+            var pendingReferral = null;
+            try {
+                pendingReferral = localStorage.getItem("ht_ref_pending");
+            } catch (e) {}
+            if (pendingReferral) {
+                try {
+                    var ownReferralCode = currentUser.id.slice(0, 8).toLowerCase();
+                    if (pendingReferral !== ownReferralCode) {
+                        var referralInsert = sbClient.from("referrals").insert({
+                            referrer_code: pendingReferral,
+                            new_user_id: currentUser.id
+                        });
+                        if (referralInsert && typeof referralInsert.catch === "function") referralInsert.catch(function() {});
+                    }
+                }
+                catch (e) {}
+                try { localStorage.removeItem("ht_ref_pending"); } catch (e) {}
+            }
             subscribeRealtime();
             if (typeof resyncPrayerReminders === "function") resyncPrayerReminders();
             if (typeof publishWidgetFeed === "function") setTimeout(publishWidgetFeed, 2000);

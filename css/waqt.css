@@ -488,6 +488,16 @@ body::before{display:none!important}
 .rem-del{flex:none;align-self:flex-start;background:transparent;border:0;color:var(--smut,#7A756E);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;opacity:.55;transition:.15s}
 .rem-del:hover,.rem-del:active{opacity:1;color:var(--dn,#B84C4C)}
 .rem-manage{display:flex;flex-direction:column;gap:2px;align-self:flex-start;flex:none}
+/* Swipe-to-reveal Edit/Delete for reminders (kind "manage"). The card slides left to uncover the
+   two action buttons sitting behind it; card bg is forced opaque so they never bleed through closed. */
+.rem-gest{border-radius:12px;margin-top:9px}
+.rem-gest .rem-card{margin-top:0;background:var(--cd);backdrop-filter:none}
+.rem-swipeacts{position:absolute;inset:0;display:flex;justify-content:flex-end;z-index:0}
+.rem-swact{width:66px;border:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;cursor:pointer}
+.rem-swedit{background:var(--ac)}
+.rem-swdel{background:var(--dn)}
+/* Desktop (no touch): reveal the same actions on hover, since there's no swipe. */
+@media (hover:hover){.rem-gest:hover .rem-card.sch-gest-row{transform:translateX(-132px)}}
 .rem-flbl{display:block;font-size:12px;color:var(--mt);margin:12px 0 5px;font-weight:600}
 .rem-finp{width:100%}
 .rem-fhint{font-size:11px;color:var(--mt);margin:5px 0 0;line-height:1.4}

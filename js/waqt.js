@@ -1107,14 +1107,20 @@ function renderReminders(todayISO) {
     var isDue = isReminderDue(r, todayISO), isLate = isDue && reminderDaysUntil(r, todayISO) < 0, kc = reminderUrgencyVar(r, todayISO);
     // Ring already shows the number for upcoming items; only spell out urgency words when due/late.
     var meta = isDue ? reminderRelLabel(r, todayISO) + ' · ' + reminderScheduleLabel(r) : reminderScheduleLabel(r);
-    h += '<div class="rem-card' + (isLate ? ' late' : isDue ? ' due' : '') + '" style="--kc:' + kc + '">' +
+    // Swipe-left (touch) or hover (desktop) slides the card open to reveal Edit + Delete — no more
+    // always-visible pencil/× cluttering the card. Reuses the .sch-gest swipe system (kind "manage").
+    h += '<div class="sch-gest rem-gest" data-gest="manage" data-k="' + esA(r.id) + '">' +
+      '<div class="rem-swipeacts" aria-hidden="true">' +
+      '<button type="button" class="rem-swact rem-swedit" data-a="reminderedit" data-id="' + esA(r.id) + '" aria-label="Edit reminder ' + esA(r.name) + '"><i class="fas fa-pen"></i></button>' +
+      '<button type="button" class="rem-swact rem-swdel" data-a="reminderdel" data-id="' + esA(r.id) + '" aria-label="Delete reminder ' + esA(r.name) + '"><i class="fas fa-trash-can"></i></button>' +
+      '</div>' +
+      '<div class="rem-card sch-gest-row' + (isLate ? ' late' : isDue ? ' due' : '') + '" style="--kc:' + kc + '">' +
       '<div class="rem-ring' + (isLate ? ' late' : '') + '" style="--p:' + reminderProgress(r, todayISO) + '"><span>' + esc(reminderRingLabel(r, todayISO)) + '</span></div>' +
       '<div class="rem-body"><p class="rem-ttl">' + esc(r.name) + '</p>' +
       '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(meta) + '</p>' +
       (r.note ? '<p class="rem-meta">' + esc(r.note) + '</p>' : '') + '</div>' +
       (isDue ? '<div class="rem-acts"><button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button><button type="button" class="rem-later" data-a="reminderlater" data-id="' + esA(r.id) + '">Later</button></div>' : '') +
-      '<div class="rem-manage"><button type="button" class="rem-del" data-a="reminderedit" data-id="' + esA(r.id) + '" aria-label="Edit reminder ' + esA(r.name) + '"><i class="fas fa-pen"></i></button>' +
-      '<button type="button" class="rem-del" data-a="reminderdel" data-id="' + esA(r.id) + '" aria-label="Delete reminder ' + esA(r.name) + '"><i class="fas fa-xmark"></i></button></div>' +
+      '</div>' +
       '</div>';
   });
   h += '<button type="button" class="rem-add" data-a="reminderadd"><i class="fas fa-plus"></i> Add reminder</button>';
@@ -4363,6 +4369,7 @@ function schGestClassify(dx, dy, kind) {
   if (Math.abs(dx) < 10) return "tap";
   if (kind === "complete" && dx > 55) return "complete";
   if (kind === "delete" && dx < -55) return "delete";
+  if (kind === "manage" && dx < -55) return "manage"; // reminder rows: reveal edit + delete behind the card
   return "cancel"; // moved, but under threshold -> snap back
 }
 
@@ -4408,6 +4415,11 @@ function schGestClassify(dx, dy, kind) {
     if (verdict === "delete") {
       // iOS-style: stays open showing the red Delete button until tapped (or the row re-renders).
       row.style.transform = "translateX(-64px)";
+      return;
+    }
+    if (verdict === "manage") {
+      // Reminder cards: slide open to reveal the Edit + Delete actions (2 x 66px) behind the card.
+      row.style.transform = "translateX(-132px)";
       return;
     }
     // tap / ignore / cancel (under threshold) -> snap back; a real tap's click still reaches
@@ -4463,7 +4475,11 @@ _gestureSelfCheck();
   var sx = 0, sy = 0, active = false;
   var appEl = document.getElementById("app");
   appEl.addEventListener("touchstart", function(e) {
-    active = !!e.target.closest(".sch-view");
+    // Only the Daily view is date-paged by a horizontal swipe. On other views (e.g. Template, where
+    // the import preview is a horizontally-scrollable region) this listener used to fire too, and its
+    // render() snapped the preview's scroll back to the left — the reported "throws me to the leftmost"
+    // bug. Gating on view==="daily" also stops accidental date changes while scrolling those regions.
+    active = (typeof view !== "undefined" && view === "daily") && !!e.target.closest(".sch-view");
     if (!active) return;
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
   }, { passive: true });

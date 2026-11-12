@@ -1767,12 +1767,20 @@ function parseOneLine(trimmed) {
 function parseScheduleText(text, cardId) {
   var lines = (text || "").split("\n"), items = [], unread = [];
   lines.forEach(function(rawLine, i) {
-    var trimmed = rawLine.trim();
+    var trimmed = rawLine.trim(), lineCard = null, cardToken = trimmed.match(/^\[([^\]]+)\]\s*/);
+    if (cardToken) {
+      var wantedCard = cardToken[1].trim().toLowerCase();
+      lineCard = getCardMeta().filter(function(card) { return card.name.toLowerCase() === wantedCard; })[0] || null;
+      trimmed = trimmed.slice(cardToken[0].length).trim();
+    }
+    var optional = /\boptional\s*$/i.test(trimmed) || /\?\s*$/.test(trimmed);
+    if (optional) trimmed = trimmed.replace(/\boptional\s*$/i, "").replace(/\?\s*$/, "").trim();
     if (!trimmed) return;
     if (isHeaderLine(trimmed) && !TIME_RANGE_RE.test(trimmed) && !TIME_SINGLE_RE.test(trimmed)) return;
     var parsed = parseOneLine(trimmed);
     if (!parsed) { unread.push({ text:rawLine, i:i }); return; }
-    items.push(parsed);
+    if (optional) parsed.optional = true;
+    items.push({ item:parsed, card:lineCard });
   });
   // Fix 1: route each line to the card its words match instead of dumping the whole day into the
   // picked card — the chip is now just the DEFAULT for lines nothing matches. Emitting real card
@@ -1780,8 +1788,8 @@ function parseScheduleText(text, cardId) {
   var byName = {}, order = [], cards = getCards();
   function cardName(id) { return (cards.filter(function(c) { return c.id === id; })[0] || {}).name || "Daily Goals"; }
   var fallback = cardName(cardId);
-  items.forEach(function(it) {
-    var guess = guessCardId(it.name), nm = guess ? cardName(guess) : fallback;
+  items.forEach(function(entry) {
+    var it = entry.item, guess = guessCardId(it.name), nm = entry.card ? entry.card.name : (guess ? cardName(guess) : fallback);
     if (!byName[nm]) { byName[nm] = []; order.push(nm); }
     byName[nm].push(it);
   });
@@ -1803,7 +1811,7 @@ function renderParserPanel() {
   h += '</div>';
   h += '<textarea id="parse-text" style="margin-top:8px" placeholder="Activities for ' + esc((cards[0] && cards[0].name) || "this card") + ', e.g.\nGym 6:30\u20137:30am\nMorning run 7am Mon Wed Fri">' + esc(parseText) + '</textarea>';
   h += '<button class="bt bta t-sm" style="margin-top:8px" data-a="parserun">Read my day</button>';
-  h += '<p class="sch-parsehint">Need another card? Add one on your <b>Plan</b> page, then come back here.</p>';
+  h += '<p class="sch-parsehint">Tip: end a line with <b>optional</b> (or <b>?</b>) to mark it optional, or start it with <b>[Card name]</b> to send that line to another card. Need another card? Add one on your <b>Plan</b> page.</p>';
   if (parseUnread.length) {
     h += '<div style="margin-top:12px"><p style="font-size:12px;font-weight:600;color:#bfa46a">Couldn\u2019t read these \u2014 add a time or edit them</p>';
     parseUnread.forEach(function(u) {

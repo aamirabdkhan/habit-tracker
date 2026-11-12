@@ -488,6 +488,10 @@ body::before{display:none!important}
 .rem-later{background:transparent;border:1px solid var(--bd,#2A2725);color:var(--smut,#7A756E);border-radius:8px;padding:5px 13px;font-size:11px;font-weight:500;cursor:pointer}
 .rem-del{flex:none;align-self:flex-start;background:transparent;border:0;color:var(--smut,#7A756E);width:26px;height:26px;border-radius:7px;cursor:pointer;font-size:13px;opacity:.55;transition:.15s}
 .rem-del:hover,.rem-del:active{opacity:1;color:var(--dn,#B84C4C)}
+.rem-manage{display:flex;flex-direction:column;gap:2px;align-self:flex-start;flex:none}
+.rem-flbl{display:block;font-size:12px;color:var(--mt);margin:12px 0 5px;font-weight:600}
+.rem-finp{width:100%}
+.rem-fhint{font-size:11px;color:var(--mt);margin:5px 0 0;line-height:1.4}
 .rem-later:hover{color:var(--stext,#E8E2D9)}
 /* Add-reminder row (full-width dashed, discoverable) */
 .rem-add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:11px;background:transparent;border:1px dashed var(--bd,#2A2725);border-radius:12px;color:var(--smut,#7A756E);font:600 13px/1 'Space Grotesk',sans-serif;cursor:pointer;transition:.15s}

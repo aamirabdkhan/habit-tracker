@@ -444,6 +444,10 @@ var PRAYERS_ON_KEY = "ht_prayers_on";
 // Spread across the hue wheel so adjacent cards never look alike. Keeps #b05a86 (the mauve-pink
 // some profiles already use) so that saved colour still shows as selected and is re-pickable.
 var CARD_PALETTE = ["#e0a33a", "#e57a35", "#d6544c", "#e0589c", "#b05a86", "#9b5fd6", "#6a6fe0", "#4090d6", "#35b6c4", "#3bbe8a", "#8fb04a", "#a86b3c"];
+// Darker display colours for card accents in LIGHT mode — the dark-tuned palette above washes out
+// on the cream surface. card.color stays the stored identity; cardColor() only remaps for rendering.
+var CARD_PALETTE_LIGHT = { "#e0a33a": "#9A6500", "#e57a35": "#A94A0A", "#d6544c": "#A63B36", "#e0589c": "#A62D70", "#b05a86": "#84375F", "#9b5fd6": "#67349D", "#6a6fe0": "#3E47A8", "#4090d6": "#1767A8", "#35b6c4": "#087C88", "#3bbe8a": "#18734F", "#8fb04a": "#58751D", "#a86b3c": "#78431D" };
+function cardColor(c) { return (typeof effectiveTheme === "function" && effectiveTheme() === "light" && CARD_PALETTE_LIGHT[c]) ? CARD_PALETTE_LIGHT[c] : c; }
 
 // ---- metadata store (ht_cards) ----
 function getCardMeta() { try { return JSON.parse(localStorage.getItem(CARDS_KEY)) || []; } catch(e) { return []; } }
@@ -1109,7 +1113,8 @@ function renderReminders(todayISO) {
       '<p class="rem-meta' + (isLate ? ' late' : '') + '">' + esc(meta) + '</p>' +
       (r.note ? '<p class="rem-meta">' + esc(r.note) + '</p>' : '') + '</div>' +
       (isDue ? '<div class="rem-acts"><button type="button" class="rem-done' + (isLate ? ' late' : '') + '" data-a="reminderdone" data-id="' + esA(r.id) + '">Done</button><button type="button" class="rem-later" data-a="reminderlater" data-id="' + esA(r.id) + '">Later</button></div>' : '') +
-      '<button type="button" class="rem-del" data-a="reminderdel" data-id="' + esA(r.id) + '" aria-label="Delete reminder ' + esA(r.name) + '"><i class="fas fa-xmark"></i></button>' +
+      '<div class="rem-manage"><button type="button" class="rem-del" data-a="reminderedit" data-id="' + esA(r.id) + '" aria-label="Edit reminder ' + esA(r.name) + '"><i class="fas fa-pen"></i></button>' +
+      '<button type="button" class="rem-del" data-a="reminderdel" data-id="' + esA(r.id) + '" aria-label="Delete reminder ' + esA(r.name) + '"><i class="fas fa-xmark"></i></button></div>' +
       '</div>';
   });
   h += '<button type="button" class="rem-add" data-a="reminderadd"><i class="fas fa-plus"></i> Add reminder</button>';
@@ -1121,6 +1126,35 @@ function addReminderFromPrompt(todayISO) {
   var interval = when.trim().toLowerCase().match(/^(\d+)\s*(days?|weeks?|months?)$/), schedule;
   if (interval) schedule = { kind:"interval", every:+interval[1], unit:interval[2].replace(/s$/, "") + "s" }; else if (/^\d{4}-\d{2}-\d{2}$/.test(when.trim())) schedule = { kind:"fixed", date:when.trim() }; else { toast("Use days, weeks, months, or YYYY-MM-DD"); return; }
   var r = { id:"rem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), name:name.trim(), schedule:schedule }; r.nextFire = nextReminderFire(r, todayISO); saveReminders(getReminders().concat([r]));
+}
+// In-app reminder add/edit form (native prompt() is dead in installed PWAs). reminderEditor:
+// null | {mode:"add"} | {mode:"edit", id}. Schedule text parses the same shapes the old prompt did.
+var reminderEditor = null;
+function parseReminderSchedule(when) {
+  if (!when) return null;
+  var m = when.trim().toLowerCase().match(/^(\d+)\s*(days?|weeks?|months?)$/);
+  if (m) return { kind:"interval", every:+m[1], unit:m[2].replace(/s$/, "") + "s" };
+  if (/^\d{4}-\d{2}-\d{2}$/.test(when.trim())) return { kind:"fixed", date:when.trim() };
+  return null;
+}
+function reminderScheduleToInput(s) {
+  if (!s) return "";
+  if (s.kind === "interval") return s.every + " " + s.unit;
+  if (s.kind === "fixed" && s.date) return s.date;
+  return "";
+}
+function renderReminderEditor() {
+  if (!reminderEditor) return '';
+  var ed = reminderEditor, existing = ed.mode === "edit" ? getReminders().filter(function(r) { return r.id === ed.id; })[0] : null;
+  var nm = existing ? existing.name : "", sch = existing ? reminderScheduleToInput(existing.schedule) : "", note = existing && existing.note ? existing.note : "";
+  var h = '<div class="sch-ovbackdrop" data-a="reminditorcancel"><div class="sch-ovsheet" data-a="helpnoop">';
+  h += '<div class="sch-ovhead"><h2>' + (existing ? "Edit reminder" : "New reminder") + '</h2><button type="button" class="sch-ib" data-a="reminditorcancel" aria-label="Close"><i class="fas fa-xmark"></i></button></div>';
+  h += '<label class="rem-flbl">Name</label><input type="text" id="rem-f-name" class="inp rem-finp" maxlength="60" placeholder="e.g. Scooty service" value="' + esA(nm) + '">';
+  h += '<label class="rem-flbl">When</label><input type="text" id="rem-f-sched" class="inp rem-finp" placeholder="3 months · 2 weeks · 2026-12-15" value="' + esA(sch) + '">';
+  h += '<p class="rem-fhint">Repeat every N days / weeks / months, or a one-time date (YYYY-MM-DD).</p>';
+  h += '<label class="rem-flbl">Note <span style="opacity:.6">(optional)</span></label><input type="text" id="rem-f-note" class="inp rem-finp" maxlength="80" placeholder="" value="' + esA(note) + '">';
+  h += '<div class="flx gap-2" style="margin-top:14px"><button type="button" class="bt" data-a="reminditorcancel" style="flex:1">Cancel</button><button type="button" class="bt bta" data-a="remindersave" style="flex:1">' + (existing ? "Save" : "Add") + '</button></div>';
+  return h + '</div></div>';
 }
 // ---- self-check (run with page open at #reminderscheck) ----
 function _remindersSelfCheck() {
@@ -1765,7 +1799,7 @@ function renderParserPanel() {
     + '</ol>';
   h += '<p class="sch-parselbl">Which card do these lines go on?</p>';
   h += '<div class="sch-gapcards">';
-  cards.forEach(function(card) { h += '<button type="button" class="sch-gapcard' + (card.id === parseCardId ? ' on' : '') + '" style="--kc:' + esA(card.color) + '" data-a="parsecardchip" data-c="' + esA(card.id) + '">' + esc(card.name) + '</button>'; });
+  cards.forEach(function(card) { h += '<button type="button" class="sch-gapcard' + (card.id === parseCardId ? ' on' : '') + '" style="--kc:' + esA(cardColor(card.color)) + '" data-a="parsecardchip" data-c="' + esA(card.id) + '">' + esc(card.name) + '</button>'; });
   h += '</div>';
   h += '<textarea id="parse-text" style="margin-top:8px" placeholder="Activities for ' + esc((cards[0] && cards[0].name) || "this card") + ', e.g.\nGym 6:30\u20137:30am\nMorning run 7am Mon Wed Fri">' + esc(parseText) + '</textarea>';
   h += '<button class="bt bta t-sm" style="margin-top:8px" data-a="parserun">Read my day</button>';
@@ -1937,6 +1971,19 @@ var GUIDE_TOPICS = {
     how: "Turn Weight on in Settings, then enter today’s weight on the Today screen.",
     why: "Track a number that matters to you alongside your habits, with no extra app." }
 };
+// First-run teaching for the priority star — shown once the first star appears on screen (see render()).
+function renderPriorityExplainer() {
+  return '<div class="sch-ovbackdrop" data-a="priorityexplainerclose">'
+    + '<div class="sch-ovsheet" data-a="helpnoop">'
+    + '<div class="sch-ovhead"><h2><i class="fas fa-star" style="color:var(--ac);margin-right:8px"></i>Priorities</h2><button type="button" class="sch-ib" data-a="priorityexplainerclose" aria-label="Close"><i class="fas fa-xmark"></i></button></div>'
+    + '<ul class="sch-ovsteps">'
+    + '<li>The <b>★</b> marks a one-time task as a <b>priority</b> — the few things that must not slip today.</li>'
+    + '<li>Tap it to star. A starred task you don’t finish <b>carries over to tomorrow</b> with an age tag (“2d late”) until it’s done.</li>'
+    + '<li>All your priorities also gather on the <b>Overview</b> page.</li>'
+    + '</ul>'
+    + '<button type="button" class="bt bta" data-a="priorityexplainerclose" style="width:100%;margin-top:4px">Got it</button>'
+    + '</div></div>';
+}
 function renderGuideOverlay() {
   if (!guideView) return '';
   var h = '<div class="sch-guidescreen"><div class="sch-view" style="max-width:560px;margin:0 auto">';
@@ -1976,13 +2023,13 @@ function renderOvStatsModal() {
   var card = getCards().filter(function(c) { return c.id === ovStatsEdit; })[0];
   if (!card) return '';
   var h = '<div class="sch-ovbackdrop" data-a="ovstatsclose">';
-  h += '<div class="sch-ovsheet" data-a="helpnoop" style="--kc:' + esA(card.color) + '">';
+  h += '<div class="sch-ovsheet" data-a="helpnoop" style="--kc:' + esA(cardColor(card.color)) + '">';
   h += '<div class="sch-ovhead"><h2>Track in ' + esc(card.name) + '</h2><button type="button" class="sch-ib" data-a="ovstatsclose" aria-label="Close"><i class="fas fa-xmark"></i></button></div>';
   h += '<p style="font-size:12px;color:var(--smut);margin:0 0 12px">Choose which items show a streak grid here.</p>';
   if (!card.items.length) { h += '<p class="sch-cardnothing">No items on this card yet.</p>'; }
   else card.items.forEach(function(it) {
     var on = getItemShow(card.id, it.n);
-    h += '<button type="button" class="sch-ovpickrow' + (on ? ' on' : '') + '" data-a="ovstatstoggle" data-c="' + esA(card.id) + '" data-k="' + esA(it.n) + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" style="--kc:' + esA(card.color) + '">';
+    h += '<button type="button" class="sch-ovpickrow' + (on ? ' on' : '') + '" data-a="ovstatstoggle" data-c="' + esA(card.id) + '" data-k="' + esA(it.n) + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '" style="--kc:' + esA(cardColor(card.color)) + '">';
     h += '<span class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></span>';
     h += '<span>' + esc(it.n) + '</span></button>';
   });
@@ -2123,10 +2170,10 @@ function emptyStateHTML(icon, text) {
 
 function renderPlanCard(card) {
   var items = cardItemsFor(card.id);
-  var h = '<div class="sch-cardblock" style="--kc:' + esA(card.color) + '">';
+  var h = '<div class="sch-cardblock" style="--kc:' + esA(cardColor(card.color)) + '">';
   h += '<div class="sch-cardhead">';
   // The icon doubles as the colour button: tap it to open a swatch row and recolour the card.
-  h += '<button type="button" class="sch-cardcolorbtn" data-a="cardcolor" data-c="' + esA(card.id) + '" aria-label="Change colour of ' + esA(card.name) + '"><i class="fas ' + esA(card.icon) + ' sch-cardicon" style="--kc:' + esA(card.color) + '"></i></button>';
+  h += '<button type="button" class="sch-cardcolorbtn" data-a="cardcolor" data-c="' + esA(card.id) + '" aria-label="Change colour of ' + esA(card.name) + '"><i class="fas ' + esA(card.icon) + ' sch-cardicon" style="--kc:' + esA(cardColor(card.color)) + '"></i></button>';
   if (tplCardEdit === card.id) {
     h += '<input type="text" class="sch-addname sch-cardnameinp" id="cardname-' + esA(card.id) + '" value="' + esA(card.name) + '" maxlength="40">';
   } else {
@@ -2644,7 +2691,7 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
     // which also took away the only route back in to re-enable anything on it.
     var chunks = items.length ? chunkArr(items, 5) : [[]];
     chunks.forEach(function(itemChunk, ci) {
-      var h = '<div class="sch-ovcard" style="--kc:' + esA(card.color) + '"><h3><i class="fas ' + esA(card.icon) + '" style="color:var(--kc);margin-right:6px"></i>' + esc(card.name) + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : '');
+      var h = '<div class="sch-ovcard" style="--kc:' + esA(cardColor(card.color)) + '"><h3><i class="fas ' + esA(card.icon) + '" style="color:var(--kc);margin-right:6px"></i>' + esc(card.name) + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : '');
       // Only the first chunk carries the picker, so a two-slide card does not show it twice.
       if (ci === 0) h += '<button type="button" class="sch-ib sch-ovedit" data-a="ovstatsedit" data-c="' + esA(card.id) + '" aria-label="Choose which items to track"><i class="fas fa-pen"></i></button>';
       h += '</h3>';
@@ -2664,10 +2711,10 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
           h += '<div class="phg" style="--cols:' + days + '">';
           for (var d2 = 0; d2 < days; d2++) {
             var on2 = arr[d2];
-            h += '<div class="phc" style="background:' + (on2 ? esA(card.color) : "rgba(150,160,180,.10)") + '" title="' + esc(it.n) + ' Day ' + (d2 + 1) + ': ' + (on2 ? 'Done' : 'Missed') + '"></div>';
+            h += '<div class="phc" style="background:' + (on2 ? esA(cardColor(card.color)) : "rgba(150,160,180,.10)") + '" title="' + esc(it.n) + ' Day ' + (d2 + 1) + ': ' + (on2 ? 'Done' : 'Missed') + '"></div>';
           }
           h += '</div></div>';
-          legend += '<div class="sch-ovlegenditem"><span>' + esc(it.n) + '</span><strong style="color:' + esA(card.color) + '"><i class="fas fa-fire" style="margin-right:4px"></i>' + st.current + ' · best ' + st.best + '</strong></div>';
+          legend += '<div class="sch-ovlegenditem"><span>' + esc(it.n) + '</span><strong style="color:' + esA(cardColor(card.color)) + '"><i class="fas fa-fire" style="margin-right:4px"></i>' + st.current + ' · best ' + st.best + '</strong></div>';
         });
         h += '<div class="sch-ovlegend">' + legend + '</div>';
         if (countItems.length) h += countItems.map(function(it) { var arr = (cardDayItems[card.id] || {})[it.n] || []; return '<p class="ov-count">' + esc(it.n) + ': ' + arr.filter(Boolean).length + ' times done</p>'; }).join('');
@@ -2837,7 +2884,13 @@ render = function() {
   else if (view === "prefs") h = rPrefs();
   else if (view === "prayertimes") { document.getElementById("content").innerHTML = rPrayerTimes(); return; }
   else { originalRender(); return; }
-  document.getElementById("content").innerHTML = h + renderTabBar(view) + renderHelpOverlay() + renderGuideOverlay() + renderOvStatsModal();
+  var _body = h + renderTabBar(view) + renderHelpOverlay() + renderGuideOverlay() + renderReminderEditor() + renderOvStatsModal();
+  // First time the priority star appears on screen, teach it once (like the Pehar intro).
+  if (_body.indexOf('data-a="odpriority"') !== -1 && !localStorage.getItem("ht_priority_explainer_seen")) {
+    _body += renderPriorityExplainer();
+    try { localStorage.setItem("ht_priority_explainer_seen", "1"); } catch (e) {}
+  }
+  document.getElementById("content").innerHTML = _body;
 };
 
 // Bottom tab bar — replaces the old top segment nav (renderNav). Maps the 5 spec
@@ -3050,7 +3103,7 @@ function buildTimeline(cards, day, dow) {
     dayItemsForCard(card, day, dow).forEach(function(it, ii) {
       if (it.time) {
         var dur2 = effectiveDur(card.id, it.n, it.oneday, day), start2 = timeToMin(it.time);
-        items.push({ id:card.id, name:it.n, t:it.time, kc:card.color, done:it.done, isPrayer:false, oneday:it.oneday, optional:it.optional, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
+        items.push({ id:card.id, name:it.n, t:it.time, kc:cardColor(card.color), done:it.done, isPrayer:false, oneday:it.oneday, optional:it.optional, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
       }
     });
   });
@@ -3084,7 +3137,7 @@ function renderTimedDisclosure(card, dow) {
   if (!expandedPeharCards[card.id]) return '<div class="pehar-disclosure">' + toggle + '</div>';
   var h = '<div class="pehar-disclosure open">' + toggle;
   order.forEach(function(name) {
-    h += '<div class="pehar-pill-row" style="--kc:' + esA(card.color) + '"><b>' + esc(name) + (groups[name].optional ? ' <span class="sch-optionaltag">optional</span>' : '') + '</b>';
+    h += '<div class="pehar-pill-row" style="--kc:' + esA(cardColor(card.color)) + '"><b>' + esc(name) + (groups[name].optional ? ' <span class="sch-optionaltag">optional</span>' : '') + '</b>';
     groups[name].slots.forEach(function(slot) { h += '<button type="button" data-a="gototimeline" data-block="' + esA(slot.okey) + '">' + esc(slot.time) + '</button>'; });
     h += '</div>';
   });
@@ -3107,7 +3160,7 @@ function renderCard(card, items) {
   var pct = total ? Math.round(done / total * 100) : 0;
   var untimed = items.filter(function(it) { return !it.time; });
   var timed = items.filter(function(it) { return !!it.time; });
-  var h = '<div class="sch-cardblock" style="--kc:' + esA(card.color) + '">';
+  var h = '<div class="sch-cardblock" style="--kc:' + esA(cardColor(card.color)) + '">';
   h += '<div class="sch-cardhead"><i class="fas ' + esA(card.icon) + ' sch-cardicon"></i><span class="sch-cardname">' + esc(card.name) + '</span><span class="sch-cardcount">' + done + '/' + total + '</span></div>';
   h += '<div class="sch-cardbar"><div class="sch-cardbarfill" style="transform:scaleX(' + (pct / 100) + ')"></div></div>';
   if (!total) {
@@ -3115,9 +3168,9 @@ function renderCard(card, items) {
   } else {
     if (untimed.length) {
       untimed.forEach(function(it) {
-        h += '<div class="sch-gest" data-gest="complete" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(card.color) + '">';
+        h += '<div class="sch-gest" data-gest="complete" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(cardColor(card.color)) + '">';
         h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
-        h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(card.color) + '">';
+        h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" style="--kc:' + esA(cardColor(card.color)) + '">';
         h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
         h += '<span class="sch-name">' + esc(it.n) + (it.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (it.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (it.priority && isT(cDate) ? ' <span class="sch-priorityage">' + (priorityAge(it.priorityCreatedOn, dk(cDate)) ? priorityAge(it.priorityCreatedOn, dk(cDate)) + 'd late' : 'today') + '</span>' : '') + '</span>';
         if (it.oneday) h += '<button type="button" class="sch-edit' + (it.priority ? ' on' : '') + '" data-a="odpriority" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="' + (it.priority ? 'Remove priority from ' : 'Prioritize ') + esA(it.n) + '"><i class="fas fa-star"></i></button><button type="button" class="sch-edit" data-a="oddel" data-f="' + esA(card.id) + '" data-k="' + esA(it.n) + '" aria-label="Remove ' + esA(it.n) + '"><i class="fas fa-xmark"></i></button>';
@@ -3143,7 +3196,7 @@ function renderGapQuickAdd(cards) {
   var chosen = schQuickGap.cardId || "habits", h = '<div class="sch-gapform">';
   h += '<input type="text" id="gap-name" class="sch-addname" placeholder="What will you do?" maxlength="60" autocomplete="off">';
   h += '<div class="sch-gapcards">';
-  cards.forEach(function(card) { h += '<button type="button" class="sch-gapcard' + (card.id === chosen ? ' on' : '') + '" style="--kc:' + esA(card.color) + '" data-a="gapquickcard" data-c="' + esA(card.id) + '">' + esc(card.name) + '</button>'; });
+  cards.forEach(function(card) { h += '<button type="button" class="sch-gapcard' + (card.id === chosen ? ' on' : '') + '" style="--kc:' + esA(cardColor(card.color)) + '" data-a="gapquickcard" data-c="' + esA(card.id) + '">' + esc(card.name) + '</button>'; });
   h += '</div><div class="sch-addfoot"><input type="time" id="gap-time" class="sch-timeinp" value="' + esA(minToHHMM(schQuickGap.start)) + '">';
   h += addDurControl("gap-dur", 30);
   h += '<button class="sch-addgo" data-a="gapquicksave">Add</button></div></div>';
@@ -3620,6 +3673,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     var a = t.dataset.a;
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
+    if (a === "priorityexplainerclose") { render(); return; }
     if (a === "openguide")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
     if (a === "guidetopic") { guideView = t.dataset.k; render(); window.scrollTo(0, 0); return; }
     if (a === "guideback")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
@@ -3859,7 +3913,22 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "prevday") { cDate.setDate(cDate.getDate() - 1); render(); return; }
     if (a === "nextday") { cDate.setDate(cDate.getDate() + 1); render(); return; }
     if (a === "today") { cDate = new Date(); render(); return; }
-    if (a === "reminderadd") { addReminderFromPrompt(dk(cDate)); render(); return; }
+    if (a === "reminderadd") { reminderEditor = { mode:"add" }; render(); return; }
+    if (a === "reminderedit") { reminderEditor = { mode:"edit", id:t.dataset.id }; render(); return; }
+    if (a === "reminditorcancel") { reminderEditor = null; render(); return; }
+    if (a === "remindersave") {
+      var nmEl = document.getElementById("rem-f-name"), schEl = document.getElementById("rem-f-sched"), noteEl = document.getElementById("rem-f-note");
+      var nm = (nmEl ? nmEl.value : "").trim(); if (!nm) { toast("Name the reminder"); return; }
+      var sch = parseReminderSchedule(schEl ? schEl.value : ""); if (!sch) { toast("Use days, weeks, months, or YYYY-MM-DD"); return; }
+      var note = (noteEl ? noteEl.value : "").trim(), rows = getReminders(), ed = reminderEditor, isEdit = ed && ed.mode === "edit";
+      if (isEdit) {
+        rows = rows.map(function(r) { if (r.id === ed.id) { r.name = nm; r.schedule = sch; r.note = note; r.snoozedUntil = ""; r.nextFire = nextReminderFire(r, dk(cDate)); } return r; });
+      } else {
+        var r = { id:"rem_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7), name:nm, schedule:sch, note:note }; r.nextFire = nextReminderFire(r, dk(cDate)); rows = rows.concat([r]);
+      }
+      saveReminders(rows); reminderEditor = null; render(); toast(isEdit ? "Reminder updated" : "Reminder added");
+      return;
+    }
     if (a === "reminderdone") { completeReminder(t.dataset.id, dk(cDate)); render(); return; }
     if (a === "reminderlater") { var tm = new Date(cDate); tm.setDate(tm.getDate() + 1); snoozeReminder(t.dataset.id, dk(tm)); render(); return; }
     if (a === "reminderdel") { var rid = t.dataset.id; uiConfirm("Delete this reminder?", function() { saveReminders(getReminders().filter(function(r) { return r.id !== rid; })); render(); toast("Reminder deleted"); }, { title: "Delete reminder?", confirmText: "Delete" }); return; }

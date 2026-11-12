@@ -1556,19 +1556,20 @@ function importPrompt() {
     + micro
     + "\n   4. Ask exactly: \"Do you want reminders, and for which items? (default: none)\""
     + "\n   Output NO JSON in this step."
-    + "\n\nSTEP 2 — CONFIRM (after they answer). Show the finished week as plain text, day by day. Below it, list every change you made, one short line each. Then ask exactly: \"Reply 'yes' for the code, or tell me what to fix.\" Still output NO JSON in this step."
+    + "\n\nSTEP 2 — CONFIRM (after they answer). Show the finished week as plain text, day by day. Before showing it, VERIFY: scan for any two items whose times overlap (an item occupies time .. time+duration; include every slot and the prayers). If an overlap is not one the user explicitly accepted, fix it — sequence the items back-to-back — then note it. Also re-check that every item keeps its stated duration and every slot you were given. Below the week, list every change you made, one short line each. Then ask exactly: \"Reply 'yes' for the code, or tell me what to fix.\" Still output NO JSON in this step."
     + "\n\nSTEP 3 — CODE (only after they reply yes). Output ONLY the JSON object shown under OUTPUT FORMAT — no code fence, no words before or after."
     + "\n\nIf the user already pasted their whole day up front, skip Step 1 and go straight to Step 2, then Step 3."
     + "\n\nRULES:"
     + "\n1. Do not overlap blocks. Place commitments where the user describes them. Use day-of-week scoping for weekly items."
-    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. For several times use slots:[{time,days?}]; never duplicate the activity."
+    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. If it happens at MORE THAN ONE clock time, you MUST list EVERY time in slots:[{time,days?}] on that one item — never keep only one time and never drop a slot. Carry forward every item AND every slot the user gave you; dropping any is an error."
+    + "\n2b. DURATIONS ARE EXACT. Use the exact minutes the user stated for each item — a 5-minute habit stays 5, a 120-minute block stays 120. The 30-minute default applies ONLY to an item whose duration was never mentioned. NEVER replace a duration you were told with 30."
     + "\n3. DO NOT RENAME user activities. Keep real names exactly; the app adds a -2 suffix itself when needed."
     + (prayers
       ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to the requested duration. If 120m loses 35m, the second piece runs 35m longer; never lose time."
       : "\n4. Use plain clock times only. Never shorten a block below its requested duration.")
     + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put the day-flow summary in top-level notes."
     + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders.";
-  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin now — Step 1, unless the user already pasted their whole day, in which case go straight to Step 2.\n\n";
+  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (omit duration ONLY when the user never gave one, in which case it defaults to 30" + (prayers ? "; anchor duration defaults to 35" : "") + " — never use 30 to override a duration you were told; omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin now — Step 1, unless the user already pasted their whole day, in which case go straight to Step 2.\n\n";
 }
 // Self-check for the interactive AI planner prompt (run at #aipromptcheck).
 function _aiPromptSelfCheck() {
@@ -1588,6 +1589,9 @@ function _aiPromptSelfCheck() {
     assert(/STEP 1/.test(on) && /STEP 2/.test(on) && /STEP 3/.test(on), "prompt: missing 3-step structure");
     assert(/Ask ALL your questions at once/i.test(on), "prompt: questions not batched into one message");
     assert(/Reply 'yes' for the code/.test(on), "prompt: missing plain-text confirm step");
+    assert(/DURATIONS ARE EXACT/.test(on) && /NEVER replace a duration you were told/i.test(on), "prompt: missing exact-duration rule");
+    assert(/list EVERY time in slots/i.test(on) && /never drop a slot/i.test(on), "prompt: missing no-drop multi-slot rule");
+    assert(/scan for any two items whose times overlap/i.test(on), "prompt: missing Step-2 overlap verification");
     setPrayersOn(false);
     var off = importPrompt();
     assert(!/Fajr|prayer/i.test(off), "prompt: prayer text remains while prayers are off");

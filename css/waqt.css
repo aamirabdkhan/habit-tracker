@@ -579,6 +579,23 @@ body::before{display:none!important}
   color-scheme:light;
 }
 [data-theme="light"] .sch-methodsel{color-scheme:light}
+/* --ink is light (a surface) in light mode, but these chips/buttons use it as TEXT on a gold/card
+   fill — force dark text so selected labels stay readable (~4.4:1 vs the ~2.9:1 beige-on-gold bug).
+   NOT .sch-tab.act / .sch-wkday.istoday — those fill with --stext (dark), so beige text is correct. */
+[data-theme="light"] .sch-day.on,
+[data-theme="light"] .sch-durchip.on,
+[data-theme="light"] .sch-segbtn.on,
+[data-theme="light"] .sch-addgo,
+[data-theme="light"] .sch-nowtag,
+[data-theme="light"] .sch-gapcard.on{color:#231a0b}
+/* Native controls: these inputs hard-set color-scheme:dark, so their pickers render dark on cream. */
+[data-theme="light"] .sch-winp,
+[data-theme="light"] .sch-timeinp,
+[data-theme="light"] .sch-durinp,
+[data-theme="light"] .sch-timepill input,
+[data-theme="light"] .sch-addname,
+[data-theme="light"] .sch-importbox textarea,
+[data-theme="light"] .sch-remtime{color-scheme:light}
 
 /* ============================================================
    GUIDE (Settings > Guide) + onboarding "what you can do" cards. All token-driven, so light

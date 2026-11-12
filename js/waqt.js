@@ -74,7 +74,7 @@ function uiConfirm(message, onConfirm, opts) {
   function close() { ov.remove(); }
   function show(text, buttonText, final) {
     ov.innerHTML = '<div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="ui-confirm-title">'
-      + '<h2 class="auth-title" id="ui-confirm-title">' + esc(final ? title : (opts.secondTitle || title)) + '</h2>'
+      + '<h2 class="auth-title" id="ui-confirm-title">' + esc(final ? (opts.secondTitle || title) : title) + '</h2>'
       + '<p style="color:var(--mt);line-height:1.5;margin:-.75rem 0 1.5rem;text-align:center">' + esc(text) + '</p>'
       + '<div style="display:flex;justify-content:flex-end;gap:.6rem"><button class="bt" type="button">' + esc(cancelText) + '</button>'
       + '<button class="bt bta" type="button" style="background:' + (opts.danger === false ? "var(--ac)" : "var(--dn)") + ';border-color:' + (opts.danger === false ? "var(--ac)" : "var(--dn)") + '">' + esc(buttonText) + '</button></div></div>';
@@ -1527,7 +1527,7 @@ function importPrompt() {
       : "\n4. Use plain clock times only. Never shorten a block below its requested duration.")
     + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put the day-flow summary in top-level notes."
     + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders.";
-  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin with Step 1 now.\n\n";
+  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (default duration 30" + (prayers ? "; anchor duration defaults to 35" : "") + ", and omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin now — Step 1, unless the user already pasted their whole day, in which case go straight to Step 2.\n\n";
 }
 // Self-check for the interactive AI planner prompt (run at #aipromptcheck).
 function _aiPromptSelfCheck() {

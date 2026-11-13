@@ -46,18 +46,27 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
   const H=HADITHS[doy % HADITHS.length] || HADITHS[0];
   const fam=(typeof config!=="undefined" && config.widgetFamily) || "medium";
   const isLock=fam.indexOf("accessory")===0;
+  const isMedium=fam==="medium" || fam==="systemMedium";
+  const isHomeFallback=fam==="small" || fam==="systemSmall" || fam==="large" || fam==="systemLarge";
   const w=new ListWidget();
-  if(fam!=="medium"){
-    // Hadith design is intentionally medium-only; all other families get a safe, unclipped hint.
-    if(!isLock) w.backgroundColor=new Color(BG);
+  if(fam==="accessoryRectangular"){
+    w.setPadding(4,6,4,6);
+    const quote=w.addText("“"+H.t+"”"); quote.font=serif(13,false); quote.minimumScaleFactor=0.55;
+  } else if(fam==="accessoryInline"){
+    const snippet=H.t.length>54?H.t.slice(0,53).replace(/\s+\S*$/,"")+"…":H.t;
+    const quote=w.addText(snippet); quote.font=Font.systemFont(11); quote.lineLimit=1; quote.minimumScaleFactor=0.65;
+  } else if(fam==="accessoryCircular"){
+    const mark=w.addText("H"); mark.font=Font.boldSystemFont(14); mark.centerAlignText();
+  } else if(isHomeFallback){
+    w.backgroundColor=new Color(BG);
     w.setPadding(12,12,12,12);
     w.addSpacer();
-    const fallback=w.addText(isLock?"Use Medium for Hadith":"Use a Medium widget for Hadith");
-    fallback.font=isLock?Font.systemFont(10):mono(11,false);
-    fallback.textColor=isLock?undefined:new Color(MUTED);
+    const fallback=w.addText("Use a Medium widget for Hadith");
+    fallback.font=mono(11,false);
+    fallback.textColor=new Color(MUTED);
     fallback.centerAlignText(); fallback.lineLimit=2; fallback.minimumScaleFactor=0.75;
     w.addSpacer();
-  } else {
+  } else if(isMedium) {
     w.backgroundColor=new Color(BG); w.setPadding(12,16,10,16);
     w.addSpacer();
     const eye=w.addText("HADITH OF THE DAY"); eye.font=mono(9,true); eye.textColor=new Color(GOLD); eye.textOpacity=0.9; eye.centerAlignText();

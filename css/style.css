@@ -34,8 +34,8 @@ h1,h2,h3{font-family:'DM Serif Display',serif}
 .rta::placeholder{color:var(--mt);opacity:.5}
 .bt{padding:.4rem .85rem;border-radius:8px;border:1px solid var(--bd);background:var(--sf);color:var(--fg);font-family:'Space Grotesk',sans-serif;font-size:.83rem;cursor:pointer;transition:all .2s;outline:none}
 .bt:hover{background:var(--cd);border-color:var(--ac);color:var(--ac)}
-.bta{background:var(--ac);color:var(--bg);border-color:var(--ac);font-weight:600}
-.bta:hover{background:var(--ach);border-color:var(--ach);color:var(--bg)}
+.bta{background:var(--ac);color:#1B140A;border-color:var(--ac);font-weight:600}
+.bta:hover{background:var(--ach);border-color:var(--ach);color:#1B140A}
 .bto{padding:.45rem 1rem;border-radius:10px;border:1px solid var(--bd);background:var(--sf);color:var(--mt);font-family:'Space Grotesk',sans-serif;font-size:.82rem;cursor:pointer;transition:all .2s;outline:none}
 .bto:hover{border-color:var(--ac);color:var(--ac)}
 .bto.act{border-color:var(--ac);background:var(--acd);color:var(--ac)}

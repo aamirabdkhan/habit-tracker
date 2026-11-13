@@ -527,6 +527,25 @@ body::before{display:none!important}
 .share-export-day{color-scheme:light;background:#FAF6EC;color:#2A2216}.share-export-day .share-rail:before{width:4px}.share-export-day .share-rail .share-item:before{width:18px;height:18px;left:-22px;top:16px;border-width:4px}.share-export-day .share-daypart h4{font-size:32px}.share-export-day .share-lines .share-item:before{width:6px}
 .share-export-week .share-weekfoot .share-qr svg{width:100px;height:100px}
 
+/* Composer uses app tokens; poster/export palette stays independently fixed above. */
+:root{--surface:var(--cd);--surface2:var(--sf);--line:var(--bd);--muted:var(--mt);--faint:rgba(232,226,217,.12);--ink:var(--fg);--ink2:var(--sf)}
+:root[data-theme="light"]{--surface:var(--cd);--surface2:var(--sf);--line:var(--bd);--muted:var(--mt);--faint:rgba(42,34,22,.10);--ink:var(--fg);--ink2:var(--sf)}
+.share-composer{box-shadow:0 18px 44px rgba(0,0,0,.48)}
+.share-tab,.share-mode,.share-look,.share-theme,.share-check,.share-toggle{min-height:44px}
+.share-tab.on,.share-mode.on{background:#201506;border-color:#201506;color:#fff8e9}
+.share-look.on,.share-theme.on{background:var(--acd);border-color:var(--ac);color:var(--fg)}
+.share-composer button:focus-visible,.share-composer input:focus-visible,.share-composer label:has(input:focus-visible){outline:3px solid var(--ac);outline-offset:2px}
+.share-toggle i,.share-check input{border-color:var(--bd);background:var(--surface2)}
+.share-check input:checked,.share-toggle input:checked+i{background:#4A8C5C;border-color:#4A8C5C}
+.share-kicker{color:var(--ach)}
+.share-action{position:sticky;bottom:-24px;z-index:5;width:100%;min-height:44px;margin:0 0 14px;box-shadow:0 8px 16px rgba(0,0,0,.25);color:#201506;background:#E0A84B;border-color:#E0A84B}
+.share-action:hover{color:#201506;background:#F0BD62;border-color:#F0BD62}.share-action:disabled{opacity:.72;cursor:progress}
+.share-name,.share-weekname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.share-item.done .share-name:after{display:inline-block;text-decoration:none}
+.share-weekcol{width:260px;min-width:260px}.share-weekitem,.share-weekcell .share-weekitem{grid-template-columns:6px auto minmax(130px,1fr) auto;align-items:baseline}.share-weekcell .share-weekitem i{grid-row:auto}.share-weekcell .share-weektime,.share-weekcell .share-weekname{grid-column:auto}.share-weekgrid{min-width:1120px}.share-weekgridrow{grid-template-columns:86px repeat(7,minmax(145px,1fr))}
+.share-weekdayhead span,.share-weekdayhead small,.share-weekgridday span,.share-weektime,.share-weekdur,.share-weekscrollnote{color:#665b49}.share-frame.t-gradient .share-caption{color:#59451E}.share-frame.t-gradient .share-overline{color:#6A4312}
+.share-export-day{background:transparent!important;color-scheme:normal}.share-export-day .share-frame{overflow:hidden}.share-export-day .share-agenda .share-item{border-left-width:7px}
+.share-export-week{background:transparent!important;color-scheme:normal}.share-pdfday{width:794px;min-height:1080px;padding:54px 52px 42px;display:flex;flex-direction:column;background:#FAF6EC;color:#2A2216;font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif}.share-pdfday.t-midnight{background:#17150F;color:#F0E8D9}.share-pdfday.t-gradient{background:linear-gradient(158deg,#FDF5E2,#EFDFC0);color:#2A2216}.share-pdfday header{padding-bottom:22px;border-bottom:2px solid currentColor}.share-pdfday header p{margin:0 0 8px;color:inherit;font-size:14px;font-weight:700;letter-spacing:.14em}.share-pdfday h1{margin:0;font:400 42px/1.1 "DM Serif Display",Georgia,serif}.share-pdfday main{display:grid;gap:12px;align-content:start;flex:1;padding:28px 0}.share-pdfrow{display:grid;grid-template-columns:12px 112px minmax(0,1fr) auto;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid currentColor;font-size:20px}.share-pdfrow i{width:10px;height:10px;border-radius:50%;background:var(--share-c)}.share-pdfrow span,.share-pdfrow small{font-size:16px;white-space:nowrap}.share-pdfrow b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.share-pdfday footer{display:flex;align-items:center;justify-content:space-between;padding-top:22px;border-top:2px solid currentColor}.share-pdfday .share-badge{display:flex;flex-wrap:wrap;gap:0 5px;color:inherit}.share-pdfday .share-badge small{flex-basis:100%}.share-pdfday .share-badge b{color:inherit}.share-pdfday .share-qr svg{width:92px;height:92px}
+
 /* PDF mount is paper by itself. Never inherit app dark/light tokens. */
 .share-export-week{color-scheme:light;background:#FAF6EC;color:#2A2216}
 .share-export-week .share-weeksheet,.share-export-week .share-weekcols,.share-export-week .share-weekstack{background:#FAF6EC;border-color:#E0D4BF;color:#2A2216}
@@ -752,3 +771,12 @@ body::before{display:none!important}
 .sch-buildpanel{margin:0 0 14px;animation:bhslide .2s ease}
 @media (prefers-reduced-motion:reduce){.sch-buildpanel{animation:none}.sch-bhb:active{transform:none}}
 @keyframes bhslide{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* Final Pehar composer tokens: must beat legacy paper rules above. */
+:root,:root[data-theme="light"]{--surface:var(--cd);--surface2:var(--sf);--line:var(--bd);--muted:var(--mt);--ink:var(--fg);--ink2:var(--sf)}
+.share-composer{background:var(--surface);border-color:var(--line);box-shadow:0 18px 44px rgba(0,0,0,.48)}
+.share-composer .sch-ovhead,.share-tabs,.share-tab,.share-segment,.share-look,.share-controlgroup,.share-captionfield .inp,.share-weekintro,.share-always{background:var(--surface);border-color:var(--line)}
+.share-weeksheet{background:var(--surface);border-color:var(--line);box-shadow:0 18px 44px rgba(0,0,0,.28)}.share-paperbar,.share-weekdayhead,.share-weekfoot{background:var(--surface2);border-color:var(--line);color:var(--muted)}.share-paperbar b,.share-weekdayhead b,.share-weekgridday b,.share-weekitem{color:var(--ink)}.share-weekcols,.share-weekstack,.share-weekcol,.share-weekstackday,.share-weekgridrow,.share-weekpart,.share-weekgridday,.share-weekcell{background:var(--surface);border-color:var(--line);color:var(--ink)}.share-weekpart{color:var(--ac)}
+.share-export-day{background:transparent!important;color-scheme:normal}.share-export-week{background:transparent!important;color-scheme:normal}
+.share-badge{display:flex;flex-wrap:wrap;gap:0 4px}.share-badge small{flex-basis:100%}.share-item.done .share-name:after{content:none}
+[data-theme="light"] .share-kicker{color:#754100}

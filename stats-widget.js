@@ -106,6 +106,11 @@
 
   const counts = Array.isArray(stats.counts) ? stats.counts : [];
   const nextItem = stats.next || feed.nextPrayer || null;
+  let totalDone = 0, totalCount = 0;
+  for (let i = 0; i < counts.length; i++) {
+    totalDone += typeof counts[i].done === "number" ? counts[i].done : 0;
+    totalCount += typeof counts[i].total === "number" ? counts[i].total : 0;
+  }
 
   const fam = (typeof config !== "undefined" && config.widgetFamily) || "medium";
   const isLock = fam.indexOf("accessory") === 0;
@@ -142,6 +147,52 @@
       const t = w.addText(monoOneLiner);
       t.font = monoFont(11);
     }
+  } else if (fam === "small") {
+    // Small home-screen widget: dial and aggregate count, with next prayer pinned to bottom.
+    w.backgroundColor = new Color(BG);
+    w.setPadding(13, 14, 12, 14);
+    w.addSpacer();
+
+    const summary = w.addStack();
+    summary.centerAlignContent();
+    const ringImg = summary.addImage(createProgressRing(percent, 72));
+    ringImg.imageSize = new Size(72, 72);
+    summary.addSpacer(12);
+    const countStack = summary.addStack();
+    countStack.layoutVertically();
+    countStack.centerAlignContent();
+    const total = countStack.addText(`${totalDone}/${totalCount}`);
+    total.font = Font.boldSystemFont(19);
+    total.textColor = new Color(TEXT);
+    total.centerAlignText();
+    countStack.addSpacer(3);
+    const totalLabel = countStack.addText("TODAY");
+    totalLabel.font = monoFont(8, "medium");
+    totalLabel.textColor = new Color(MUTED);
+    totalLabel.centerAlignText();
+
+    w.addSpacer();
+    const nextStack = w.addStack();
+    nextStack.centerAlignContent();
+    const nextPrefix = nextStack.addText("Next: ");
+    nextPrefix.font = monoFont(10);
+    nextPrefix.textColor = new Color(MUTED);
+    if (nextItem && nextItem.name) {
+      const nName = nextStack.addText(nextItem.name);
+      nName.font = monoFont(10, "bold");
+      nName.textColor = new Color(TEXT);
+      if (nextItem.in) {
+        const inStr = String(nextItem.in);
+        const inText = inStr.startsWith("in ") ? inStr.slice(3) : inStr;
+        const nIn = nextStack.addText(" · in " + inText);
+        nIn.font = monoFont(10);
+        nIn.textColor = new Color(MUTED);
+      }
+    } else {
+      const nNone = nextStack.addText(feed.error ? "Open Waqt to sync" : "All caught up");
+      nNone.font = monoFont(10);
+      nNone.textColor = new Color(MUTED);
+    }
   } else {
     // Home-screen medium widget: full colour
     w.backgroundColor = new Color(BG);
@@ -160,21 +211,7 @@
     const statsStack = top.addStack();
     statsStack.centerAlignContent();
 
-    if (fam === "small") {
-      // Compact: one combined total instead of per-card columns (ring + Next line render regardless).
-      let totalDone = 0, totalCount = 0;
-      for (let i = 0; i < counts.length; i++) {
-        totalDone += typeof counts[i].done === "number" ? counts[i].done : 0;
-        totalCount += typeof counts[i].total === "number" ? counts[i].total : 0;
-      }
-      const total = statsStack.addText(`${totalDone}/${totalCount}`);
-      total.font = Font.boldSystemFont(17);
-      total.textColor = new Color(TEXT);
-      statsStack.addSpacer(5);
-      const totalLabel = statsStack.addText("TODAY");
-      totalLabel.font = monoFont(7, "medium");
-      totalLabel.textColor = new Color(MUTED);
-    } else if (counts.length === 0) {
+    if (counts.length === 0) {
       const noCounts = statsStack.addText(feed.error ? "Open Waqt to sync" : "No active counts");
       noCounts.font = Font.systemFont(12);
       noCounts.textColor = new Color(MUTED);

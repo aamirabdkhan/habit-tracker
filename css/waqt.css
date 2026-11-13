@@ -198,6 +198,8 @@ body::before{display:none!important}
 .sch-timepill{display:inline-flex;align-items:center;gap:8px;background:var(--ink);border:1px solid var(--line);border-radius:999px;padding:6px 14px;cursor:pointer}
 .sch-timepill i{color:var(--smut);font-size:12px}
 .sch-timepill input{background:transparent;border:0;color:var(--stext);font-family:var(--smono);font-size:13px;color-scheme:dark;padding:0;cursor:pointer}
+.sch-timepill .sch-slotdur{width:42px;border-left:1px solid var(--line);border-radius:0;color-scheme:dark;padding-left:7px}
+.sch-timepill span{color:var(--smut);font:11px var(--smono)}
 .sch-durrow{align-items:flex-start}
 .sch-durwrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
 .sch-durread{font-family:var(--smono);font-size:20px;font-weight:700;letter-spacing:-.01em}

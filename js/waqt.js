@@ -151,7 +151,7 @@ function computeWidgetPayload() {
     var tag = String(card.name || "").toUpperCase().split(/\s+/)[0];
     dayItemsForCard(card, day, dow).forEach(function(it) {
       if (!it.time) return;
-      var end = timeToMin(it.time) + effectiveDur(card.id, it.n, it.oneday, day);
+      var end = timeToMin(it.time) + effectiveSlotDur(card.id, it.n, it.oneday, day, it.duration);
       items.push({ n:it.n, t:it.time, end:minToHHMM(end), c:card.color, done:!!it.done, tag:tag });
     });
   });
@@ -350,18 +350,19 @@ function saveSlotsMap(map) { localStorage.setItem(NOTIF_SLOTS_KEY, JSON.stringif
 function validSlotTime(time) { return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time); }
 function getItemSlots(field, name) {
   var slots = getSlotsMap()[notifKey(field, name)];
-  if (Array.isArray(slots)) return slots.filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, days:Array.isArray(slot.days) ? slot.days : undefined }; });
+  if (Array.isArray(slots)) return slots.filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, duration:typeof slot.duration === "number" && isFinite(slot.duration) && slot.duration > 0 ? slot.duration : undefined, days:Array.isArray(slot.days) ? slot.days : undefined }; });
   var time = getNotifTime(field, name);
   return time ? [{ time:time, days:getItemDays(field, name) || undefined }] : [];
 }
 function setItemSlots(field, name, slots) {
   // Slots MVP registers reminders/notifications only for first slot; per-slot delivery is out of scope.
-  var clean = (Array.isArray(slots) ? slots : []).filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, days:Array.isArray(slot.days) ? slot.days : undefined }; });
+  var clean = (Array.isArray(slots) ? slots : []).filter(function(slot) { return slot && validSlotTime(slot.time); }).map(function(slot) { return { time:slot.time, duration:typeof slot.duration === "number" && isFinite(slot.duration) && slot.duration > 0 ? Math.round(slot.duration) : undefined, days:Array.isArray(slot.days) ? slot.days : undefined }; });
   var map = getSlotsMap(), key = notifKey(field, name);
   if (clean.length <= 1) delete map[key]; else map[key] = clean;
   saveSlotsMap(map);
   setNotifTime(field, name, clean.length ? clean[0].time : "");
   setItemDays(field, name, clean.length ? (clean[0].days || null) : null);
+  if (clean.length === 1 && clean[0].duration !== undefined) setItemDur(field, name, clean[0].duration);
 }
 function slotsForDay(field, name, dow) { return getItemSlots(field, name).filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }); }
 function occurrenceKey(cardId, name, time) { return cardId + "::" + name + "::" + time; }
@@ -378,8 +379,8 @@ function _slotsSelfCheck() {
     console.assert(JSON.stringify(legacy) === JSON.stringify([{ time:"06:25", days:[1,3] }]), "legacy slot fallback failed", legacy);
     console.assert(slotsForDay("habits", "CEH", 1).length === 1 && slotsForDay("habits", "CEH", 2).length === 0, "slot day filter failed");
     console.assert(occurrenceKey("habits", "CEH", "06:25") === "habits::CEH::06:25", "occurrence key failed");
-    setItemSlots("habits", "CEH", [{ time:"06:25", days:[1] }, { time:"18:25" }]);
-    console.assert(getItemSlots("habits", "CEH").length === 2, "two-slot roundtrip failed");
+    setItemSlots("habits", "CEH", [{ time:"06:25", duration:70, days:[1] }, { time:"18:25", duration:150 }]);
+    console.assert(JSON.stringify(getItemSlots("habits", "CEH").map(function(slot) { return slot.duration; })) === JSON.stringify([70,150]), "slot duration roundtrip failed");
     setItemSlots("habits", "CEH", [{ time:"07:00" }]);
     console.assert(!getSlotsMap()["habits::CEH"], "one slot must use legacy storage");
     setItemSlots("habits", "CEH", [{ time:"07:00" }, { time:"19:00" }]);
@@ -1203,23 +1204,24 @@ function importDays(value) {
 function importItem(value, prayer) {
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.name !== "string" || !value.name.trim()) return null;
   if (value.time !== undefined && (typeof value.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.time))) return null;
-  if (value.duration !== undefined && (typeof value.duration !== "number" || !isFinite(value.duration) || value.duration <= 0)) return null;
+  if (value.duration !== undefined && (typeof value.duration !== "number" || !isFinite(value.duration) || value.duration <= 0 || Math.round(value.duration) <= 0)) return null;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return null;
   var days = importDays(value.days); if (days === false) return null;
-  var slots = null;
+  var slots = null, defaultDuration = value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration);
   if (value.slots !== undefined) {
     if (!Array.isArray(value.slots)) return null;
     slots = [];
     for (var i = 0; i < value.slots.length; i++) {
       var slot = value.slots[i], slotDays;
       if (!slot || typeof slot !== "object" || Array.isArray(slot) || !validSlotTime(slot.time)) return null;
-      if (slot.duration !== undefined && (typeof slot.duration !== "number" || !isFinite(slot.duration) || slot.duration <= 0)) return null;
+      if (slot.duration !== undefined && (typeof slot.duration !== "number" || !isFinite(slot.duration) || slot.duration <= 0 || Math.round(slot.duration) <= 0)) return null;
       slotDays = importDays(slot.days); if (slotDays === false) return null;
-      slots.push({ time:slot.time, duration:slot.duration === undefined ? (value.duration === undefined ? 30 : Math.round(value.duration)) : Math.round(slot.duration), days:slotDays || undefined });
+      slots.push({ time:slot.time, duration:slot.duration === undefined ? defaultDuration : Math.round(slot.duration), days:slotDays || undefined });
     }
   }
   var first = slots && slots[0];
-  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration), days:days === null && first ? (first.days || null) : days, optional:!!value.optional };
+  if (slots && slots.length && value.duration === undefined && slots.every(function(slot) { return slot.duration === slots[0].duration; })) defaultDuration = slots[0].duration;
+  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:defaultDuration, days:days === null && first ? (first.days || null) : days, optional:!!value.optional };
   if (slots) out.slots = slots;
   // Fix 4: optional per-item change note ("split around Asr", "moved 21:30->22:00"). Optional by
   // design — absence must never fail validation, so older payloads keep importing unchanged.
@@ -1288,43 +1290,6 @@ function collapseImportItems(items) {
     return kept;
   });
 }
-function splitImportItemDurations(item) {
-  var groups = {}, order = [];
-  importItemSlots(item).forEach(function(slot) {
-    var duration = slot.duration === undefined ? item.duration : slot.duration;
-    var key = String(duration);
-    if (!groups[key]) { groups[key] = { duration:duration, slots:[] }; order.push(key); }
-    groups[key].slots.push({ time:slot.time, days:slot.days });
-  });
-  if (!order.length) return [item];
-  return order.map(function(key) {
-    var group = groups[key], slots = group.slots;
-    var out = { name:item.name, duration:group.duration, days:item.days, optional:item.optional };
-    if (item.note) out.note = item.note;
-    if (slots.length > 1) {
-      out.time = slots[0].time;
-      out.slots = slots.map(function(slot) { return { time:slot.time, days:slot.days }; });
-    } else {
-      out.time = slots[0].time;
-      out.days = slots[0].days || item.days || null;
-    }
-    return out;
-  }).sort(function(a, b) { return a.time.localeCompare(b.time); });
-}
-function splitImportItemsByDuration(items) {
-  return items.reduce(function(out, item) { return out.concat(splitImportItemDurations(item)); }, []);
-}
-// Repeat names can still be suffixed by callers that genuinely need distinct items (for example,
-// prayer splitting). Import parsing itself now calls collapseImportItems instead.
-function dedupItemNames(items) {
-  var used = {};
-  items.forEach(function(it) {
-    var nm = it.name;
-    if (used[nm]) { var k = 2; nm = it.name + '-' + k; while (used[nm]) { k++; nm = it.name + '-' + k; } it.name = nm; }
-    used[nm] = true;
-  });
-  return items;
-}
 // Real AI replies wrap the JSON in a ```json fence and/or add prose ("Here's your plan:").
 // Pull the JSON out before parsing so a verbatim paste works. Clean JSON (and our own
 // internal JSON.stringify callers) pass through untouched.
@@ -1363,7 +1328,7 @@ function parseImportSchedule(text) {
     if (!card || typeof card !== "object" || Array.isArray(card) || typeof card.name !== "string" || !card.name.trim() || !Array.isArray(card.items)) return { error:"Each card needs a name and an items array." };
     var clean = { name:card.name.trim(), items:[] };
     for (var j = 0; j < card.items.length; j++) { var item = importItem(card.items[j], false); if (!item) return { error:"Each item needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
-    clean.items = dedupItemNames(splitImportItemsByDuration(collapseImportItems(clean.items)));
+    clean.items = collapseImportItems(clean.items);
     out.cards.push(clean);
   }
   if (raw.reminders !== undefined) {
@@ -1383,10 +1348,18 @@ function parseImportSchedule(text) {
 function cleanScheduleSnapshot() {
   var out = { version:1 };
   if (prayersOn()) { out.prayers = {}; PRAYERS.forEach(function(name) { out.prayers[name] = { time:getNotifTime("prayers", name) || "", duration:effectiveDur("prayers", name, false) }; }); }
-  out.cards = getCards().map(function(card) { return { name:card.name, items:card.items.map(function(it) { var x = { name:it.n }; var time = getNotifTime(card.id, it.n); if (time) x.time = time; x.duration = effectiveDur(card.id, it.n, false); var days = getItemDays(card.id, it.n); if (days) x.days = days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); if (isOptional(card.id, it.n)) x.optional = true; return x; }) }; });
+  out.cards = getCards().map(function(card) { return { name:card.name, items:card.items.map(function(it) {
+    var x = { name:it.n }, slots = getItemSlots(card.id, it.n), days;
+    x.duration = effectiveDur(card.id, it.n, false);
+    if (slots.length) x.slots = slots.map(function(slot) { var y = { time:slot.time, duration:effectiveSlotDur(card.id, it.n, false, null, slot.duration) }; if (slot.days) y.days = slot.days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); return y; });
+    else { var time = getNotifTime(card.id, it.n); if (time) x.time = time; days = getItemDays(card.id, it.n); if (days) x.days = days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); }
+    if (isOptional(card.id, it.n)) x.optional = true;
+    return x;
+  }) }; });
   return out;
 }
-function importSame(a, b) { return a.time === b.time && a.duration === b.duration && !!a.optional === !!b.optional && JSON.stringify(a.days || null) === JSON.stringify(b.days || null); }
+function comparableImportSlots(item) { return importItemSlots(item).map(function(slot) { return { time:slot.time, duration:slot.duration === undefined ? item.duration : slot.duration, days:slot.days || undefined }; }); }
+function importSame(a, b) { return a.time === b.time && a.duration === b.duration && !!a.optional === !!b.optional && JSON.stringify(a.days || null) === JSON.stringify(b.days || null) && JSON.stringify(comparableImportSlots(a)) === JSON.stringify(comparableImportSlots(b)); }
 
 // ---- Fix 1: card routing -------------------------------------------------
 // Guess an incoming item's home card by matching words in its name against the user's REAL card
@@ -1418,63 +1391,24 @@ function resolveImportTarget(item, groupName, pool) {
   return null;
 }
 
-// ---- Fix 2: prayer split that preserves the requested duration -----------
-// A timed block straddling a prayer becomes two pieces that SUM to the original duration: the
-// second resumes when the prayer block ends and runs for the remainder. It is never shrunk — if
-// the pushed-out end now collides with something, the overlap flag below says so.
-// Idempotent: neither piece straddles that prayer any more, so re-running changes nothing.
-function prayerBlocks(data) {
-  if (!prayersOn()) return [];
-  return PRAYERS.map(function(p) {
-    var inc = data.prayers && data.prayers[p];
-    var t = (inc && inc.time) || getNotifTime("prayers", p) || "";
-    if (!t) return null;
-    return { name:p, start:hhmmToMin(t), dur:(inc && inc.duration) || effectiveDur("prayers", p, false) || 35 };
-  }).filter(function(x) { return !!x; });
-}
-function splitOnePrayer(it, prayers) {
-  if (!it.time || !it.duration) return null;
-  var s = hhmmToMin(it.time), e = s + it.duration;
-  for (var i = 0; i < prayers.length; i++) {
-    var p = prayers[i];
-    if (p.start <= s || p.start >= e) continue;
-    var first = p.start - s, why = "split around " + p.name + ", all " + fmtDur(it.duration) + " kept";
-    return [{ name:it.name, time:it.time, duration:first, days:it.days, note:why },
-            { name:it.name, time:minToHHMM((p.start + p.dur) % 1440), duration:it.duration - first, days:it.days, note:why }];
-  }
-  return null;
-}
-function splitAroundPrayers(data) {
-  var prayers = prayerBlocks(data);
-  if (!prayers.length) return data;
-  data.cards.forEach(function(card) {
-    var out = [];
-    card.items.forEach(function(it) {
-      var queue = [it], guard = 0;                       // a piece can straddle a later prayer too
-      while (queue.length && guard++ < 20) {
-        var cur = queue.shift(), pieces = splitOnePrayer(cur, prayers);
-        if (pieces) { out.push(pieces[0]); queue.unshift(pieces[1]); } else out.push(cur);
-      }
-    });
-    card.items = dedupItemNames(out);                    // pieces become Research / Research-2
-  });
-  return data;
-}
-
 // ---- Fix 5: overlap flagging + the one-tap fix ---------------------------
 function importRowRange(row) {
   var inc = row && row.incoming;
   if (!inc || !inc.time || row.kind === "prayer" || row.kind === "newprayer") return null;
   var s = hhmmToMin(inc.time);
-  return { s:s, e:s + (inc.duration || 30), days:inc.days || null };
+  return { s:s, e:s + effectiveSlotDur("", "", false, null, inc.duration), days:inc.days || null };
+}
+function importRowRanges(row) {
+  var inc = row && row.incoming;
+  if (!inc || row.kind === "prayer" || row.kind === "newprayer") return [];
+  return importItemSlots(inc).filter(function(slot) { return !!slot.time; }).map(function(slot) { var s = hhmmToMin(slot.time); return { s:s, e:s + effectiveSlotDur("", "", false, null, slot.duration === undefined ? inc.duration : slot.duration), days:slot.days || inc.days || null }; });
 }
 function daysIntersect(a, b) { return !a || !b || a.some(function(d) { return b.indexOf(d) !== -1; }); }
 function markImportOverlaps(rows) {
-  var rs = rows.map(importRowRange);
+  var rs = rows.map(importRowRanges);
   rows.forEach(function(r) { r.overlap = false; });
   for (var i = 0; i < rs.length; i++) for (var j = i + 1; j < rs.length; j++) {
-    if (!rs[i] || !rs[j]) continue;
-    if (rs[i].s < rs[j].e && rs[j].s < rs[i].e && daysIntersect(rs[i].days, rs[j].days)) { rows[i].overlap = true; rows[j].overlap = true; }
+    if (rs[i].some(function(a) { return rs[j].some(function(b) { return a.s < b.e && b.s < a.e && daysIntersect(a.days, b.days); }); })) { rows[i].overlap = true; rows[j].overlap = true; }
   }
 }
 // Moves ONE row (the tapped one) past every block it collides with. Nothing here runs without a tap.
@@ -1494,7 +1428,6 @@ function shiftRowToFreeSlot(preview, idx) {
 }
 
 function buildImportPreview(data) {
-  splitAroundPrayers(data);
   var cards = getCards(), planned = cards.slice(), rows = [], addCards = 0, addItems = 0, folded = 0, prayerSets = prayersOn() && data.prayers ? Object.keys(data.prayers).length : 0;
   if (prayersOn() && data.prayers) Object.keys(data.prayers).forEach(function(name) {
     var incoming = data.prayers[name], mine = { time:getNotifTime("prayers", name) || "", duration:effectiveDur("prayers", name, false), days:null };
@@ -1514,7 +1447,7 @@ function buildImportPreview(data) {
       }
       var existing = target.newCard ? null : cardTemplateArr(target.id).filter(function(x) { return itemName(x) === incoming.name; })[0];
       if (!existing) { rows.push({ kind:"newitem", cardName:target.name, targetId:target.id, incoming:incoming, sourceName:group.name }); addItems++; }
-      else { var mine = { time:getNotifTime(target.id, incoming.name) || "", duration:effectiveDur(target.id, incoming.name, false), days:getItemDays(target.id, incoming.name), optional:isOptional(target.id, incoming.name) }; if (!importSame(mine, incoming)) rows.push({ kind:"item", cardName:target.name, targetId:target.id, name:incoming.name, incoming:incoming, mine:mine, choice:"mine" }); }
+      else { var mine = { time:getNotifTime(target.id, incoming.name) || "", duration:effectiveDur(target.id, incoming.name, false), days:getItemDays(target.id, incoming.name), slots:getItemSlots(target.id, incoming.name), optional:isOptional(target.id, incoming.name) }; if (!importSame(mine, incoming)) rows.push({ kind:"item", cardName:target.name, targetId:target.id, name:incoming.name, incoming:incoming, mine:mine, choice:"mine" }); }
     });
   });
   markImportOverlaps(rows);
@@ -1570,7 +1503,7 @@ function applyImportSchedule(preview, rawTimes) {
 // fixes the "AI invented a pile of reminders" bug.
 function importPrompt() {
   var prayers = prayersOn();
-  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"],"note":"why this moved or split"}]}],"reminders":[]}';
+  var schema = '{"version":1,' + (prayers ? '"prayers":{"Fajr":{"time":"05:30","duration":30}},' : '') + '"notes":"how the day flows and anything I changed","cards":[{"name":"Learning","items":[{"name":"CEH","duration":120,"slots":[{"time":"06:30","duration":70,"days":["Sat","Sun","Mon"]},{"time":"19:00","duration":150}],"note":"why this moved"}]}],"reminders":[]}';
   var anchors = prayers
     ? "\n   1. Fixed anchors: confirm the five daily prayer times, then ask about weekly classes, physio, and other fixed commitments with their days."
     : "\n   1. Fixed anchors: ask about clock-time commitments, weekly classes, physio, and other fixed commitments with their days.";
@@ -1589,9 +1522,9 @@ function importPrompt() {
     + "\n\nIf the user already pasted their whole day up front, skip Step 1 and go straight to Step 2, then Step 3."
     + "\n\nRULES:"
     + "\n1. Do not overlap blocks. Place commitments where the user describes them. Use day-of-week scoping for weekly items."
-    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. If it happens at MORE THAN ONE clock time, you MUST list EVERY time in slots:[{time,days?}] on that one item — never keep only one time and never drop a slot. Carry forward every item AND every slot the user gave you; dropping any is an error."
+    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. If it happens at MORE THAN ONE clock time, you MUST list EVERY time in slots:[{time,duration,days?}] on that one item — never keep only one time, duration, or slot. Carry forward every item AND every slot the user gave you; dropping any is an error."
     + "\n2b. DURATIONS ARE EXACT. Use the exact minutes the user stated for each item — a 5-minute habit stays 5, a 120-minute block stays 120. The 30-minute default applies ONLY to an item whose duration was never mentioned. NEVER replace a duration you were told with 30."
-    + "\n3. DO NOT RENAME user activities. Keep real names exactly; the app adds a -2 suffix itself when needed."
+    + "\n3. DO NOT RENAME or split user activities. Keep real names exactly; each activity stays one item even when its slots have different durations."
     + (prayers
       ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to the requested duration. If 120m loses 35m, the second piece runs 35m longer; never lose time."
       : "\n4. Use plain clock times only. Never shorten a block below its requested duration.")
@@ -3014,6 +2947,11 @@ function effectiveDur(field, name, oneday, day) {
   var v2 = getItemDur(field, name);
   return typeof v2 === "number" ? v2 : (field === "prayers" ? 35 : 30);
 }
+// A permanent item's slot can override htn_dur. Legacy slots have no duration, so they retain
+// the exact old htn_dur/default behavior; one-day items still only use their day-record duration.
+function effectiveSlotDur(field, name, oneday, day, slotDuration) {
+  return !oneday && typeof slotDuration === "number" && isFinite(slotDuration) && slotDuration > 0 ? slotDuration : effectiveDur(field, name, oneday, day);
+}
 // dur() from the reference weekly-schedule.html, minutes-in/string-out: "50m" / "2h" / "1.1h".
 function fmtDur(n) { return n >= 60 ? ((n / 60 % 1 ? (n / 60).toFixed(1) : n / 60) + "h") : (n + "m"); }
 // Compact duration control for the ADD forms (Task 12) — a readout + preset chips, no name/field
@@ -3088,8 +3026,8 @@ function itemEditorHTML(field, name, closeAction) {
   h += '<div class="sch-editrow sch-slotrow"><span class="sch-editlbl">Time</span><span class="sch-slots">';
   if (isPrayer) h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-timeinp" data-field="' + esA(field) + '" data-name="' + esA(name) + '" value="' + esA(t) + '"></label>';
   else {
-    if (!slots.length) slots = [{ time:"" }];
-    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"></label>'; });
+    if (!slots.length) slots = [{ time:"", duration:effectiveDur(field, name, false) }];
+    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span></label>'; });
     h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button>';
   }
   h += '</span></div>';
@@ -3128,7 +3066,7 @@ function dayItemsForCard(card, day, dow) {
     var isTpl = tplNames.indexOf(name) !== -1;
     if (isTpl) {
       var slots = getItemSlots(card.id, name), todaySlots = slotsForDay(card.id, name, dow);
-      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, oneday:false, optional:isOptional(card.id, name), okey:occurrenceKey(card.id, name, slot.time) }); });
+      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, duration:slot.duration, oneday:false, optional:isOptional(card.id, name), okey:occurrenceKey(card.id, name, slot.time) }); });
       else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false, optional:isOptional(card.id, name) }); }
       return;
     }
@@ -3153,7 +3091,7 @@ function buildTimeline(cards, day, dow) {
   cards.forEach(function(card, ci) {
     dayItemsForCard(card, day, dow).forEach(function(it, ii) {
       if (it.time) {
-        var dur2 = effectiveDur(card.id, it.n, it.oneday, day), start2 = timeToMin(it.time);
+        var dur2 = effectiveSlotDur(card.id, it.n, it.oneday, day, it.duration), start2 = timeToMin(it.time);
         items.push({ id:card.id, name:it.n, t:it.time, kc:cardColor(card.color), done:it.done, isPrayer:false, oneday:it.oneday, optional:it.optional, okey:it.okey || (card.id + "::" + it.n), cardOrder:ci, itemOrder:ii, start:start2, dur:dur2, end:start2 + dur2 });
       }
     });
@@ -4405,14 +4343,21 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "slotadd") {
       var addButton = t, slotLabel = document.createElement("label");
       slotLabel.className = "sch-timepill";
-      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp">';
+      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="30"><span>m</span>';
       addButton.parentNode.insertBefore(slotLabel, addButton);
       slotLabel.querySelector("input").focus();
       return;
     }
     if (a === "slotsave") {
       var editor = t.closest(".sch-editor"), selectedDays = Array.prototype.slice.call(editor.querySelectorAll(".sch-day.on")).map(function(btn) { return +btn.dataset.dow; });
-      var savedSlots = Array.prototype.slice.call(editor.querySelectorAll(".sch-slotinp")).filter(function(inp) { return !!inp.value; }).map(function(inp) { return { time:inp.value, days:selectedDays.length === 7 ? undefined : selectedDays }; });
+      var invalidSlotDuration = false;
+      var savedSlots = Array.prototype.slice.call(editor.querySelectorAll(".sch-timepill")).map(function(pill) {
+        var inp = pill.querySelector(".sch-slotinp"), durInp = pill.querySelector(".sch-slotdur"), duration = durInp ? parseInt(durInp.value, 10) : null;
+        if (!inp || !inp.value) return null;
+        if (durInp && (!duration || duration <= 0)) { invalidSlotDuration = true; return null; }
+        return { time:inp.value, duration:duration || undefined, days:selectedDays.length === 7 ? undefined : selectedDays };
+      }).filter(function(slot) { return !!slot; });
+      if (invalidSlotDuration) { toast("Each slot duration must be at least 1 minute"); return; }
       setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
       setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
       syncItemReminder(t.dataset.f, t.dataset.k);
@@ -4654,7 +4599,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (di === -1) set.push(dow); else set.splice(di, 1);
     set.sort(function(x, y) { return x - y; });
     var slotItems = getItemSlots(wrap.dataset.field, wrap.dataset.name);
-    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot) { return { time:slot.time, days:set.length === 7 ? undefined : set }; }));
+    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot) { return { time:slot.time, duration:slot.duration, days:set.length === 7 ? undefined : set }; }));
     else setItemDays(wrap.dataset.field, wrap.dataset.name, set);
     render();
   }
@@ -5433,7 +5378,7 @@ _importTabSelfCheck();
 // ---- self-check (run with the page open at #importcheck) ----
 function _importSelfCheck() {
   if (location.hash !== "#importcheck") return;
-  var keys = [CARDS_KEY, CARDS_V1_KEY, CARD_ITEMS_KEY, "ht_d", NOTIF_TIMES_KEY, HTN_DUR_KEY, NOTIF_DAYS_KEY, PRAYERS_ON_KEY, "ht_migrated_v3"];
+  var keys = [CARDS_KEY, CARDS_V1_KEY, CARD_ITEMS_KEY, "ht_d", NOTIF_TIMES_KEY, HTN_DUR_KEY, NOTIF_DAYS_KEY, NOTIF_SLOTS_KEY, PRAYERS_ON_KEY, "ht_migrated_v3"];
   var saved = {}; keys.forEach(function(k) { saved[k] = localStorage.getItem(k); });
   var savedDate = cDate, savedData = cData;
   function assert(ok, reason) { if (!ok) throw new Error(reason); }
@@ -5442,7 +5387,7 @@ function _importSelfCheck() {
     localStorage.setItem(CARDS_V1_KEY, "true");
     saveCards([{id:"habits",name:"Daily Goals",icon:"fa-bullseye",color:"#e0a33a",base:true}]);
     localStorage.setItem("ht_d", JSON.stringify({habits:[],ex:[],hl:[],prayers:[],water:false}));
-    localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY);
+    localStorage.removeItem(CARD_ITEMS_KEY); localStorage.removeItem(NOTIF_TIMES_KEY); localStorage.removeItem(HTN_DUR_KEY); localStorage.removeItem(NOTIF_DAYS_KEY); localStorage.removeItem(NOTIF_SLOTS_KEY);
     setPrayersOn(true);
     var goodText = '{"version":1,"prayers":{"Fajr":{"time":"05:30","duration":30}},"cards":[{"name":"Study","items":[{"name":"CEH","time":"06:30","duration":120,"days":["Sat","Sun","Mon"]}]}]}';
     var parsed = parseImportSchedule(goodText); assert(!!parsed.value, "good payload was rejected");
@@ -5465,10 +5410,14 @@ function _importSelfCheck() {
     assert(newCards.length === 2 && newCards[0].color !== newCards[1].color && newCards[0].icon !== newCards[1].icon && newCards.every(function(c) { return c.color !== "#82a06e"; }), "new cards did not receive unique non-green color/icon assignments");
     var dup = parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Physio","time":"09:00","days":["Sat"]},{"name":"Physio","time":"11:00","days":["Wed"]}]}]}').value.cards[0].items;
     assert(dup.length === 1 && dup[0].slots.length === 2, "duplicate import names must collapse into one multi-slot item");
-    var uniformSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Fitness","items":[{"name":"Dorsiflexion","slots":[{"time":"09:00","duration":5},{"time":"18:00","duration":5}]}]}]}').value.cards[0].items;
-    assert(uniformSlots.length === 1 && uniformSlots[0].duration === 5 && uniformSlots[0].slots.every(function(slot) { return slot.duration === undefined; }), "uniform slot durations must become one item duration");
+    var uniformSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Fitness","items":[{"name":"Dorsiflexion","slots":[{"time":"09:00","duration":5},{"time":"13:00","duration":5},{"time":"18:00","duration":5}]}]}]}').value.cards[0].items;
+    assert(uniformSlots.length === 1 && uniformSlots[0].name === "Dorsiflexion" && uniformSlots[0].duration === 5 && JSON.stringify(uniformSlots[0].slots.map(function(slot) { return slot.duration; })) === JSON.stringify([5,5,5]), "uniform slot durations must stay on one item");
     var mixedSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"CEH","slots":[{"time":"06:30","duration":70},{"time":"10:00","duration":150},{"time":"19:00","duration":115}]}]}]}').value.cards[0].items;
-    assert(mixedSlots.length === 3 && JSON.stringify(mixedSlots.map(function(item) { return [item.name, item.time, item.duration]; })) === JSON.stringify([["CEH", "06:30", 70], ["CEH-2", "10:00", 150], ["CEH-3", "19:00", 115]]), "mixed slot durations must split into ordered, suffixed items");
+    assert(mixedSlots.length === 1 && mixedSlots[0].name === "CEH" && JSON.stringify(mixedSlots[0].slots.map(function(slot) { return [slot.time, slot.duration]; })) === JSON.stringify([["06:30",70],["10:00",150],["19:00",115]]), "mixed slot durations must stay on CEH");
+    var mixedPreview = buildImportPreview({ version:1, cards:[{ name:"Study", items:mixedSlots }] }); mixedPreview.rows.forEach(function(row) { if (row.kind === "item") row.choice = "import"; }); applyImportSchedule(mixedPreview, true);
+    assert(JSON.stringify(getItemSlots(study.id, "CEH").map(function(slot) { return slot.duration; })) === JSON.stringify([70,150,115]), "mixed slot durations must persist in htn_slots");
+    var sleepSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Health","items":[{"name":"Sleep","slots":[{"time":"22:00","duration":300},{"time":"06:00","duration":180}]}]}]}').value.cards[0].items;
+    assert(sleepSlots.length === 1 && sleepSlots[0].name === "Sleep" && JSON.stringify(sleepSlots[0].slots.map(function(slot) { return slot.duration; })) === JSON.stringify([300,180]), "mixed Sleep slots must stay on one item");
     assert(!!parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Bad slot","slots":[{"time":"09:00","duration":0}]}]}]}').error, "non-positive slot duration must be rejected");
 
     // ---- 2026-08-13 import fixes ----
@@ -5500,17 +5449,10 @@ function _importSelfCheck() {
     applyImportSchedule(overridden, true);
     assert(templateNamesFor("habits").indexOf("Exercise") !== -1, "override: apply must honour the row's chosen card, not the guess");
 
-    // (3) prayer split preserves the requested duration: 120m across a 35m Asr -> 50m + 70m.
+    // (3) Imports never split one activity into suffixed names, even around a prayer.
     setPrayersOn(true);
-    var split = parseImportSchedule('{"version":1,"cards":[{"name":"Daily Goals","items":[{"name":"Research","time":"16:45","duration":120}]}]}').value;
-    splitAroundPrayers(split);
-    var pieces = split.cards[0].items;
-    assert(pieces.length === 2 && pieces[0].duration + pieces[1].duration === 120, "split: the two pieces must sum to the requested 120m");
-    assert(pieces[0].duration === 50 && pieces[1].time === "18:10" && pieces[1].duration === 70, "split: pieces should be 16:45+50m and 18:10+70m");
-    assert(pieces[0].name === "Research" && pieces[1].name === "Research-2", "split: pieces use the -2 dedup style, not invented prose names");
-    assert(!!pieces[0].note && !!pieces[1].note, "split: both pieces must carry a note explaining the reshape");
-    var again = JSON.stringify(splitAroundPrayers(split).cards[0].items);
-    assert(again === JSON.stringify(pieces), "split: re-running must be a no-op (preview rebuilds call it repeatedly)");
+    var unsplit = parseImportSchedule('{"version":1,"cards":[{"name":"Daily Goals","items":[{"name":"Research","time":"16:45","duration":120}]}]}').value;
+    assert(unsplit.cards[0].items.length === 1 && unsplit.cards[0].items[0].name === "Research", "imports must not suffix names around prayers");
 
     // (4) notes survive parsing at both levels, and their absence still validates.
     var noted = parseImportSchedule('{"version":1,"flow":"morning is deep work","cards":[{"name":"Daily Goals","items":[{"name":"Deep work","time":"09:00","note":"moved 30m later"}]}]}').value;

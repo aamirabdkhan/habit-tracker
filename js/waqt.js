@@ -103,8 +103,12 @@ if (window.matchMedia) { try { matchMedia("(prefers-color-scheme: dark)").addEve
 
 // Toggle done-state for prayers, base-card items, or new-card items alike. Single code path shared
 // by the tap-to-toggle click handler (data-a="schtog") and the swipe-right-to-complete gesture (Task 8).
-function schToggle(f, k) {
+function schToggle(f, k, okey) {
   if (f === "prayers") { cData.prayers[k] = !cData.prayers[k]; }
+  else if (okey && getItemSlots(f, k).length > 1) {
+    if (!cData.slotDone) cData.slotDone = {};
+    cData.slotDone[okey] = !occurrenceDone(cData, f, k, okey);
+  }
   else if (isBaseCard(f)) { cData[f][k] = !cData[f][k]; }
   else { if (!cData.cards) cData.cards = {}; if (!cData.cards[f]) cData.cards[f] = {}; cData.cards[f][k] = !cData.cards[f][k]; }
   sDay();
@@ -166,6 +170,7 @@ function computeWidgetPayload() {
   // items via dayItemsForCard + prayers), so the widget dial matches the app exactly. Using dScore
   // here counted every template item regardless of today's schedule, giving a lower % than the app.
   var ringDone = 0, ringTotal = 0;
+  if (prayersOn()) { PRAYERS.forEach(function(p) { if (day.prayers[p]) ringDone++; }); ringTotal += PRAYERS.length; }
   cards.forEach(function(card) {
     // Base cards get their fixed label; custom cards (Study, Fitness, …) use their own name,
     // so every card shows in the stats widget, not just the three base ones.
@@ -332,7 +337,12 @@ function copyYesterdayOneday(day, key) {
 // ---- day-of-week scoping ----
 var NOTIF_DAYS_KEY = "htn_days";
 function getDaysMap() { try { return JSON.parse(localStorage.getItem(NOTIF_DAYS_KEY)) || {}; } catch(e) { return {}; } }
-function saveDaysMap(map) { localStorage.setItem(NOTIF_DAYS_KEY, JSON.stringify(map)); }
+function saveScheduleMap(key, map) {
+  localStorage.setItem(key, JSON.stringify(map));
+  try { localStorage.setItem(key + "_mt", String(Date.now())); } catch(e) {}
+  if (typeof dbSave === "function") dbSave(key, map);
+}
+function saveDaysMap(map) { saveScheduleMap(NOTIF_DAYS_KEY, map); }
 function getItemDays(field, name) { var v = getDaysMap()[notifKey(field, name)]; return Array.isArray(v) ? v : null; }
 function setItemDays(field, name, daysArr) {
   var map = getDaysMap(), key = notifKey(field, name);
@@ -346,7 +356,7 @@ function isOptional(field, name) { return !!getOptionalMap()[notifKey(field, nam
 function setOptional(field, name, on) { var map = getOptionalMap(), key = notifKey(field, name); if (on) map[key] = true; else delete map[key]; saveOptionalMap(map); }
 var NOTIF_SLOTS_KEY = "htn_slots";
 function getSlotsMap() { try { return JSON.parse(localStorage.getItem(NOTIF_SLOTS_KEY)) || {}; } catch(e) { return {}; } }
-function saveSlotsMap(map) { localStorage.setItem(NOTIF_SLOTS_KEY, JSON.stringify(map)); }
+function saveSlotsMap(map) { saveScheduleMap(NOTIF_SLOTS_KEY, map); }
 function validSlotTime(time) { return typeof time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(time); }
 function getItemSlots(field, name) {
   var slots = getSlotsMap()[notifKey(field, name)];
@@ -366,6 +376,11 @@ function setItemSlots(field, name, slots) {
 }
 function slotsForDay(field, name, dow) { return getItemSlots(field, name).filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }); }
 function occurrenceKey(cardId, name, time) { return cardId + "::" + name + "::" + time; }
+function occurrenceDone(day, cardId, name, okey) {
+  if (day.slotDone && Object.prototype.hasOwnProperty.call(day.slotDone, okey)) return !!day.slotDone[okey];
+  var doneMap = isBaseCard(cardId) ? day[cardId] : (day.cards && day.cards[cardId]);
+  return !!(doneMap && doneMap[name]);
+}
 function isDailyRecurring(field, name) { var slots = getItemSlots(field, name), days; if (slots.length) return slots.every(function(slot) { return !slot.days || slot.days.length === 7; }); days = getItemDays(field, name); return !days || days.length === 7; }
 function eligibleHeatmapItem(field, name) { return !isOptional(field, name) && isDailyRecurring(field, name); }
 function scoreItems(items) { return items.reduce(function(score, item) { if (item.optional) return score; score.total++; if (item.done) score.done++; return score; }, { done:0, total:0 }); }
@@ -678,17 +693,9 @@ gDay = function(key) {
 // Base cards read the existing top-level day-record maps; new cards read
 // the day.cards sub-map. Prayers are NOT a card — handled separately.
 function gDayCards(key) {
-  var day = gDay(key);
+  var day = gDay(key), dow = dowOf(key);
   return getCards().map(function(card) {
-    var items;
-    if (card.id === "habits" || card.id === "extra" || card.id === "health") {
-      var f = card.id === "extra" ? "extra" : card.id === "health" ? "health" : "habits";
-      items = card.items.map(function(it) { return { n:it.n, done:!!day[f][it.n], time:it.time, days:it.days, optional:it.optional }; });
-    } else {
-      var doneMap = (day.cards && day.cards[card.id]) || {};
-      items = card.items.map(function(it) { return { n:it.n, done:!!doneMap[it.n], time:it.time, days:it.days, optional:it.optional }; });
-    }
-    return { card:card, items:items };
+    return { card:card, items:dayItemsForCard(card, day, dow) };
   });
 }
 
@@ -1071,7 +1078,11 @@ function nextReminderFire(reminder, fromDateISO) {
   if (s.kind === "interval") { if (s.unit === "months") return reminderAddMonths(fromDateISO, every); var d = new Date(fromDateISO + "T00:00:00"); d.setDate(d.getDate() + (s.unit === "weeks" ? every * 7 : every)); return dk(d); }
   if (s.kind !== "fixed") return "";
   var from = fromDateISO.split("-").map(Number), month = +s.month, day = +s.day;
-  if (typeof s.date === "string") { var bits = s.date.match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/); if (bits) { month = +bits[1]; day = +bits[2]; } }
+  if (typeof s.date === "string") {
+    var exact = s.date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (exact) return reminderISO(+exact[1], +exact[2], Math.min(+exact[3], reminderDaysInMonth(+exact[1], +exact[2])));
+    var bits = s.date.match(/^(?:\d{4}-)?(\d{2})-(\d{2})$/); if (bits) { month = +bits[1]; day = +bits[2]; }
+  }
   if (!(day >= 1)) return "";
   // {day:15} means fifteenth of every month; {month:3,day:15} / date means yearly date.
   if (!(month >= 1 && month <= 12)) {
@@ -1348,14 +1359,25 @@ function parseImportSchedule(text) {
 function cleanScheduleSnapshot() {
   var out = { version:1 };
   if (prayersOn()) { out.prayers = {}; PRAYERS.forEach(function(name) { out.prayers[name] = { time:getNotifTime("prayers", name) || "", duration:effectiveDur("prayers", name, false) }; }); }
-  out.cards = getCards().map(function(card) { return { name:card.name, items:card.items.map(function(it) {
+  var today = gDay(dk(cDate));
+  out.cards = getCards().map(function(card) { var doneMap = isBaseCard(card.id) ? (today[card.id] || {}) : ((today.cards && today.cards[card.id]) || {}), names = card.items.map(function(it) { return it.n; }); return { name:card.name, items:card.items.map(function(it) {
     var x = { name:it.n }, slots = getItemSlots(card.id, it.n), days;
     x.duration = effectiveDur(card.id, it.n, false);
     if (slots.length) x.slots = slots.map(function(slot) { var y = { time:slot.time, duration:effectiveSlotDur(card.id, it.n, false, null, slot.duration) }; if (slot.days) y.days = slot.days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); return y; });
     else { var time = getNotifTime(card.id, it.n); if (time) x.time = time; days = getItemDays(card.id, it.n); if (days) x.days = days.map(function(d) { return IMPORT_DAY_NAMES[d]; }); }
     if (isOptional(card.id, it.n)) x.optional = true;
     return x;
-  }) }; });
+  }).concat(Object.keys(doneMap).filter(function(name) { return names.indexOf(name) === -1; }).map(function(name) {
+    var key = card.id + "::" + name, x = { name:name, duration:effectiveDur(card.id, name, true, today) }, time = (today.onedayTimes || {})[key];
+    if (time) x.time = time;
+    return x;
+  })) }; });
+  out.reminders = getReminders().map(function(r) {
+    var x = { name:r.name, note:r.note || "" }, s = r.schedule || {};
+    if (s.kind === "interval") { x.every = s.every; x.unit = s.unit; }
+    else if (s.kind === "fixed") x.date = s.date;
+    return x;
+  }).filter(function(r) { return r.every || r.date; });
   return out;
 }
 function comparableImportSlots(item) { return importItemSlots(item).map(function(slot) { return { time:slot.time, duration:slot.duration === undefined ? item.duration : slot.duration, days:slot.days || undefined }; }); }
@@ -1415,16 +1437,19 @@ function markImportOverlaps(rows) {
 // ponytail: free slots are measured against the other import rows only, not the user's untouched
 // existing blocks — widen to those if the preview ever imports into a heavily-filled day.
 function shiftRowToFreeSlot(preview, idx) {
-  var row = preview.rows[idx], inc = row && row.incoming, mine = importRowRange(row);
-  if (!mine) return false;
-  var busy = preview.rows.map(importRowRange).filter(function(r, i) { return r && i !== idx && daysIntersect(r.days, mine.days); }).sort(function(a, b) { return a.s - b.s; });
-  var s = mine.s, dur = inc.duration || 30;
-  busy.forEach(function(b) { if (s < b.e && b.s < s + dur) s = b.e; });
-  if (s === mine.s) return false;
-  var from = inc.time;
-  inc.time = minToHHMM(s % 1440);
-  inc.note = "moved " + from + "→" + inc.time + " to avoid an overlap";
-  return true;
+  var row = preview.rows[idx], inc = row && row.incoming;
+  if (!inc) return false;
+  var busy = [].concat.apply([], preview.rows.map(function(r, i) { return i === idx ? [] : importRowRanges(r); })).sort(function(a, b) { return a.s - b.s; });
+  var slots = inc.slots && inc.slots.length ? inc.slots : [inc], moved = false, notes = [];
+  slots.forEach(function(slot) {
+    if (!slot.time) return;
+    var from = slot.time, s = hhmmToMin(from), dur = slot.duration === undefined ? (inc.duration || 30) : slot.duration, days = slot.days || inc.days || null;
+    busy.forEach(function(b) { if (daysIntersect(days, b.days) && s < b.e && b.s < s + dur) s = b.e; });
+    if (s !== hhmmToMin(from)) { slot.time = minToHHMM(s % 1440); notes.push(from + "→" + slot.time); moved = true; }
+  });
+  if (inc.slots && inc.slots.length) inc.time = inc.slots[0].time;
+  if (moved) inc.note = "moved " + notes.join(", ") + " to avoid an overlap";
+  return moved;
 }
 
 function buildImportPreview(data) {
@@ -1460,10 +1485,14 @@ function applyImportSchedule(preview, rawTimes) {
   // #setupcheck's raw NOTIF_TIMES_KEY restore (see its comment above). Real applies (importapply
   // click handler calls this with rawTimes=false) do want reminder_times kept in step.
   function applyValues(id, item) {
-    if (item.slots && item.slots.length > 1) {
-      if (rawTimes) { var slotMap = getSlotsMap(); slotMap[notifKey(id, item.name)] = item.slots; saveSlotsMap(slotMap); writeImportTime(id, item.name, item.slots[0].time, true); setItemDays(id, item.name, item.slots[0].days || null); }
+    if (item.slots && item.slots.length) {
+      if (rawTimes) { var slotMap = getSlotsMap(), rawSlots = item.slots; if (rawSlots.length > 1) slotMap[notifKey(id, item.name)] = rawSlots; else delete slotMap[notifKey(id, item.name)]; saveSlotsMap(slotMap); writeImportTime(id, item.name, rawSlots[0].time, true); setItemDays(id, item.name, rawSlots[0].days || null); }
       else setItemSlots(id, item.name, item.slots);
-    } else { writeImportTime(id, item.name, item.time, rawTimes); setItemDays(id, item.name, item.days); }
+    } else {
+      if (rawTimes) { var clearSlots = getSlotsMap(); delete clearSlots[notifKey(id, item.name)]; saveSlotsMap(clearSlots); }
+      else setItemSlots(id, item.name, []);
+      writeImportTime(id, item.name, item.time, rawTimes); setItemDays(id, item.name, item.days);
+    }
     setItemDur(id, item.name, item.duration); setOptional(id, item.name, item.optional); if (!rawTimes) syncItemReminder(id, item.name);
   }
   preview.rows.forEach(function(row) {
@@ -2904,7 +2933,7 @@ function minToHHMM(min) { var h = Math.floor(min / 60) % 24, m = min % 60; retur
 // htn_dur = {"field::name": minutes}. Missing key -> caller applies the default (35 prayers, 30 else).
 var HTN_DUR_KEY = "htn_dur";
 function getDurMap() { try { return JSON.parse(localStorage.getItem(HTN_DUR_KEY)) || {}; } catch(e) { return {}; } }
-function saveDurMap(map) { localStorage.setItem(HTN_DUR_KEY, JSON.stringify(map)); }
+function saveDurMap(map) { saveScheduleMap(HTN_DUR_KEY, map); }
 function getItemDur(field, name) { var v = getDurMap()[notifKey(field, name)]; return typeof v === "number" ? v : null; }
 function setItemDur(field, name, mins) {
   var map = getDurMap(), key = notifKey(field, name), def = field === "prayers" ? 35 : 30;
@@ -2975,7 +3004,7 @@ function computeNextPrayer(nowMin, times) {
   if (!withTimes.length) return null;
   for (var i = 0; i < withTimes.length; i++) {
     var tmin = timeToMin(times[withTimes[i]]);
-    if (tmin > nowMin) return { name: withTimes[i], mins: tmin - nowMin };
+    if (tmin >= nowMin) return { name: withTimes[i], mins: tmin - nowMin };
   }
   if (times.Fajr) return { name: "Fajr", mins: (1440 - nowMin) + timeToMin(times.Fajr) };
   return null;
@@ -2985,12 +3014,13 @@ function fmtHM(mins) { var h = Math.floor(mins / 60), m = mins % 60; return (h >
 // start,end} rows spliced into gaps >= 15min. No filler before the first or after the last item;
 // overlapping/negative gaps (prevEnd > nextStart) simply never clear the >=15 threshold.
 function insertOpenBlocks(items) {
-  var out = [];
+  var out = [], occupiedEnd = -Infinity;
   for (var i = 0; i < items.length; i++) {
     out.push(items[i]);
+    occupiedEnd = Math.max(occupiedEnd, items[i].end);
     var next = items[i + 1];
     if (next) {
-      var gapStart = items[i].end, gapEnd = next.start;
+      var gapStart = occupiedEnd, gapEnd = next.start;
       if (gapEnd - gapStart >= 15) out.push({ openBlock: true, start: gapStart, end: gapEnd });
     }
   }
@@ -3066,7 +3096,7 @@ function dayItemsForCard(card, day, dow) {
     var isTpl = tplNames.indexOf(name) !== -1;
     if (isTpl) {
       var slots = getItemSlots(card.id, name), todaySlots = slotsForDay(card.id, name, dow);
-      if (slots.length) todaySlots.forEach(function(slot) { out.push({ n:name, done:!!doneMap[name], time:slot.time, duration:slot.duration, oneday:false, optional:isOptional(card.id, name), okey:occurrenceKey(card.id, name, slot.time) }); });
+      if (slots.length) todaySlots.forEach(function(slot) { var okey = occurrenceKey(card.id, name, slot.time); out.push({ n:name, done:occurrenceDone(day, card.id, name, okey), time:slot.time, duration:slot.duration, oneday:false, optional:isOptional(card.id, name), okey:okey }); });
       else { var days = getItemDays(card.id, name); if (!days || days.indexOf(dow) !== -1) out.push({ n:name, done:!!doneMap[name], time:"", oneday:false, optional:isOptional(card.id, name) }); }
       return;
     }
@@ -3487,7 +3517,7 @@ function renderWeekSheet() {
     parts.forEach(function(part) {
       grid += '<div class="share-weekgridrow"><div class="share-weekpart">' + esc(part) + '</div>' + week.map(function(day) {
         var items = day.items.filter(function(item) { return inPart(item, part); });
-        return '<div class="share-weekcell">' + (items.length ? items.map(function(item) { return itemHtml(item, false); }).join('') : '<span class="share-weeknone">—</span>') + '</div>';
+        return '<div class="share-weekcell">' + (items.length ? items.map(function(item) { return itemHtml(item, true); }).join('') : '<span class="share-weeknone">—</span>') + '</div>';
       }).join('') + '</div>';
     });
     return '<div class="share-weekgridscroll">' + grid + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
@@ -3496,7 +3526,7 @@ function renderWeekSheet() {
     return '<div class="share-weekpdfpreview">' + week.map(function(day) { return renderWeekPdfDay(day.source); }).join('') + '</div>';
   }
   return '<div class="share-weekcols">' + week.map(function(day) {
-    return '<section class="share-weekcol">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, false); }).join('') : empty) + '</div></section>';
+    return '<section class="share-weekcol">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, true); }).join('') : empty) + '</div></section>';
   }).join('') + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
 }
 function shareWeekDate(dateKey) {
@@ -3548,7 +3578,7 @@ async function exportDayImage() {
 function renderWeekPdfPage(title, items, continuation) {
   var rows = items.length ? items.map(function(item) {
     return '<div class="share-pdfrow" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span>' + esc(prettyTime(item.t)) + '</span><b>' + esc(item.n) + '</b><small>' + esc(fmtDur(item.dur)) + '</small></div>';
-  }).join('') : '<p class="share-weekempty">Nothing selected for this day.</p>';
+  }).join('') : (continuation ? '' : '<p class="share-weekempty">Nothing selected for this day.</p>');
   return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR' + (continuation ? ' · CONTINUED' : '') + '</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 92) + '</span></footer></section>';
 }
 function renderWeekPdfDay(day) {
@@ -3837,9 +3867,9 @@ function rPehar() {
       h += '<div class="sch-block' + (item.done ? ' checked' : '') + (isNow ? ' now' : '') + (item.isPrayer ? ' prayer' : '') + '" data-block="' + esA(ekey) + '" style="--kc:' + item.kc + '">';
       h += '<div class="sch-time">' + prettyTime(item.t) + '<small>' + fmtDur(item.dur) + '</small></div>';
       h += '<div class="sch-node"><i></i></div>';
-      h += '<div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" style="--kc:' + item.kc + '">';
+      h += '<div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '" style="--kc:' + item.kc + '">';
       h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
-      h += '<div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '">';
+      h += '<div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '">';
       h += '<p class="sch-title">' + esc(item.name) + (item.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
       if (!item.oneday) h += '<button class="sch-edit" data-a="schedit" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '"><i class="fas fa-pen"></i></button>';
       else h += '<button class="sch-edit" data-a="oddel" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" aria-label="Remove ' + esA(item.name) + '"><i class="fas fa-xmark"></i></button>';
@@ -4358,6 +4388,8 @@ document.getElementById("app").addEventListener("click", function(e) {
         return { time:inp.value, duration:duration || undefined, days:selectedDays.length === 7 ? undefined : selectedDays };
       }).filter(function(slot) { return !!slot; });
       if (invalidSlotDuration) { toast("Each slot duration must be at least 1 minute"); return; }
+      var oldSlots = getItemSlots(t.dataset.f, t.dataset.k);
+      savedSlots = savedSlots.map(function(slot, i) { if (oldSlots[i] && oldSlots[i].days) slot.days = oldSlots[i].days; return slot; });
       setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
       setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
       syncItemReminder(t.dataset.f, t.dataset.k);
@@ -4369,7 +4401,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       // A completed swipe-right gesture already toggled + rendered this row; the
       // browser's post-touch synthetic click would otherwise flip it right back.
       if (Date.now() - schGestSwipedAt < 500) return;
-      schToggle(t.dataset.f, t.dataset.k); render(); return;
+      schToggle(t.dataset.f, t.dataset.k, t.dataset.o); render(); return;
     }
     if (a === "takbeertog") { schToggleTakbeer(t.dataset.k); render(); return; }
     // Single-open-editor (Task 12): opening Daily's editor closes Template's (if open) and vice
@@ -4519,7 +4551,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       // (htn_times is intentionally left set so times survive an off/on round-trip — same as
       // before this feature). Off must still stop delivery; on should restore whatever each
       // prayer's bell+time already say (Task: task notifications, note 6).
-      PRAYERS.forEach(function(pn) { if (wasPrayersOn) pushSaveReminderTime("prayers", pn, ""); else syncPrayerReminder(pn); });
+      PRAYERS.concat(typeof VOLUNTARY_PRAYERS !== "undefined" ? VOLUNTARY_PRAYERS : []).forEach(function(pn) { if (wasPrayersOn) pushSaveReminderTime("prayers", pn, ""); else syncPrayerReminder(pn); });
       render(); return;
     }
     // Add-forms' compact duration control (no persisted item yet — just patches the readout/
@@ -4599,7 +4631,9 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (di === -1) set.push(dow); else set.splice(di, 1);
     set.sort(function(x, y) { return x - y; });
     var slotItems = getItemSlots(wrap.dataset.field, wrap.dataset.name);
-    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot) { return { time:slot.time, duration:slot.duration, days:set.length === 7 ? undefined : set }; }));
+    // Repeat pills edit primary (first) occurrence only. Other slots can carry
+    // different weekday rules from an import and must not be flattened here.
+    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot, i) { return { time:slot.time, duration:slot.duration, days:i === 0 ? (set.length === 7 ? undefined : set) : slot.days }; }));
     else setItemDays(wrap.dataset.field, wrap.dataset.name, set);
     render();
   }
@@ -4786,7 +4820,7 @@ function schGestClassify(dx, dy, kind) {
     if (verdict === "complete") {
       row.style.transform = "";
       schGestSwipedAt = Date.now(); // guards the schtog click handler against a synthetic ghost-click
-      schToggle(st.f, st.k);
+      schToggle(st.f, st.k, st.wrap.dataset.o);
       render();
       return;
     }

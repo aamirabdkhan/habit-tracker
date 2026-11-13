@@ -15,7 +15,11 @@ var VAPID_PUBLIC_KEY = "BMvpaT5hi2vpaMX0HUE80ZA6gn-xQPs-ZGVDy6VCllaP3Z80QVslvsYJ
 var NOTIF_TIMES_KEY = "htn_times";
 
 function getNotifTimesMap() { try { return JSON.parse(localStorage.getItem(NOTIF_TIMES_KEY)) || {}; } catch(e) { return {}; } }
-function saveNotifTimesMap(map) { localStorage.setItem(NOTIF_TIMES_KEY, JSON.stringify(map)); }
+function saveNotifTimesMap(map) {
+  localStorage.setItem(NOTIF_TIMES_KEY, JSON.stringify(map));
+  try { localStorage.setItem(NOTIF_TIMES_KEY + "_mt", String(Date.now())); } catch(e) {}
+  if (typeof dbSave === "function") dbSave(NOTIF_TIMES_KEY, map);
+}
 function notifKey(field, name) { return field + "::" + name; }
 function getNotifTime(field, name) { return getNotifTimesMap()[notifKey(field, name)] || ""; }
 function setNotifTime(field, name, time) {

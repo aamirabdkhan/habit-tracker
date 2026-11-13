@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v92';
+const CACHE = 'habit-tracker-v93';
 const URLS = [
   './',
   'index.html',
@@ -11,13 +11,7 @@ const URLS = [
   'js/supabase-sync.js',
   'js/manifest.js',
   'js/push-client.js',
-  'js/theme-init.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
-  'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
-  'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
-  'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Public+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
+  'js/theme-init.js'
 ];
 self.addEventListener('install', function(e) {
   // skipWaiting so a new worker activates itself instead of getting stuck "waiting" (on iOS PWAs a
@@ -40,14 +34,19 @@ self.addEventListener('activate', function(e) {
 });
 self.addEventListener('fetch', function(e) {
   if (e.request.method !== 'GET') return;
-  // Stale-while-revalidate for same-origin AND cross-origin (Supabase CDN
-  // script, Google Fonts, Font Awesome) requests alike. A service worker's
-  // own internal fetch() of a cross-origin request is checked against this
-  // page's CSP connect-src directive regardless of the original resource
-  // type (e.g. a <script src> load would need to satisfy connect-src
-  // instead of script-src) — so every cross-origin host used here must
-  // also be listed in connect-src (see vercel.json), or that fetch is
-  // silently blocked and the resource never loads.
+  var url = new URL(e.request.url);
+  // Cloud data and third-party assets are always live. Cache Storage only owns
+  // same-origin app files, so API/auth responses can never be stale matches.
+  if (url.hostname.endsWith('.supabase.co') || url.origin !== self.location.origin) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+  if (!(url.pathname === '/' || /\.(?:html|css|js|json|png|svg|ico|woff2?)$/i.test(url.pathname))) {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+  // Stale-while-revalidate is intentionally limited to same-origin static
+  // files. API/auth requests and third-party resources never enter this cache.
   e.respondWith(
     caches.match(e.request, { ignoreSearch: true }).then(function(cached) {
       var networked = fetch(e.request).then(function(res) {

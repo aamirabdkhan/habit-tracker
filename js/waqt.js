@@ -213,17 +213,23 @@ function computeWidgetPayload() {
   };
 }
 function publishWidgetFeed() {
-  if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return;
-  sbClient.from("widget_feed").upsert(
+  if (typeof sbClient === "undefined" || !sbClient || typeof currentUser === "undefined" || !currentUser) return Promise.resolve("");
+  return sbClient.from("widget_feed").upsert(
     { user_id:currentUser.id, payload:computeWidgetPayload(), updated_at:new Date().toISOString() },
     { onConflict:"user_id" }
   ).select("token").then(function(res) {
-    if (res.error) return;
+    if (res.error) return "";
     if (res.data && res.data[0] && res.data[0].token) {
       try { localStorage.setItem(WIDGET_TOKEN_KEY, res.data[0].token); } catch(e) {}
       if (view === "prefs" && typeof render === "function") render();
+      return res.data[0].token;
     }
+    return "";
   });
+}
+function ensureWidgetToken() {
+  var token = localStorage.getItem(WIDGET_TOKEN_KEY);
+  return token ? Promise.resolve(token) : publishWidgetFeed();
 }
 var _widgetPubTimer = null;
 function scheduleWidgetPublish() {
@@ -1328,17 +1334,17 @@ function parseImportSchedule(text) {
     Object.keys(raw.prayers).forEach(function(name) {
       if (PRAYERS.indexOf(name) === -1) return;
       var p = raw.prayers[name];
-      if (!p || typeof p !== "object" || Array.isArray(p) || (p.time !== undefined && (typeof p.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.time))) || (p.duration !== undefined && (typeof p.duration !== "number" || !isFinite(p.duration) || p.duration <= 0))) { out._bad = true; return; }
+      if (!p || typeof p !== "object" || Array.isArray(p) || (p.time !== undefined && (typeof p.time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.time))) || (p.duration !== undefined && (typeof p.duration !== "number" || !isFinite(p.duration) || p.duration <= 0))) { out._bad = name; return; }
       out.prayers[name] = { time:p.time || "", duration:p.duration === undefined ? 35 : Math.round(p.duration) };
     });
-    if (out._bad) return { error:"Prayer times must be HH:MM and durations must be positive numbers." };
+    if (out._bad) return { error:"Prayer " + out._bad + " needs HH:MM time and a positive duration." };
   }
   out.cards = [];
   for (var i = 0; i < raw.cards.length; i++) {
     var card = raw.cards[i];
-    if (!card || typeof card !== "object" || Array.isArray(card) || typeof card.name !== "string" || !card.name.trim() || !Array.isArray(card.items)) return { error:"Each card needs a name and an items array." };
+    if (!card || typeof card !== "object" || Array.isArray(card) || typeof card.name !== "string" || !card.name.trim() || !Array.isArray(card.items)) return { error:"Card " + (card && typeof card.name === "string" && card.name.trim() ? '"' + card.name.trim() + '"' : "(unnamed)") + " needs a name and items array." };
     var clean = { name:card.name.trim(), items:[] };
-    for (var j = 0; j < card.items.length; j++) { var item = importItem(card.items[j], false); if (!item) return { error:"Each item needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
+    for (var j = 0; j < card.items.length; j++) { var rawItem = card.items[j], item = importItem(rawItem, false), itemName = rawItem && typeof rawItem.name === "string" && rawItem.name.trim() ? ' "' + rawItem.name.trim() + '"' : " (unnamed)"; if (!item) return { error:"Item" + itemName + " in card \"" + clean.name + "\" needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
     clean.items = collapseImportItems(clean.items);
     out.cards.push(clean);
   }
@@ -1350,7 +1356,7 @@ function parseImportSchedule(text) {
       if (!reminder || typeof reminder !== "object" || Array.isArray(reminder) || typeof reminder.name !== "string" || !reminder.name.trim()) return { error:"Each reminder needs a name." };
       if (typeof reminder.every === "number" && isFinite(reminder.every) && reminder.every > 0 && ["days", "weeks", "months"].indexOf(reminder.unit) !== -1) schedule = { kind:"interval", every:Math.round(reminder.every), unit:reminder.unit };
       else if (typeof reminder.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(reminder.date)) schedule = { kind:"fixed", date:reminder.date };
-      else return { error:"Reminder needs every + unit, or a YYYY-MM-DD date." };
+      else return { error:"Reminder \"" + reminder.name.trim() + "\" needs every + unit, or a YYYY-MM-DD date." };
       out.reminders.push({ name:reminder.name.trim(), note:typeof reminder.note === "string" ? reminder.note.trim() : "", schedule:schedule });
     }
   }
@@ -1590,11 +1596,11 @@ function _aiPromptSelfCheck() {
   finally { setPrayersOn(savedPrayers); }
 }
 _aiPromptSelfCheck();
-function copyImportPrompt() {
-  var value = importPrompt();
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(function() { toast("Copied!"); }, function() { copyImportFallback(value); }); else copyImportFallback(value);
+function copyText(value, successMessage) {
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(function() { toast(successMessage); }, function() { copyImportFallback(value, successMessage); }); else copyImportFallback(value, successMessage);
 }
-function copyImportFallback(value) { var area = document.createElement("textarea"); area.value = value; area.style.position = "fixed"; area.style.opacity = "0"; document.body.appendChild(area); area.select(); try { document.execCommand("copy"); toast("Copied!"); } catch(e) { toast("Copy failed"); } document.body.removeChild(area); }
+function copyImportPrompt() { copyText(importPrompt(), "Copied!"); }
+function copyImportFallback(value, successMessage) { var area = document.createElement("textarea"); area.value = value; area.style.position = "fixed"; area.style.opacity = "0"; document.body.appendChild(area); area.select(); try { document.execCommand("copy"); toast(successMessage || "Copied!"); } catch(e) { toast("Copy failed"); } document.body.removeChild(area); }
 
 // ============================================================
 // "TYPE YOUR DAY" SCHEDULE PARSER (no-AI, offline) — a second input into the
@@ -1810,7 +1816,7 @@ function renderParserPanel() {
   cards.forEach(function(card) { h += '<button type="button" class="sch-gapcard' + (card.id === parseCardId ? ' on' : '') + '" style="--kc:' + esA(cardColor(card.color)) + '" data-a="parsecardchip" data-c="' + esA(card.id) + '">' + esc(card.name) + '</button>'; });
   h += '</div>';
   h += '<textarea id="parse-text" style="margin-top:8px" placeholder="Activities for ' + esc((cards[0] && cards[0].name) || "this card") + ', e.g.\nGym 6:30\u20137:30am\nMorning run 7am Mon Wed Fri">' + esc(parseText) + '</textarea>';
-  h += '<button class="bt bta t-sm" style="margin-top:8px" data-a="parserun">Read my day</button>';
+  h += '<div class="flx gap-2" style="margin-top:8px"><button class="bt bta t-sm" data-a="parserun">Read my day</button><button class="bt t-sm" data-a="plainexample">Load example</button></div>';
   h += '<p class="sch-parsehint">Tip: end a line with <b>optional</b> (or <b>?</b>) to mark it optional, or start it with <b>[Card name]</b> to send that line to another card. Need another card? Add one on your <b>Plan</b> page.</p>';
   if (parseUnread.length) {
     h += '<div style="margin-top:12px"><p style="font-size:12px;font-weight:600;color:#bfa46a">Couldn\u2019t read these \u2014 add a time or edit them</p>';
@@ -1833,7 +1839,7 @@ function renderParserPanel() {
 // Shared with HELP_TOPICS.import below — one source of copy, so the ? sheet and the inline
 // guide's <ol> never drift apart.
 var IMPORT_GUIDE_STEPS = [
-  "Tap Copy my template (copies a prompt with your current schedule).",
+  "Tap Copy prompt (copies a prompt with your current schedule).",
   "Open your AI (Claude, ChatGPT, etc.), paste it, and describe your week in plain words.",
   "It asks a few questions, then shows your week as plain text — check it, reply ‘yes’ and it sends the code.",
   "Copy that code, tap Import schedule below to open the paste box, and paste it in.",
@@ -1872,6 +1878,7 @@ function renderAiTabGuide() {
   AI_SERVICES.forEach(function(svc) {
     h += '<button type="button" class="bt t-sm" data-a="aiopen" data-svc="' + esA(svc.id) + '"><i class="fas fa-arrow-up-right-from-square mr-1.5"></i>' + esc(svc.label) + '</button>';
   });
+  h += '<button type="button" class="bt t-sm" data-a="copyimportprompt"><i class="fas fa-copy mr-1.5"></i>Copy prompt</button>';
   h += '</div>';
   return h;
 }
@@ -2128,7 +2135,7 @@ function renderImportPanel(kind) {
     h += '</div>';
   }
   // Preview renders beside the method that produced it (AI vs Type); no-arg shows it for either.
-  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' group' + (importPreview.folded === 1 ? '' : 's') + ' merged into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
+  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' group' + (importPreview.folded === 1 ? '' : 's') + ' merged into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm" data-a="importall">Select all imported</button><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
   return h + '</div>';
 }
 
@@ -2501,8 +2508,10 @@ function rPrefs() {
   } else if (currentUser) {
     h += '<p class="t-xs mb-3" style="color:var(--mt)">Logged in as <strong>' + esc(currentUser.email) + '</strong>.</p>';
     h += '<div class="flx gap-2"><button class="bt t-sm" data-a="sync-now"><i class="fas fa-rotate mr-1.5"></i>Sync Now</button><button class="bt t-sm" data-a="signout" style="border-color:var(--dn);color:var(--dn)"><i class="fas fa-right-from-bracket mr-1.5"></i>Sign Out</button></div>';
+    h += '<button class="bt t-sm" style="margin-top:8px" data-a="copyreferral"><i class="fas fa-link mr-1.5"></i>Copy referral link</button>';
   } else {
     h += '<button class="bt t-sm" data-a="show-login"><i class="fas fa-cloud mr-1.5"></i>Connect Cloud Sync</button>';
+    h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Sign in to earn referral credit</p>';
   }
   h += '</div>';
 
@@ -2546,8 +2555,9 @@ function rPrefs() {
 
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-table-cells-large mr-1.5" style="color:var(--ac)"></i>Home screen widget</div>';
   if (typeof currentUser !== "undefined" && currentUser) {
-    h += '<p class="t-xs mb-3" style="color:var(--mt)">Four home-screen widgets — Pehar, Stats, Priority and Next prayer — from one script, using the free Scriptable app. You pick which one each widget shows with its <b>Parameter</b>.</p>';
+    h += '<p class="t-xs mb-3" style="color:var(--mt)">Five home-screen widgets — Pehar, Stats, Priority, Next prayer and Hadith — from one script, using the free Scriptable app. You pick which one each widget shows with its <b>Parameter</b>.</p>';
     h += '<button type="button" class="bt bta t-sm" data-a="copywidgetscript"><i class="fas fa-copy mr-1.5"></i>Copy widget script</button>';
+    h += '<div class="flx gap-1" style="flex-wrap:wrap;margin-top:8px">' + ["pehar", "stats", "priority", "nextprayer", "hadith"].map(function(name) { return '<button type="button" class="bt t-xs" data-a="copyparam" data-k="' + esA(name) + '">' + esc(name) + '</button>'; }).join('') + '</div>';
     h += '<ol class="sch-parsesteps" style="margin-top:11px">'
       + '<li>Install <b>Scriptable</b> (free, from the App Store).</li>'
       + '<li>Tap <b>Copy widget script</b> above.</li>'
@@ -2637,7 +2647,7 @@ function renderHeatmapCard(md) {
     var score = dScore(d.key);
     var bg = isFuture ? "rgba(150,160,180,.10)" : completionRampColor(score);
     var isTd = d.key === todayKey;
-    h += '<div class="hmc' + (isTd ? ' today' : '') + '" style="background:' + bg + '" title="Day ' + d.day + (isFuture ? ': upcoming' : ': ' + score + '%') + '">' + d.day + '</div>';
+    h += '<div class="hmc' + (isTd ? ' today' : '') + '" data-a="goto" data-k="' + esA(d.key) + '" style="background:' + bg + '" title="Day ' + d.day + (isFuture ? ': upcoming' : ': ' + score + '%') + '">' + d.day + '</div>';
   });
   return h + '</div></div>';
 }
@@ -2658,7 +2668,7 @@ function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, pray
     h += '<div class="sch-ovrow"><div class="sch-ovrowlbl">' + PRAYERS[p] + '</div><div class="phg" style="--cols:' + days + '">';
     for (var dd = 0; dd < days; dd++) {
       var on = prayerGrid[p][dd];
-      h += '<div class="phc" style="background:' + (on ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + PRAYERS[p] + ' Day ' + (dd + 1) + ': ' + (on ? 'Done' : 'Missed') + '"></div>';
+      h += '<div class="phc" data-a="goto" data-k="' + esA(md[dd].key) + '" style="background:' + (on ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + PRAYERS[p] + ' Day ' + (dd + 1) + ': ' + (on ? 'Done' : 'Missed') + '"></div>';
     }
     h += '</div></div>';
   }
@@ -2670,7 +2680,7 @@ function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, pray
       h += '<div class="sch-ovrow"><div class="sch-ovrowlbl">' + esc(name) + '</div><div class="phg" style="--cols:' + days + '">';
       for (var vd = 0; vd < days; vd++) {
         var vdone = !!(md[vd].data.prayers && md[vd].data.prayers[name]);
-        h += '<div class="phc" style="background:' + (vdone ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + esA(name) + ' Day ' + (vd + 1) + ': ' + (vdone ? 'Done' : 'Missed') + '"></div>';
+        h += '<div class="phc" data-a="goto" data-k="' + esA(md[vd].key) + '" style="background:' + (vdone ? "#82a06e" : "rgba(150,160,180,.10)") + '" title="' + esA(name) + ' Day ' + (vd + 1) + ': ' + (vdone ? 'Done' : 'Missed') + '"></div>';
       }
       h += '</div></div>';
     });
@@ -2719,7 +2729,7 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
           h += '<div class="phg" style="--cols:' + days + '">';
           for (var d2 = 0; d2 < days; d2++) {
             var on2 = arr[d2];
-            h += '<div class="phc" style="background:' + (on2 ? esA(cardColor(card.color)) : "rgba(150,160,180,.10)") + '" title="' + esc(it.n) + ' Day ' + (d2 + 1) + ': ' + (on2 ? 'Done' : 'Missed') + '"></div>';
+            h += '<div class="phc" data-a="goto" data-k="' + esA(md[d2].key) + '" style="background:' + (on2 ? esA(cardColor(card.color)) : "rgba(150,160,180,.10)") + '" title="' + esc(it.n) + ' Day ' + (d2 + 1) + ': ' + (on2 ? 'Done' : 'Missed') + '"></div>';
           }
           h += '</div></div>';
           legend += '<div class="sch-ovlegenditem"><span>' + esc(it.n) + '</span><strong style="color:' + esA(cardColor(card.color)) + '"><i class="fas fa-fire" style="margin-right:4px"></i>' + st.current + ' · best ' + st.best + '</strong></div>';
@@ -2733,6 +2743,96 @@ function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
   });
   return slides;
 }
+
+// ===== PATTERNS (correlation USP) =====
+// "You keep X on more of the days you do Y." Honest, not clever: we only surface a link when there is
+// a real sample behind it (both items scheduled on >= PAT_MIN_OVERLAP days, each side of the split
+// >= PAT_MIN_GROUP days) AND the gap is large (>= PAT_MIN_EFFECT). Spurious one-off coincidences never
+// reach the card. ponytail: window = the displayed month only; widen to full history if signal too thin.
+var PAT_MIN_OVERLAP = 10, PAT_MIN_GROUP = 4, PAT_MIN_EFFECT = 0.30, PAT_MAX_FINDINGS = 4;
+
+// Pure: given two {globalDayIndex: boolDone} maps, split A's completion by whether B was done that day.
+// Returns null when either side of the split is too small to trust.
+function pairLift(aBy, bBy) {
+  var onB = 0, onBAdone = 0, offB = 0, offBAdone = 0;
+  Object.keys(bBy).forEach(function(gi) {
+    if (!(gi in aBy)) return; // only days where BOTH were scheduled
+    if (bBy[gi]) { onB++; if (aBy[gi]) onBAdone++; }
+    else { offB++; if (aBy[gi]) offBAdone++; }
+  });
+  if (onB < PAT_MIN_GROUP || offB < PAT_MIN_GROUP) return null;
+  var pOn = onBAdone / onB, pOff = offBAdone / offB;
+  return { pOn: pOn, pOff: pOff, effect: pOn - pOff, n: onB + offB };
+}
+
+function overviewPatterns(md) {
+  var items = {}; // key -> { label, color, by:{gi:boolDone} }
+  function mark(key, label, color, gi, done) {
+    if (!items[key]) items[key] = { label: label, color: color, by: {} };
+    items[key].by[gi] = done;
+  }
+  var prayersEnabled = (typeof prayersOn === "function") && prayersOn();
+  var trackedDays = 0;
+  md.forEach(function(d, gi) {
+    var dd = d.data, hasData = Object.keys(dd.habits || {}).length > 0 || Object.keys(dd.prayers || {}).length > 0;
+    if (hasData) trackedDays++;
+    gDayCards(d.key).forEach(function(row) {
+      row.items.forEach(function(it) {
+        if (it.optional) return;
+        mark(row.card.id + "::" + it.n, it.n, cardColor(row.card.color), gi, !!it.done);
+      });
+    });
+    if (prayersEnabled && hasData) {
+      mark("prayers::__all5", "All 5 prayers", "#82a06e", gi, PRAYERS.every(function(p) { return !!(dd.prayers && dd.prayers[p]); }));
+    }
+  });
+  var keys = Object.keys(items).filter(function(k) { return Object.keys(items[k].by).length >= PAT_MIN_OVERLAP; });
+  var findings = [];
+  keys.forEach(function(ka) {
+    keys.forEach(function(kb) {
+      if (ka === kb) return;
+      var lift = pairLift(items[ka].by, items[kb].by);
+      if (!lift || Math.abs(lift.effect) < PAT_MIN_EFFECT) return;
+      findings.push({ a: items[ka].label, b: items[kb].label, color: items[ka].color, pOn: lift.pOn, pOff: lift.pOff, effect: lift.effect });
+    });
+  });
+  // One row per unordered pair — keep the framing with the larger gap.
+  findings.sort(function(x, y) { return Math.abs(y.effect) - Math.abs(x.effect); });
+  var seen = {}, top = [];
+  findings.forEach(function(f) { var k = [f.a, f.b].sort().join("\u0000"); if (seen[k]) return; seen[k] = 1; top.push(f); });
+  return { findings: top.slice(0, PAT_MAX_FINDINGS), trackedDays: trackedDays };
+}
+
+function renderPatternsCard(md) {
+  var P = overviewPatterns(md);
+  var h = '<div class="sch-ovcard"><h3>Patterns</h3>';
+  if (P.trackedDays < PAT_MIN_OVERLAP || !P.findings.length) {
+    h += '<p class="sch-ovsub" style="margin:4px 0 0">Honest links between your habits appear here once there’s enough history'
+      + (P.trackedDays < PAT_MIN_OVERLAP ? ' — about ' + PAT_MIN_OVERLAP + ' tracked days (you have ' + P.trackedDays + ').' : ' this month.') + '</p>';
+    return h + '</div>';
+  }
+  h += '<p class="sch-ovsub" style="margin:4px 0 0">Based on ' + P.trackedDays + ' tracked days this month — not advice, just what co-occurs.</p>';
+  P.findings.forEach(function(f) {
+    var up = f.effect > 0;
+    h += '<div class="sch-pat"><span class="sch-patbar" style="background:' + esA(f.color) + '"></span>'
+      + '<span class="sch-pattext"><b>' + esc(f.a) + '</b> — ' + Math.round(f.pOn * 100) + '% done on days you do <b>' + esc(f.b) + '</b>, '
+      + Math.round(f.pOff * 100) + '% when you don’t <em class="sch-pattag" style="color:' + (up ? '#82a06e' : '#c98f6a') + '">'
+      + (up ? 'moves together' : 'tends to clash') + '</em></span></div>';
+  });
+  return h + '</div>';
+}
+
+function _patternsSelfCheck() {
+  if (location.hash !== "#patterncheck") return;
+  // A done 4/5 days B is done, 1/5 days B is not: lift = 0.80 - 0.20 = 0.60.
+  var aBy = { 0:true, 1:true, 2:true, 3:true, 4:false, 5:false, 6:false, 7:false, 8:true, 9:false };
+  var bBy = { 0:true, 1:true, 2:true, 3:true, 4:true,  5:false, 6:false, 7:false, 8:false, 9:false };
+  var r = pairLift(aBy, bBy);
+  console.assert(r && Math.abs(r.pOn - 0.8) < 1e-9 && Math.abs(r.pOff - 0.2) < 1e-9, "(pat) 80% vs 20% expected", r);
+  console.assert(pairLift({ 0:true, 1:false }, { 0:true, 1:false }) === null, "(pat) tiny sample must return null");
+  console.log("patterns self-check complete");
+}
+_patternsSelfCheck();
 
 function rOverview() {
   var md = getMonthData();
@@ -2822,6 +2922,7 @@ function rOverview() {
   h += renderHeatmapCard(md);
   if (weightOn()) h += renderWeightTrendCard(md);
   if (prayersOn()) h += renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, prayerStreak);
+  h += renderPatternsCard(md);
   // Habit / Card Consistency — stacked (capped ~5 habits/card via chunking above).
   h += '<p class="sch-anylbl" style="margin:22px 0 0">HABIT / CARD CONSISTENCY</p>';
   h += '<p style="margin:4px 0 0;font-size:11px;color:var(--mt)"><i class="fas fa-fire" style="margin-right:4px"></i>days completed in a row, shown as <b>now</b> · <b>best</b> ever</p>';
@@ -3057,7 +3158,7 @@ function itemEditorHTML(field, name, closeAction) {
   if (isPrayer) h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-timeinp" data-field="' + esA(field) + '" data-name="' + esA(name) + '" value="' + esA(t) + '"></label>';
   else {
     if (!slots.length) slots = [{ time:"", duration:effectiveDur(field, name, false) }];
-    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span></label>'; });
+    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button></label>'; });
     h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button>';
   }
   h += '</span></div>';
@@ -3211,6 +3312,7 @@ function renderCard(card, items) {
   h += '<input type="text" id="od-name-' + esA(card.id) + '" class="sch-addname" placeholder="Add for today…" maxlength="60" autocomplete="off">';
   h += '<button class="sch-addgo" data-a="odaddsave" data-c="' + esA(card.id) + '"><i class="fas fa-plus mr-1.5"></i>Add</button>';
   h += '</div>';
+  h += '<p class="t-xs" style="color:var(--mt);margin:4px 0 0">Adds for today only · add recurring habits in Plan</p>';
   h += '</div>';
   return h;
 }
@@ -3772,6 +3874,7 @@ function rSchedule() {
   h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
   h += '<button type="button" class="dnb share-open" data-a="shareopen" aria-label="Share this day"><i class="fas fa-share-nodes t-xs"></i></button>';
   h += '</div>';
+  h += '<button type="button" class="bt t-xs" style="margin-top:10px" data-a="openrefl"><i class="fas fa-pen-fancy mr-1.5"></i>Daily Reflection</button>';
   h += '</header>';
 
   h += '<div class="al"></div>';
@@ -3847,7 +3950,7 @@ function rPehar() {
   h += '<div class="sch-peharhead">';
   h += '<button type="button" class="sch-copyy sch-phleft" data-a="setupwithai"><i class="fas fa-wand-magic-sparkles"></i> Set up with AI</button>';
   h += '<p class="sch-anylbl sch-phtitle">PEHAR</p>';
-  if (td) h += '<button type="button" class="sch-copyy sch-phright" data-a="copyyesterday"><i class="fas fa-copy"></i> Copy yesterday</button>';
+  if (td) h += '<button type="button" class="sch-copyy sch-phright" data-a="copyyesterday"><i class="fas fa-copy"></i> Copy yesterday\'s tasks</button>';
   else h += '<span></span>';
   h += '</div>';
   if (timeline.length) {
@@ -4076,6 +4179,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "guideback")  { guideView = "index"; render(); window.scrollTo(0, 0); return; }
     if (a === "guideclose") { guideView = null; render(); return; }
     if (a === "guidejump")  { guideView = null; view = t.dataset.v || "daily"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
+    if (a === "goto") { var gp = t.dataset.k.split("-"); cDate = new Date(+gp[0], +gp[1] - 1, +gp[2]); view = "daily"; render(); return; }
     if (a === "buildpick")  { buildPanel = (buildPanel === t.dataset.k) ? null : t.dataset.k; render(); return; }
     if (a === "importtab") { importTab = t.dataset.tab; aiStep = 0; render(); return; }
     if (a === "aiopen") {
@@ -4090,6 +4194,8 @@ document.getElementById("app").addEventListener("click", function(e) {
       render();
       return;
     }
+    if (a === "copyimportprompt") { copyImportPrompt(); return; }
+    if (a === "copyreferral") { copyText(referralUrl(), "Referral link copied"); return; }
     if (a === "vprefs") { view = "prefs"; if (typeof publishWidgetFeed === "function") publishWidgetFeed(); render(); window.scrollTo(0, 0); return; }
     if (a === "tab") {
       view = t.dataset.tab;
@@ -4100,12 +4206,10 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     if (a === "copywidgetscript") {
-      if (!localStorage.getItem(WIDGET_TOKEN_KEY)) { publishWidgetFeed(); toast("Preparing your widget, tap Copy again in a moment"); return; }
-      var wscript = widgetLoaderText();
-      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(wscript).then(function() { toast("Widget script copied"); }, function() { copyImportFallback(wscript); });
-      else copyImportFallback(wscript);
+      ensureWidgetToken().then(function(token) { if (token) copyText(widgetLoaderText(), "Widget script copied"); else toast("Couldn't prepare your widget"); });
       return;
     }
+    if (a === "copyparam") { copyText(t.dataset.k, "Copied: " + t.dataset.k); return; }
     if (a === "doupdate") {
       toast("Updating…");
       var reload = function() { location.reload(); };
@@ -4134,7 +4238,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (!shiftRowToFreeSlot(importPreview, +t.dataset.i)) { toast("Nowhere free to shift to"); return; }
       rebuildImportPreview(); render(); return;
     }
-    if (a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
+    if (a === "importall" || a === "importallmine" || a === "importallimport") { if (importPreview) importPreview.rows.forEach(function(row) { if (row.kind === "item" || row.kind === "prayer") row.choice = a === "importallmine" ? "mine" : "import"; }); render(); return; }
     if (a === "resetschedule") {
       uiConfirm("Reset your whole schedule? This clears all cards, items, times, day-scopes and prayer times, leaving an empty Daily Goals card. Your day-by-day completion history is kept.", function() {
       // Cancel remote reminders before deleting their cards/items (same teardown deleteCard uses),
@@ -4251,6 +4355,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "importapply") { if (!importPreview) return; applyImportSchedule(importPreview, false); importPreview = null; importDraft = ""; importError = ""; aiStep = 0; parseText = ""; parseUnread = []; render(); toast("Schedule imported"); return; }
     // ---- "Type your day" parser (Feature 1/2/4/5) ----
     if (a === "parsecardchip") { parseCardId = t.dataset.c; render(); return; }
+    if (a === "plainexample") { parseText = "[Daily Goals]\n06:30 Morning walk\n19:00 Read"; render(); return; }
     if (a === "parserun") {
       var parseTa = document.getElementById("parse-text"); parseText = parseTa ? parseTa.value : parseText;
       var parseResult = parseScheduleText(parseText, parseCardId);
@@ -4373,11 +4478,12 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "slotadd") {
       var addButton = t, slotLabel = document.createElement("label");
       slotLabel.className = "sch-timepill";
-      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="30"><span>m</span>';
+      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="30"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button>';
       addButton.parentNode.insertBefore(slotLabel, addButton);
       slotLabel.querySelector("input").focus();
       return;
     }
+    if (a === "slotdel") { var slotPill = t.closest(".sch-timepill"); if (slotPill) slotPill.remove(); return; }
     if (a === "slotsave") {
       var editor = t.closest(".sch-editor"), selectedDays = Array.prototype.slice.call(editor.querySelectorAll(".sch-day.on")).map(function(btn) { return +btn.dataset.dow; });
       var invalidSlotDuration = false;
@@ -4393,6 +4499,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
       setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
       syncItemReminder(t.dataset.f, t.dataset.k);
+      if (savedSlots[0] && savedSlots[0].time && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings.");
       if (t.dataset.close === "schedit") schEdit = null; else tplItemEdit = null;
       delete tplRepeatMode[t.dataset.f + "::" + t.dataset.k]; render(); return;
     }
@@ -4531,13 +4638,13 @@ document.getElementById("app").addEventListener("click", function(e) {
         setPrayerAutoAndApply(true);
         if (!(typeof getPrayerGeo === "function" && getPrayerGeo())) {
           toast("Getting your location…");
-          if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } else toast("Couldn't get location — allow location access"); render(); });
+          if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } else toast("Couldn't get location — you can still set prayer times manually below."); render(); });
         } else { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); }
       } else { setPrayerAutoAndApply(false); }
       render(); return;
     }
     if (a === "prayermadhab") { setPrayerMadhab(t.dataset.m); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
-    if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location"); render(); }); return; }
+    if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location — you can still set prayer times manually below."); render(); }); return; }
     if (a === "voltoggle") { var volOn = !voluntaryTracked(t.dataset.p); setVoluntaryTracked(t.dataset.p, volOn); if (!volOn && typeof pushSaveReminderTime === "function") pushSaveReminderTime("prayers", t.dataset.p, ""); else if (volOn) syncPrayerReminder(t.dataset.p); if ((typeof prayerAutoOn === "function") && prayerAutoOn()) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); render(); return; }
     if (a === "pehartoggle") {
       if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
@@ -4570,7 +4677,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "prayerbell") {
       var pbk = t.dataset.k;
       if (getPrayerBells()[pbk]) { var offBells = getPrayerBells(); offBells[pbk] = false; savePrayerBells(offBells); syncPrayerReminder(pbk); render(); return; }
-      ensureBellPermission(function(ok) { var bells = getPrayerBells(); bells[pbk] = ok; savePrayerBells(bells); syncPrayerReminder(pbk); render(); });
+      ensureBellPermission(function(ok) { var bells = getPrayerBells(); bells[pbk] = ok; savePrayerBells(bells); syncPrayerReminder(pbk); if (ok && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings."); render(); });
       return;
     }
     // ---- Onboarding (Task 9A) ----
@@ -4582,7 +4689,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       render(); return;
     }
     if (a === "onbnew") { onbStep = 1; render(); return; }
-    if (a === "onbreturn") { finishOnboarding(); return; }
+    if (a === "onbreturn") { finishOnboarding(); if (typeof showAuthModal === "function") showAuthModal("login"); return; }
     if (a === "onbstep1") { onbStep = 2; render(); return; }
     if (a === "onbstep2") { onbStep = prayersOn() ? 3 : 4; render(); return; }
     if (a === "onbskip1")  { onbStep = 4; render(); return; }
@@ -4619,7 +4726,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "copyyesterday") {
       var copied = copyYesterdayOneday(cData, dk(cDate));
-      if (copied) sDay(); render(); toast(copied ? "Copied " + copied + " from yesterday" : "Nothing new from yesterday"); return;
+      if (copied) sDay(); render(); toast(copied ? "Copied " + copied + " from yesterday" : "No one-off tasks from yesterday"); return;
     }
   }
   var dayBtn = e.target.closest(".sch-day");
@@ -4654,7 +4761,7 @@ document.getElementById("app").addEventListener("change", function(e) {
   var msel = e.target.closest('[data-a="prayermethod"]');
   if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); setTimeout(render, 0); return; }
   var reminderTime = e.target.closest('[data-a="remindertime"]');
-  if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast("Reminder time updated"); return; }
+  if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast(reminderTime.value && (typeof currentUser === "undefined" || !currentUser) ? "Notifications need Cloud Sync — sign in under Settings." : "Reminder time updated"); return; }
   var dinp = e.target.closest(".sch-durinp");
   if (dinp && dinp.dataset.field) {
     var mins = parseInt(dinp.value, 10);
@@ -4670,6 +4777,7 @@ document.getElementById("app").addEventListener("change", function(e) {
     // so their flag is left alone here.
     if (inp.dataset.field !== "prayers") setItemBell(inp.dataset.field, inp.dataset.name, !!inp.value);
     syncItemReminder(inp.dataset.field, inp.dataset.name);
+    if (inp.value && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings.");
     // No render() here: on mobile the native time picker fires `change` live as the wheel turns, so a
     // re-render would destroy the open <input> and snap the picker shut (reported bug). We render on
     // blur instead — once the user dismisses the picker — via the capture-phase listener below.

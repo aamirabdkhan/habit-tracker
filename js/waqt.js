@@ -3583,21 +3583,70 @@ function renderWeekPdfDay(day) {
   }).join('') : '<p class="share-weekempty">Nothing selected for this day.</p>';
   return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 92) + '</span></footer></section>';
 }
+function renderWeekPdfSheet() {
+  var days = wkDays(cDate);
+  var range = esc(days[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(days[6].toLocaleDateString(undefined, { month:"short", day:"numeric" }));
+  return '<div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + range + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 100) + '</span></footer></div>';
+}
+function weekPdfSafeBreaks(mount, layout, canvasHeight, pageHeight) {
+  var root = mount.getBoundingClientRect(), selectors = layout === "rows" ? ".share-weekgridrow,.share-weekfoot" : ".share-weekdayhead,.share-weekitem,.share-weekfoot";
+  var intervals = Array.prototype.map.call(mount.querySelectorAll(selectors), function(node) {
+    var rect = node.getBoundingClientRect();
+    return [Math.max(0, Math.floor(rect.top - root.top)), Math.min(canvasHeight, Math.ceil(rect.bottom - root.top))];
+  }).sort(function(a, b) { return a[0] - b[0]; });
+  var gaps = [0], end = 0;
+  intervals.forEach(function(interval) {
+    if (interval[0] > end) gaps.push(interval[0]);
+    end = Math.max(end, interval[1]);
+    gaps.push(end);
+  });
+  gaps.push(canvasHeight);
+  var cuts = [], start = 0;
+  while (canvasHeight - start > pageHeight) {
+    var limit = start + pageHeight, cut = 0;
+    gaps.forEach(function(gap) { if (gap > start && gap <= limit) cut = Math.max(cut, gap); });
+    if (!cut) cut = Math.min(canvasHeight, limit);
+    cuts.push(cut);
+    start = cut;
+  }
+  cuts.push(canvasHeight);
+  return cuts;
+}
 async function exportWeekPdf() {
   if (typeof html2canvas !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") { toast("PDF export unavailable. Reload and try again."); return; }
   var mount, exportDate = dk(cDate), pdf, pageWidth, pageHeight, margin = 24, days = shareWeekData();
   try {
-    pdf = new window.jspdf.jsPDF({ orientation:"portrait", unit:"pt", format:"a4" });
-    pageWidth = pdf.internal.pageSize.getWidth(); pageHeight = pdf.internal.pageSize.getHeight();
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    for (var i = 0; i < days.length; i++) {
-      mount = mountShareExport("share-export-week t-" + shareState.theme, 794, renderWeekPdfDay(days[i]));
+    if (shareState.wk === "stack") {
+      pdf = new window.jspdf.jsPDF({ orientation:"portrait", unit:"pt", format:"a4" });
+      pageWidth = pdf.internal.pageSize.getWidth(); pageHeight = pdf.internal.pageSize.getHeight();
+      for (var i = 0; i < days.length; i++) {
+        mount = mountShareExport("share-export-week t-" + shareState.theme, 794, renderWeekPdfDay(days[i]));
+        var dayCanvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
+        var dayFit = Math.min((pageWidth - margin * 2) / dayCanvas.width, (pageHeight - margin * 2) / dayCanvas.height);
+        var dayWidth = dayCanvas.width * dayFit, dayHeight = dayCanvas.height * dayFit;
+        if (i) pdf.addPage();
+        pdf.addImage(dayCanvas.toDataURL("image/png"), "PNG", (pageWidth - dayWidth) / 2, (pageHeight - dayHeight) / 2, dayWidth, dayHeight);
+        mount.remove(); mount = null;
+      }
+    } else {
+      pdf = new window.jspdf.jsPDF({ orientation:"landscape", unit:"pt", format:"a4" });
+      pageWidth = pdf.internal.pageSize.getWidth(); pageHeight = pdf.internal.pageSize.getHeight();
+      mount = mountShareExport("share-export-week t-" + shareState.theme, 1400, renderWeekPdfSheet());
       var canvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
-      var fit = Math.min((pageWidth - margin * 2) / canvas.width, (pageHeight - margin * 2) / canvas.height);
-      var width = canvas.width * fit, height = canvas.height * fit;
-      if (i) pdf.addPage();
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", (pageWidth - width) / 2, (pageHeight - height) / 2, width, height);
+      var width = pageWidth - margin * 2, pxToPt = width / canvas.width, maxSlice = Math.floor((pageHeight - margin * 2) / pxToPt);
+      var cuts = weekPdfSafeBreaks(mount, shareState.wk, canvas.height / 2, maxSlice / 2).map(function(cut) { return cut * 2; });
+      var start = 0;
+      for (var page = 0; page < cuts.length; page++) {
+        var end = cuts[page], slice = document.createElement("canvas"), ctx;
+        slice.width = canvas.width; slice.height = end - start;
+        ctx = slice.getContext("2d");
+        ctx.drawImage(canvas, 0, start, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
+        if (page) pdf.addPage();
+        pdf.addImage(slice.toDataURL("image/png"), "PNG", margin, margin, width, slice.height * pxToPt);
+        start = end;
+      }
       mount.remove(); mount = null;
     }
     pdf.save("waqt-week-" + exportDate + ".pdf");

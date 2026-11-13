@@ -546,14 +546,18 @@ body::before{display:none!important}
 .share-export-day{background:transparent!important;color-scheme:normal}.share-export-day .share-frame{overflow:hidden}.share-export-day .share-agenda .share-item{border-left-width:7px}
 .share-export-week{background:transparent!important;color-scheme:normal}.share-pdfday{width:794px;min-height:1080px;padding:54px 52px 42px;display:flex;flex-direction:column;background:#FAF6EC;color:#2A2216;font-family:"Public Sans",ui-sans-serif,system-ui,sans-serif}.share-pdfday.t-midnight{background:#17150F;color:#F0E8D9}.share-pdfday.t-gradient{background:linear-gradient(158deg,#FDF5E2,#EFDFC0);color:#2A2216}.share-pdfday header{padding-bottom:22px;border-bottom:2px solid currentColor}.share-pdfday header p{margin:0 0 8px;color:inherit;font-size:14px;font-weight:700;letter-spacing:.14em}.share-pdfday h1{margin:0;font:400 42px/1.1 "DM Serif Display",Georgia,serif}.share-pdfday main{display:grid;gap:12px;align-content:start;flex:1;padding:28px 0}.share-pdfrow{display:grid;grid-template-columns:12px 112px minmax(0,1fr) auto;gap:14px;align-items:baseline;padding:9px 0;border-bottom:1px solid currentColor;font-size:20px}.share-pdfrow i{width:10px;height:10px;border-radius:50%;background:var(--share-c)}.share-pdfrow span,.share-pdfrow small{font-size:16px;white-space:nowrap}.share-pdfrow b{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.share-pdfday footer{display:flex;align-items:center;justify-content:space-between;padding-top:22px;border-top:2px solid currentColor}.share-pdfday .share-badge{display:flex;flex-wrap:wrap;gap:0 5px;color:inherit}.share-pdfday .share-badge small{flex-basis:100%}.share-pdfday .share-badge b{color:inherit}.share-pdfday .share-qr svg{width:92px;height:92px}
 
-/* PDF mount is paper by itself. Never inherit app dark/light tokens. */
-.share-export-week{color-scheme:light;background:#FAF6EC;color:#2A2216}
-.share-export-week .share-weeksheet,.share-export-week .share-weekcols,.share-export-week .share-weekstack{background:#FAF6EC;border-color:#E0D4BF;color:#2A2216}
-.share-export-week .share-paperbar,.share-export-week .share-weekdayhead,.share-export-week .share-weekfoot{background:#F3ECDC;border-color:#E0D4BF;color:#857A64}
-.share-export-week .share-weekcol,.share-export-week .share-weekstackday{background:#FAF6EC;border-color:#E0D4BF;color:#2A2216}
-.share-export-week .share-weekgridrow,.share-export-week .share-weekpart,.share-export-week .share-weekgridday,.share-export-week .share-weekcell{border-color:#E0D4BF;background:#FAF6EC;color:#2A2216}
-.share-export-week .share-weekgridhead,.share-export-week .share-weekgridhead .share-weekpart,.share-export-week .share-weekgridhead .share-weekgridday{background:#F3ECDC}
-.share-export-week .share-weekpart{position:static;color:#B06A2E}.share-export-week .share-weekdayhead span,.share-export-week .share-weekdayhead small,.share-export-week .share-weekgridday span,.share-export-week .share-weektime,.share-export-week .share-weekdur,.share-export-week .share-weekempty,.share-export-week .share-weeknone{color:#857A64}
+/* Week PDF palette is explicit: export never inherits app light/dark tokens. */
+.share-export-week{--week-surface:#FAF6EC;--week-head:#F3ECDC;--week-line:#E0D4BF;--week-ink:#2A2216;--week-muted:#857A64;--week-accent:#B06A2E;color-scheme:light;background:var(--week-surface);color:var(--week-ink)}
+.share-export-week.t-midnight{--week-surface:#171A22;--week-head:#252B37;--week-line:#3A4353;--week-ink:#F0E8D9;--week-muted:#B4BDCA;--week-accent:#E0A84B;color-scheme:dark}
+.share-export-week.t-gradient{--week-surface:#FDF5E2;--week-head:#EFDFC0;--week-line:#D7B98A;--week-ink:#2A2216;--week-muted:#6A5435;--week-accent:#9B551F;color-scheme:light}
+.share-export-week .share-weeksheet,.share-export-week .share-weekcols,.share-export-week .share-weekstack{background:var(--week-surface);border-color:var(--week-line);color:var(--week-ink)}
+.share-export-week .share-paperbar,.share-export-week .share-weekdayhead,.share-export-week .share-weekfoot{background:var(--week-head);border-color:var(--week-line);color:var(--week-muted)}
+.share-export-week .share-paperbar b,.share-export-week .share-weekdayhead b,.share-export-week .share-weekgridday b,.share-export-week .share-weekitem{color:var(--week-ink)}
+.share-export-week .share-weekcol,.share-export-week .share-weekstackday{background:var(--week-surface);border-color:var(--week-line);color:var(--week-ink)}
+.share-export-week .share-weekgridrow,.share-export-week .share-weekpart,.share-export-week .share-weekgridday,.share-export-week .share-weekcell{border-color:var(--week-line);background:var(--week-surface);color:var(--week-ink)}
+.share-export-week .share-weekgridhead,.share-export-week .share-weekgridhead .share-weekpart,.share-export-week .share-weekgridhead .share-weekgridday{background:var(--week-head)}
+.share-export-week .share-weekpart{position:static;color:var(--week-accent)}.share-export-week .share-weekdayhead span,.share-export-week .share-weekdayhead small,.share-export-week .share-weekgridday span,.share-export-week .share-weektime,.share-export-week .share-weekdur,.share-export-week .share-weekempty,.share-export-week .share-weeknone{color:var(--week-muted)}
+.share-export-week .share-weekstack:after{background:var(--week-line)}
 
 /* Bottom tab bar (replaces the old top .sch-nav segment tabs) */
 .waqt-tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(4px + env(safe-area-inset-bottom));z-index:50;display:flex;justify-content:space-around;gap:4px;width:calc(100% - 28px);max-width:520px;padding:6px;background:var(--cd,#1A1A1A);border:1px solid var(--bd);border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.4)}
@@ -780,3 +784,8 @@ body::before{display:none!important}
 .share-export-day{background:transparent!important;color-scheme:normal}.share-export-week{background:transparent!important;color-scheme:normal}
 .share-badge{display:flex;flex-wrap:wrap;gap:0 4px}.share-badge small{flex-basis:100%}.share-item.done .share-name:after{content:none}
 [data-theme="light"] .share-kicker{color:#754100}
+
+/* Week PDF needs full wide sheet and own selected palette after app-token overrides. */
+.share-export-week .share-weeksheet{width:100%}
+.share-export-week.t-paper,.share-export-week.t-midnight,.share-export-week.t-gradient{background:var(--week-surface)!important;color:var(--week-ink)}
+.share-export-week.t-gradient{--week-surface:linear-gradient(158deg,#FDF5E2,#EFDFC0);--week-head:linear-gradient(158deg,#F6E8CA,#E7C993)}

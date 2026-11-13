@@ -56,10 +56,11 @@ function pushReminderIsLive(field, name) {
   var prayers, items, isBase, cards;
   if (field === "prayers") {
     prayers = (typeof PRAYERS !== "undefined" && Array.isArray(PRAYERS)) ? PRAYERS.slice() : [];
-    // Voluntary tracking (htn_track_*) is device-local, so a second device's sweep can't see it —
-    // never orphan a Duha/Tahajjud reminder just because this device doesn't track it. Count the set.
-    if (typeof VOLUNTARY_PRAYERS !== "undefined" && Array.isArray(VOLUNTARY_PRAYERS)) prayers = prayers.concat(VOLUNTARY_PRAYERS);
-    return prayers.indexOf(name) !== -1;
+    if (prayers.indexOf(name) !== -1) return true;
+    if (typeof VOLUNTARY_PRAYERS !== "undefined" && Array.isArray(VOLUNTARY_PRAYERS) && VOLUNTARY_PRAYERS.indexOf(name) !== -1) {
+      return typeof voluntaryTracked === "function" ? voluntaryTracked(name) : true;
+    }
+    return false;
   }
   // Base cards (habits/extra/health) hold items in ht_d (cardTemplateArr), independent of the ht_cards
   // meta list — never gate them on getCardMeta, which may be empty before migrateCardsIfNeeded runs.
@@ -203,7 +204,7 @@ function unsubscribeFromPush() {
 // addressable via production's existing rChk() output: data-a="tog"
 // data-f="<field>" data-k="<name>".
 function findItemEl(field, name) {
-  var els = document.querySelectorAll('[data-a="tog"][data-f="' + field + '"]');
+  var els = document.querySelectorAll('[data-a="schtog"][data-f="' + field + '"]');
   for (var i = 0; i < els.length; i++) { if (els[i].dataset.k === name) return els[i]; }
   return null;
 }

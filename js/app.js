@@ -1045,8 +1045,8 @@ ct.addEventListener("click",function(e){
     if(a==="vov"){view="overview";oMonth=new Date(cDate.getFullYear(),cDate.getMonth(),1);render();return}
     if(a==="vset"){view="settings";render();return}
     if(a==="back"){view="daily";render();return}
-    if(a==="omp"){oMonth.setMonth(oMonth.getMonth()-1);rOverview();return}
-    if(a==="omn"){oMonth.setMonth(oMonth.getMonth()+1);rOverview();return}
+    if(a==="omp"){oMonth.setMonth(oMonth.getMonth()-1);render();return}
+    if(a==="omn"){oMonth.setMonth(oMonth.getMonth()+1);render();return}
 
     if(a==="openrefl"){openReflModal();return}
 
@@ -1081,9 +1081,9 @@ ct.addEventListener("click",function(e){
     if(a==="tghs-toggle"){e.stopPropagation();var i8=+t.dataset.i;var d19=gDef();if(typeof d19.habits[i8]==="string"){d19.habits[i8]={n:d19.habits[i8],s:false}}else{d19.habits[i8].s=!d19.habits[i8].s}sDef(d19);t.classList.toggle("on");return}
     if(a==="sar"){var inp10=document.getElementById("snr"),nm9=inp10.value.trim();if(!nm9){toast("Enter a name");return}var d17=gDef();if(d17.rd.indexOf(nm9)!==-1){toast("Already exists");return}d17.rd.push(nm9);sDef(d17);inp10.value="";render();var nextInp=document.getElementById("snr");if(nextInp)nextInp.focus();toast("Added");return}
     if(a==="srr"){e.stopPropagation();var i7=+t.dataset.i;var d18=gDef();d18.rd.splice(i7,1);sDef(d18);render();toast("Removed");return}
-    if(a==="clr"){if(confirm("This will delete ALL your habit tracking data. Are you sure?")){var keys2=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k && k.indexOf("ht_")===0)keys2.push(k)}keys2.forEach(function(k){localStorage.removeItem(k)});render();toast("All data cleared")}return}
+    if(a==="clr"){if(confirm("This will delete ALL your habit tracking data. Are you sure?")){var keys2=[];for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k && /^htn?_/.test(k))keys2.push(k)}keys2.forEach(function(k){localStorage.removeItem(k)});render();toast("All data cleared")}return}
 
-    if(a==="exp"){var data={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k && k.indexOf("ht_")===0)try{data[k]=JSON.parse(localStorage.getItem(k))}catch(ex){}}var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});var a2=document.createElement("a");a2.href=URL.createObjectURL(blob);a2.download="habit-tracker-"+dk(new Date())+".json";a2.click();URL.revokeObjectURL(a2.href);toast("Exported");return}
+    if(a==="exp"){var data={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k && /^htn?_/.test(k))try{data[k]=JSON.parse(localStorage.getItem(k))}catch(ex){}}var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});var a2=document.createElement("a");a2.href=URL.createObjectURL(blob);a2.download="habit-tracker-"+dk(new Date())+".json";a2.click();URL.revokeObjectURL(a2.href);toast("Exported");return}
     if(a==="impb"){document.getElementById("imf").click();return}
 });
 
@@ -1116,7 +1116,7 @@ ct.addEventListener("change",function(e){
         if(s) s.style.color=(!isNaN(v)&&v)?"var(--ok)":"var(--mt)";
         return;
     }
-    if(e.target.id==="imf"){var f=e.target.files[0];if(f){if(f.size>2*1024*1024){toast("File too large");e.target.value="";return}var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d||typeof d!=="object"||Array.isArray(d))throw new Error("bad shape");Object.entries(d).forEach(function(entry){if(typeof entry[0]!=="string"||entry[0].indexOf("ht_")!==0)return;localStorage.setItem(entry[0],JSON.stringify(entry[1]));if(typeof dbSave === "function")dbSave(entry[0],entry[1])});render();toast("Imported")}catch(ex){toast("Invalid file")}};r.readAsText(f)}e.target.value="";return}
+    if(e.target.id==="imf"){var f=e.target.files[0];if(f){if(f.size>2*1024*1024){toast("File too large");e.target.value="";return}var r=new FileReader();r.onload=function(ev){try{var d=JSON.parse(ev.target.result);if(!d||typeof d!=="object"||Array.isArray(d))throw new Error("bad shape");Object.entries(d).forEach(function(entry){if(typeof entry[0]!=="string"||!/^htn?_/.test(entry[0]))return;localStorage.setItem(entry[0],JSON.stringify(entry[1]));if(typeof dbSave === "function")dbSave(entry[0],entry[1])});render();toast("Imported")}catch(ex){toast("Invalid file")}};r.readAsText(f)}e.target.value="";return}
     if(e.target.classList.contains("notif-time-inp")){
         var nfField=e.target.dataset.field, nfName=e.target.dataset.name, nfVal=e.target.value;
         if(typeof setNotifTime==="function")setNotifTime(nfField,nfName,nfVal);

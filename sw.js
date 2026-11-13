@@ -1,4 +1,4 @@
-const CACHE = 'habit-tracker-v89';
+const CACHE = 'habit-tracker-v90';
 const URLS = [
   './',
   'index.html',
@@ -11,6 +11,8 @@ const URLS = [
   'js/supabase-sync.js',
   'js/manifest.js',
   'js/push-client.js',
+  'js/theme-init.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js',
   'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',
   'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js',
@@ -37,6 +39,7 @@ self.addEventListener('activate', function(e) {
   );
 });
 self.addEventListener('fetch', function(e) {
+  if (e.request.method !== 'GET') return;
   // Stale-while-revalidate for same-origin AND cross-origin (Supabase CDN
   // script, Google Fonts, Font Awesome) requests alike. A service worker's
   // own internal fetch() of a cross-origin request is checked against this
@@ -46,7 +49,7 @@ self.addEventListener('fetch', function(e) {
   // also be listed in connect-src (see vercel.json), or that fetch is
   // silently blocked and the resource never loads.
   e.respondWith(
-    caches.match(e.request).then(function(cached) {
+    caches.match(e.request, { ignoreSearch: true }).then(function(cached) {
       var networked = fetch(e.request).then(function(res) {
         // Opaque responses (no-cors cross-origin, e.g. the Supabase script
         // tag) always report status 0 — cache them unconditionally since
@@ -54,7 +57,7 @@ self.addEventListener('fetch', function(e) {
         // cached on a real 200.
         if (res && (res.type === 'opaque' || res.status === 200)) {
           var clone = res.clone();
-          caches.open(CACHE).then(function(c){ c.put(e.request, clone); });
+          caches.open(CACHE).then(function(c){ return c.put(e.request, clone); }).catch(function() {});
         }
         return res;
       }).catch(function() {

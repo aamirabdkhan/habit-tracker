@@ -141,6 +141,7 @@ function takbeerStreak() {
 var WIDGET_TOKEN_KEY = "ht_widget_token";
 function computeWidgetPayload() {
   var now = new Date(), key = dk(now), day = gDay(key), dow = now.getDay(), items = [];
+  day.prayers = day.prayers || {};
   if (prayersOn()) allTrackedPrayers().forEach(function(p) {
     var t = getNotifTime("prayers", p);
     if (t) items.push({ n:p, t:t, end:null, c:PRAYER_GREEN, done:!!day.prayers[p], prayer:true, voluntary:isVoluntaryPrayer(p), tag:"PRAYER" });
@@ -174,9 +175,7 @@ function computeWidgetPayload() {
     ringDone += score.done; ringTotal += score.total;
     counts.push({ label:label, done:score.done, total:score.total });
   });
-  var ringPd = 0; if (prayersOn()) PRAYERS.forEach(function(p) { if (day.prayers && day.prayers[p]) ringPd++; });
-  var ringDenom = (prayersOn() ? 5 : 0) + ringTotal;
-  var dayPct = ringDenom ? Math.round((ringPd + ringDone) / ringDenom * 100) : 0;
+  var dayPct = ringTotal ? Math.round(ringDone / ringTotal * 100) : 0;
   // Priority (starred one-time) tasks have their own dedicated widget, so they're NOT shown as a
   // pseudo "COMMITMENTS" card in the stats dial any more — that looked like a card the user never made.
   var priority = priorityItemsForDay(day, key).map(function(item) { return { name:item.name, age:item.age }; });
@@ -699,11 +698,12 @@ function gDayCards(key) {
 // covers base cards (habits/extra/health, read from the day record) AND new cards (day.cards), so
 // nothing is double-counted. Water is intentionally dropped (cut from this redesign, spec "Cut/Keep").
 dScore = function(key) {
-  var day = gDay(key), pd = 0;
+  var day = gDay(key), pd = 0, dow = dowOf(key);
+  day.prayers = day.prayers || {};
   if (prayersOn()) PRAYERS.forEach(function(p) { if (day.prayers[p]) pd++; });
   var doneTasks = 0, totalTasks = 0;
-  gDayCards(key).forEach(function(row) {
-    var score = scoreItems(row.items); doneTasks += score.done; totalTasks += score.total;
+  getCards().forEach(function(card) {
+    var score = scoreItems(dayItemsForCard(card, day, dow)); doneTasks += score.done; totalTasks += score.total;
   });
   var total = (prayersOn() ? 5 : 0) + totalTasks;
   return total ? Math.round((pd + doneTasks) / total * 100) : 0;
@@ -1085,7 +1085,7 @@ function nextReminderFire(reminder, fromDateISO) {
 // Snooze hides a due reminder until snoozedUntil passes (then it's due again), so an overdue nag
 // can be deferred a day instead of forcing a false "Done".
 function isReminderDue(reminder, todayISO) { return !!(reminder && reminder.nextFire && reminder.nextFire <= todayISO && (!reminder.snoozedUntil || reminder.snoozedUntil <= todayISO)); }
-function completeReminder(id, doneDateISO) { var rows = getReminders().map(function(r) { if (r.id === id) { r.lastDone = doneDateISO; r.snoozedUntil = ""; r.nextFire = nextReminderFire(r, doneDateISO); } return r; }); saveReminders(rows); }
+function completeReminder(id, doneDateISO) { var rows = getReminders().map(function(r) { if (r.id === id) { r.lastDone = doneDateISO; r.snoozedUntil = ""; r.nextFire = r.schedule && r.schedule.kind === "fixed" ? "" : nextReminderFire(r, doneDateISO); } return r; }); saveReminders(rows); }
 function snoozeReminder(id, untilISO) { var rows = getReminders().map(function(r) { if (r.id === id) r.snoozedUntil = untilISO; return r; }); saveReminders(rows); }
 function reminderScheduleLabel(reminder) { var s = reminder.schedule || {}; if (s.kind === "interval") { var u = String(s.unit || "days").replace(/s$/, ""), n = Math.max(1, Math.round(+s.every || 1)); return "Every " + (n === 1 ? u : n + " " + u + "s"); } return "On " + (reminder.nextFire || s.date || "a date"); }
 function reminderDaysUntil(r, todayISO) { if (!r || !r.nextFire) return 0; return Math.round((new Date(r.nextFire + "T00:00:00") - new Date(todayISO + "T00:00:00")) / 86400000); }
@@ -2900,7 +2900,7 @@ render = function() {
   else if (view === "settings") h = rTemplate();
   else if (view === "overview") h = rOverview();
   else if (view === "prefs") h = rPrefs();
-  else if (view === "prayertimes") { document.getElementById("content").innerHTML = rPrayerTimes(); return; }
+  else if (view === "prayertimes") h = rPrayerTimes();
   else { originalRender(); return; }
   // Share dialog belongs to shell, not Daily. Pehar can therefore open it on
   // its first click, and its poster continues to read the current cDate.
@@ -3114,6 +3114,7 @@ function dayItemsForCard(card, day, dow) {
 // sorted chronologically. Tie-break: prayers first, then card order, then item order.
 function buildTimeline(cards, day, dow) {
   var items = [];
+  day.prayers = day.prayers || {};
   if (prayersOn()) allTrackedPrayers().forEach(function(name) {
     var t = getNotifTime("prayers", name);
     if (t) {
@@ -3571,7 +3572,11 @@ async function exportDayImage() {
     if (navigator.canShare && navigator.canShare({ files:[file] })) await navigator.share({ files:[file], title:"My Pehar", text:"My Pehar, tracked with Waqt. Create your own daily schedule:", url:referralUrl() });
     else shareDownload(file, file.name);
     toast("Image ready.");
-  } catch (e) { if (!e || (e.name !== "AbortError" && e.name !== "NotAllowedError")) toast("Could not export image."); }
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    if (typeof file !== "undefined") { shareDownload(file, file.name); toast("Image ready."); }
+    else toast("Could not export image.");
+  }
   finally { if (mount) mount.remove(); }
 }
 function renderWeekPdfPage(title, items, continuation) {
@@ -3629,7 +3634,7 @@ function weekPdfSafeBreaks(mount, layout, canvasHeight, pageHeight) {
     cuts.push(cut);
     start = cut;
   }
-  cuts.push(canvasHeight);
+  if (!cuts.length || cuts[cuts.length - 1] !== canvasHeight) cuts.push(canvasHeight);
   return cuts;
 }
 async function exportWeekPdf() {
@@ -3664,6 +3669,7 @@ async function exportWeekPdf() {
       var start = 0;
       for (var page = 0; page < cuts.length; page++) {
         var end = cuts[page], slice = document.createElement("canvas"), ctx;
+        if (end <= start) continue;
         slice.width = canvas.width; slice.height = end - start;
         ctx = slice.getContext("2d");
         ctx.drawImage(canvas, 0, start, canvas.width, slice.height, 0, 0, canvas.width, slice.height);
@@ -4167,6 +4173,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       localStorage.removeItem(HTN_DUR_KEY);
       localStorage.removeItem(NOTIF_DAYS_KEY);
       localStorage.removeItem(NOTIF_SLOTS_KEY);
+      (typeof VOLUNTARY_PRAYERS !== "undefined" ? VOLUNTARY_PRAYERS : []).forEach(function(p) { localStorage.removeItem("htn_track_" + p); });
       localStorage.removeItem(ITEM_BELL_KEY);
       saveOptionalMap({});
       if (typeof dbSave === "function") dbSave(OPTIONAL_KEY, {});
@@ -4405,13 +4412,13 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "schdel")       {
       var f2 = t.dataset.f, k2 = t.dataset.k;
-      removeCardItem(f2, k2);
+      if (templateNamesFor(f2).indexOf(k2) !== -1) removeCardItem(f2, k2); else removeOnedayItem(f2, k2);
       delete tplRepeatMode[f2 + "::" + k2];
       schEdit = null; tplItemEdit = null; render(); toast("Removed"); return;
     }
     // Template row's revealed swipe-left delete button (discoverability alt to the editor's Delete).
     if (a === "gestdel")      {
-      removeCardItem(t.dataset.f, t.dataset.k);
+      if (templateNamesFor(t.dataset.f).indexOf(t.dataset.k) !== -1) removeCardItem(t.dataset.f, t.dataset.k); else removeOnedayItem(t.dataset.f, t.dataset.k);
       render(); toast("Removed"); return;
     }
     if (a === "tplmerge") { tplMergeCard = t.dataset.c; tplItemEdit = null; render(); return; }
@@ -4526,7 +4533,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     }
     if (a === "prayermadhab") { setPrayerMadhab(t.dataset.m); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
     if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location"); render(); }); return; }
-    if (a === "voltoggle") { setVoluntaryTracked(t.dataset.p, !voluntaryTracked(t.dataset.p)); if ((typeof prayerAutoOn === "function") && prayerAutoOn()) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); render(); return; }
+    if (a === "voltoggle") { var volOn = !voluntaryTracked(t.dataset.p); setVoluntaryTracked(t.dataset.p, volOn); if (!volOn && typeof pushSaveReminderTime === "function") pushSaveReminderTime("prayers", t.dataset.p, ""); else if (volOn) syncPrayerReminder(t.dataset.p); if ((typeof prayerAutoOn === "function") && prayerAutoOn()) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); render(); return; }
     if (a === "pehartoggle") {
       if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
       else setPeharOn(!peharOn());
@@ -4707,7 +4714,7 @@ document.getElementById("app").addEventListener("keydown", function(e) {
   if (e.target.id && e.target.id.indexOf("cardname-") === 0 && e.key === "Enter") { e.preventDefault(); e.target.blur(); }
   if (e.target.id && e.target.id.indexOf("itemname-") === 0) {
     if (e.key === "Enter") { e.preventDefault(); e.target.blur(); }
-    else if (e.key === "Escape") { tplItemNameEdit = null; render(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.target.dataset.cancelRename = "1"; tplItemNameEdit = null; render(); }
   }
 });
 document.addEventListener("keydown", function(e) {
@@ -4731,6 +4738,7 @@ document.getElementById("app").addEventListener("focusout", function(e) {
   }
   // Item rename: save on blur (Enter above blurs into here too).
   if (e.target.id && e.target.id.indexOf("itemname-") === 0) {
+    if (e.target.dataset.cancelRename === "1") return;
     var rawKey = e.target.id.slice("itemname-".length);
     var sep = rawKey.indexOf("::");
     if (sep !== -1) {
@@ -5785,15 +5793,14 @@ window.schPeharTick = setInterval(function() {
 }, 60000);
 
 // ---- sync self-check (Task 8): the new synced keys + day-record fields round-trip. Run at
-// #synccheck. Slots live in htn_slots (device-local by the MVP decision — single device), so they
-// are intentionally NOT syncable; everything a second device needs rides the ht_* keys below. ----
+// #synccheck. Schedule keys (including htn_slots) must follow the user across devices. ----
 (function() {
   if (location.hash !== "#synccheck") return;
   if (typeof isSyncableKey !== "function" || typeof mergeData !== "function") { console.warn("sync self-check: sync layer not loaded"); return; }
   console.assert(isSyncableKey("ht_optional") === true, "ht_optional must sync");
   console.assert(isSyncableKey("ht_reminders") === true, "ht_reminders must sync");
   console.assert(isSyncableKey("ht_optional_mt") === false, "_mt keys must not sync");
-  console.assert(isSyncableKey("htn_slots") === false, "slots are device-local by design (MVP)");
+  console.assert(isSyncableKey("htn_slots") === true, "slots must sync");
   // whole-value LWW keeps the newer side intact, so a day record's new fields (onedayPriority,
   // occurrences) are never dropped by the merge.
   var localDay = { habits:{ A:true }, onedayPriority:{ "habits::X":"2026-10-30" } };

@@ -64,10 +64,9 @@ function isDueInWindow(reminderTime: string, nowMinutes: number, windowMinutes: 
 }
 
 // Custom reminders are synced as user_data.value under ht_reminders, not reminder_times.
-// Interval reminders re-arm only in the client when completed; calendar reminders can safely fire
-// here whenever their persisted nextFire is today.
+// Both interval and fixed reminders are persisted with nextFire by the client.
 export function isDateReminderDue(reminder: any, isoDate: string): boolean {
-  return !!(reminder && reminder.schedule?.kind === "fixed" && reminder.nextFire === isoDate && !reminder.snoozedUntil);
+  return !!(reminder && (reminder.schedule?.kind === "fixed" || reminder.schedule?.kind === "interval") && reminder.nextFire && reminder.nextFire <= isoDate && !reminder.snoozedUntil);
 }
 
 Deno.serve(async (_req: Request) => {

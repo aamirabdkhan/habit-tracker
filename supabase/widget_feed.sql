@@ -29,6 +29,10 @@ drop policy if exists "widget_feed own update" on public.widget_feed;
 create policy "widget_feed own update" on public.widget_feed
   for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "widget_feed own delete" on public.widget_feed;
+create policy "widget_feed own delete" on public.widget_feed
+  for delete using (auth.uid() = user_id);
+
 -- Public read of ONE row by its token (used by the widget). Runs as definer, so it bypasses RLS
 -- but can only ever return the single row whose token matches -- no enumeration.
 create or replace function public.get_widget_feed(p_token uuid)

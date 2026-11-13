@@ -76,7 +76,7 @@ function mergeTemplate(local, remote, remoteUpdatedAt) {
 // Local-only bookkeeping + sync predicates.
 function localMtOf(key) { return parseInt(localStorage.getItem(key + "_mt") || "0", 10) || 0; }
 // Rows we sync: ht_* day/template records only — never the local "_mt" edit stamps or the migration flag.
-function isSyncableKey(k) { return !!k && k.indexOf("ht_") === 0 && k !== "ht_migrated_v3" && !/_mt$/.test(k); }
+function isSyncableKey(k) { return !!k && (/^htn?_/.test(k)) && k !== "ht_migrated_v3" && !/_mt$/.test(k); }
 
 // Last-write-wins for one day's record, by edit timestamp — mirrors mergeTemplate.
 // The OLD field-wise OR-merge could only ever flip a checkbox ON across devices: an un-check on one
@@ -213,7 +213,7 @@ function clearLocalHabitData() {
     var keys = [];
     for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
-        if (k && k.indexOf("ht_") === 0) {
+        if (k && /^htn?_/.test(k)) {
             keys.push(k);
         }
     }

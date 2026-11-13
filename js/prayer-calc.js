@@ -87,9 +87,9 @@
     var base = dateObj || new Date();
     // Pre-dawn (before today's Fajr) we're still in last night's prayer-day, so compute for yesterday
     // — that keeps the Isha/Tahajjud windows current and the "now" highlight correct at 2am.
-    if (!dateObj) {
+    if (base.getHours() * 60 + base.getMinutes() < 12 * 60) {
       var probe = new adhan.PrayerTimes(coords, base, params);
-      if (ok(probe.fajr) && new Date() < probe.fajr) base = new Date(base.getFullYear(), base.getMonth(), base.getDate() - 1);
+      if (ok(probe.fajr) && base < probe.fajr) base = new Date(base.getFullYear(), base.getMonth(), base.getDate() - 1);
     }
     var pt = new adhan.PrayerTimes(coords, base, params);
     // next day's Fajr, so Isha/Tahajjud windows have a real end past midnight

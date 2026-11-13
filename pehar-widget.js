@@ -27,7 +27,7 @@
       r.method = "POST";
       r.headers = { apikey: ANON_KEY, Authorization: "Bearer " + ANON_KEY, "Content-Type": "application/json" };
       r.body = JSON.stringify({ p_token: TOKEN });
-      return (await r.loadJSON()) || {};
+      return (await r.loadJSON()) || { error: true };
     } catch (e) {
       return { error: true };
     }

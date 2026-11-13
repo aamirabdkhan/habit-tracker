@@ -3158,7 +3158,17 @@ function itemEditorHTML(field, name, closeAction) {
   if (isPrayer) h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-timeinp" data-field="' + esA(field) + '" data-name="' + esA(name) + '" value="' + esA(t) + '"></label>';
   else {
     if (!slots.length) slots = [{ time:"", duration:effectiveDur(field, name, false) }];
-    slots.forEach(function(slot) { h += '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button></label>'; });
+    // Slot 0's days are the item's days — edited by the shared Repeat row below. Each LATER time gets
+    // its own day row here, so an item like "CEH at 06:25 on Mon, 18:25 every day" can be authored.
+    slots.forEach(function(slot, si) {
+      h += '<div class="sch-slotblock"><label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button></label>';
+      if (si > 0) {
+        h += '<div class="sch-days sch-slotdays"><span class="sch-slotdayslbl">on</span>';
+        DOW_LBL.forEach(function(lbl, d) { var on = !slot.days || slot.days.indexOf(d) !== -1; h += '<button type="button" class="sch-day' + (on ? ' on' : '') + '" data-dow="' + d + '" aria-label="' + esA(DOW_FULL[d]) + '">' + lbl + '</button>'; });
+        h += '</div>';
+      }
+      h += '</div>';
+    });
     h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button>';
   }
   h += '</span></div>';
@@ -4476,27 +4486,33 @@ document.getElementById("app").addEventListener("click", function(e) {
       return;
     }
     if (a === "slotadd") {
-      var addButton = t, slotLabel = document.createElement("label");
-      slotLabel.className = "sch-timepill";
-      slotLabel.innerHTML = '<i class="fas fa-clock"></i><input type="time" class="sch-slotinp"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="30"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button>';
-      addButton.parentNode.insertBefore(slotLabel, addButton);
-      slotLabel.querySelector("input").focus();
+      var addButton = t, slotBlock = document.createElement("div");
+      slotBlock.className = "sch-slotblock";
+      var newDayPills = "";
+      for (var _dd = 0; _dd < DOW_LBL.length; _dd++) newDayPills += '<button type="button" class="sch-day on" data-dow="' + _dd + '" aria-label="' + esA(DOW_FULL[_dd]) + '">' + DOW_LBL[_dd] + '</button>';
+      slotBlock.innerHTML = '<label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="30"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button></label><div class="sch-days sch-slotdays"><span class="sch-slotdayslbl">on</span>' + newDayPills + '</div>';
+      addButton.parentNode.insertBefore(slotBlock, addButton);
+      slotBlock.querySelector("input").focus();
       return;
     }
-    if (a === "slotdel") { var slotPill = t.closest(".sch-timepill"); if (slotPill) slotPill.remove(); return; }
+    if (a === "slotdel") { var slotBlk = t.closest(".sch-slotblock"); if (slotBlk) slotBlk.remove(); return; }
     if (a === "slotsave") {
-      var editor = t.closest(".sch-editor"), selectedDays = Array.prototype.slice.call(editor.querySelectorAll(".sch-day.on")).map(function(btn) { return +btn.dataset.dow; });
+      var editor = t.closest(".sch-editor");
+      // All day edits commit here (never live), so a mid-edit re-render can't wipe an unsaved day pick.
+      // Each slot reads its OWN day row; slot 0 has none and inherits the shared Repeat row (.sch-daysrow).
+      var readSlotDays = function(row) { if (!row) return null; var sel = Array.prototype.slice.call(row.querySelectorAll(".sch-day.on")).map(function(b) { return +b.dataset.dow; }); return (sel.length === 0 || sel.length >= 7) ? null : sel; };
+      var sharedDays = readSlotDays(editor.querySelector(".sch-daysrow"));
       var invalidSlotDuration = false;
-      var savedSlots = Array.prototype.slice.call(editor.querySelectorAll(".sch-timepill")).map(function(pill) {
-        var inp = pill.querySelector(".sch-slotinp"), durInp = pill.querySelector(".sch-slotdur"), duration = durInp ? parseInt(durInp.value, 10) : null;
+      var savedSlots = Array.prototype.slice.call(editor.querySelectorAll(".sch-slotblock")).map(function(block) {
+        var inp = block.querySelector(".sch-slotinp"), durInp = block.querySelector(".sch-slotdur"), duration = durInp ? parseInt(durInp.value, 10) : null;
         if (!inp || !inp.value) return null;
         if (durInp && (!duration || duration <= 0)) { invalidSlotDuration = true; return null; }
-        return { time:inp.value, duration:duration || undefined, days:selectedDays.length === 7 ? undefined : selectedDays };
+        var ownRow = block.querySelector(".sch-slotdays"), slotDays = ownRow ? readSlotDays(ownRow) : sharedDays;
+        return { time:inp.value, duration:duration || undefined, days:slotDays || undefined };
       }).filter(function(slot) { return !!slot; });
       if (invalidSlotDuration) { toast("Each slot duration must be at least 1 minute"); return; }
-      var oldSlots = getItemSlots(t.dataset.f, t.dataset.k);
-      savedSlots = savedSlots.map(function(slot, i) { if (oldSlots[i] && oldSlots[i].days) slot.days = oldSlots[i].days; return slot; });
-      setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
+      if (savedSlots.length) setItemSlots(t.dataset.f, t.dataset.k, savedSlots);
+      else { setItemSlots(t.dataset.f, t.dataset.k, []); setItemDays(t.dataset.f, t.dataset.k, sharedDays); } // untimed item keeps its day scoping
       setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
       syncItemReminder(t.dataset.f, t.dataset.k);
       if (savedSlots[0] && savedSlots[0].time && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings.");
@@ -4729,21 +4745,10 @@ document.getElementById("app").addEventListener("click", function(e) {
       if (copied) sDay(); render(); toast(copied ? "Copied " + copied + " from yesterday" : "No one-off tasks from yesterday"); return;
     }
   }
+  // Day pills (shared Repeat row + each slot's own row) just toggle their lit state; slotsave reads
+  // them on Save. Nothing persists live, so re-rendering mid-edit can never drop an unsaved day pick.
   var dayBtn = e.target.closest(".sch-day");
-  if (dayBtn) {
-    var wrap = dayBtn.closest(".sch-days");
-    var current = getItemDays(wrap.dataset.field, wrap.dataset.name);
-    var set = current ? current.slice() : [0, 1, 2, 3, 4, 5, 6];
-    var dow = +dayBtn.dataset.dow, di = set.indexOf(dow);
-    if (di === -1) set.push(dow); else set.splice(di, 1);
-    set.sort(function(x, y) { return x - y; });
-    var slotItems = getItemSlots(wrap.dataset.field, wrap.dataset.name);
-    // Repeat pills edit primary (first) occurrence only. Other slots can carry
-    // different weekday rules from an import and must not be flattened here.
-    if (slotItems.length > 1) setItemSlots(wrap.dataset.field, wrap.dataset.name, slotItems.map(function(slot, i) { return { time:slot.time, duration:slot.duration, days:i === 0 ? (set.length === 7 ? undefined : set) : slot.days }; }));
-    else setItemDays(wrap.dataset.field, wrap.dataset.name, set);
-    render();
-  }
+  if (dayBtn) { dayBtn.classList.toggle("on"); return; }
 });
 document.getElementById("app").addEventListener("change", function(e) {
   // Fix 1: the preview's Card dropdown. The override is stashed on the incoming item itself, so a

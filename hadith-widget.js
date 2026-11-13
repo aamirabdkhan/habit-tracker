@@ -7,11 +7,11 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
   const QUOTE_WIDTH=296, QUOTE_HEIGHT=92, BODY_SIZE=15, HONORIFIC_SIZE=9;
   function serif(s,b){ try{return new Font(b?"Georgia-Bold":"Georgia",s);}catch(e){return b?Font.boldSystemFont(s):Font.systemFont(s);} }
   function mono(s,b){ try{return new Font(b?"Menlo-Bold":"Menlo",s);}catch(e){return b?Font.boldSystemFont(s):Font.systemFont(s);} }
-  function tokenWidth(token){ return token==="ﷺ" ? 12 : Math.ceil(token.length*BODY_SIZE*0.53); }
+  function tokenWidth(token,bodySize,honorificSize){ return token==="ﷺ" ? Math.ceil(honorificSize*1.33) : Math.ceil(token.length*bodySize*0.53); }
   // Scriptable Text cannot size one inline glyph separately. Draw quote so ﷺ stays inline,
   // but at a legible smaller size, with fixed leading that prevents line collisions.
-  function drawMediumQuote(text){
-    const dc=new DrawContext(); dc.size=new Size(QUOTE_WIDTH,QUOTE_HEIGHT); dc.opaque=false; dc.respectScreenScale=true;
+  function drawQuote(text,width,height,color,bodySize,honorificSize,lineHeight,maxLines){
+    const dc=new DrawContext(); dc.size=new Size(width,height); dc.opaque=false; dc.respectScreenScale=true;
     const tokens=("“"+text+"”").split(/(ﷺ)/).reduce(function(all,part){
       if(part==="ﷺ") all.push(part); else {
         const words=part.match(/\S+/g)||[];
@@ -19,27 +19,41 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
       }
       return all;
     },[]);
-    const lines=[], line=[]; let width=0;
+    const lines=[], line=[]; let lineUsed=0;
     for(let i=0;i<tokens.length;i++){
-      const token=tokens[i], gap=line.length?5:0, next=tokenWidth(token)+gap;
-      if(line.length && width+next>QUOTE_WIDTH-4){ lines.push(line.slice()); line.length=0; width=0; }
-      line.push(token); width+=line.length===1?tokenWidth(token):next;
+      const token=tokens[i], gap=line.length?5:0, next=tokenWidth(token,bodySize,honorificSize)+gap;
+      if(line.length && lineUsed+next>dc.size.width-4){ lines.push(line.slice()); line.length=0; lineUsed=0; }
+      line.push(token); lineUsed+=line.length===1?tokenWidth(token,bodySize,honorificSize):next;
     }
     if(line.length) lines.push(line);
-    const lineHeight=22, firstY=Math.max(0,Math.round((QUOTE_HEIGHT-lines.length*lineHeight)/2));
-    for(let row=0;row<lines.length;row++){
-      const parts=lines[row]; let lineWidth=0;
-      for(let j=0;j<parts.length;j++) lineWidth+=tokenWidth(parts[j])+(j?5:0);
-      let x=Math.max(0,Math.round((QUOTE_WIDTH-lineWidth)/2));
+    const visibleLines=maxLines?lines.slice(0,maxLines):lines;
+    const firstY=Math.max(0,Math.round((height-visibleLines.length*lineHeight)/2));
+    for(let row=0;row<visibleLines.length;row++){
+      const parts=visibleLines[row]; let lineWidth=0;
+      for(let j=0;j<parts.length;j++) lineWidth+=tokenWidth(parts[j],bodySize,honorificSize)+(j?5:0);
+      let x=Math.max(0,Math.round((dc.size.width-lineWidth)/2));
       for(let j=0;j<parts.length;j++){
         const token=parts[j], honorific=token==="ﷺ";
-        dc.setFont(honorific?Font.systemFont(HONORIFIC_SIZE):serif(BODY_SIZE,false));
-        dc.setTextColor(new Color(TEXT));
-        dc.drawTextInRect(token,new Rect(x,firstY+row*lineHeight+(honorific?5:0),tokenWidth(token)+2,lineHeight));
-        x+=tokenWidth(token)+5;
+        dc.setFont(honorific?Font.systemFont(honorificSize):serif(bodySize,false));
+        dc.setTextColor(new Color(color));
+        dc.drawTextInRect(token,new Rect(x,firstY+row*lineHeight+(honorific?Math.round((bodySize-honorificSize)/2):0),tokenWidth(token,bodySize,honorificSize)+2,lineHeight));
+        x+=tokenWidth(token,bodySize,honorificSize)+5;
       }
     }
     return dc.getImage();
+  }
+  function drawMediumQuote(text){ return drawQuote(text,QUOTE_WIDTH,QUOTE_HEIGHT,TEXT,BODY_SIZE,HONORIFIC_SIZE,22); }
+  function drawLockQuote(text){
+    const width=158, height=76, maxLines=4;
+    for(let bodySize=11;bodySize>=8;bodySize--){
+      const honorificSize=Math.max(7,bodySize-3), lineHeight=Math.round(bodySize*1.45);
+      const image=drawQuote(text,width,height,"#FFFFFF",bodySize,honorificSize,lineHeight,maxLines);
+      // First size that naturally fits four lines; smallest size still clips gracefully.
+      const tokens=("“"+text+"”").split(/(ﷺ)/).reduce(function(all,part){ return all.concat(part==="ﷺ"?[part]:(part.match(/\S+/g)||[])); },[]);
+      let lines=1, used=0;
+      for(let i=0;i<tokens.length;i++){ const next=tokenWidth(tokens[i],bodySize,honorificSize)+(used?5:0); if(used&&used+next>width-4){ lines++; used=0; } used+=tokenWidth(tokens[i],bodySize,honorificSize)+(used?5:0); }
+      if(lines<=maxLines || bodySize===8) return image;
+    }
   }
   const now=new Date(), start=new Date(now.getFullYear(),0,0);
   const doy=Math.floor((now-start)/86400000);
@@ -50,10 +64,11 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
   const isHomeFallback=fam==="small" || fam==="systemSmall" || fam==="large" || fam==="systemLarge";
   const w=new ListWidget();
   if(fam==="accessoryRectangular"){
-    w.setPadding(4,6,4,6);
-    const quote=w.addText("“"+H.t+"”"); quote.font=serif(13,false); quote.minimumScaleFactor=0.55;
+    w.setPadding(0,0,0,0);
+    const quote=w.addImage(drawLockQuote(H.t)); quote.imageSize=new Size(158,76); quote.centerAlignImage();
   } else if(fam==="accessoryInline"){
-    const snippet=H.t.length>54?H.t.slice(0,53).replace(/\s+\S*$/,"")+"…":H.t;
+    const inlineText=H.t.replace(/ﷺ/g,"").replace(/\s{2,}/g," ").trim();
+    const snippet=inlineText.length>54?inlineText.slice(0,53).replace(/\s+\S*$/,"")+"…":inlineText;
     const quote=w.addText(snippet); quote.font=Font.systemFont(11); quote.lineLimit=1; quote.minimumScaleFactor=0.65;
   } else if(fam==="accessoryCircular"){
     const mark=w.addText("H"); mark.font=Font.boldSystemFont(14); mark.centerAlignText();

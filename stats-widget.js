@@ -142,6 +142,8 @@
       w.addSpacer(2);
       const t = w.addText(monoOneLiner);
       t.font = monoFont(11, "bold");
+      t.lineLimit = 1;
+      t.minimumScaleFactor = 0.7;
     } else {
       // accessoryInline
       const t = w.addText(monoOneLiner);

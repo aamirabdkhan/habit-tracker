@@ -84,7 +84,7 @@
   }
 
   const feed = await getFeed();
-  const rawItems = feed.items || feed.pehar || [];
+  const rawItems = Array.isArray(feed.items) ? feed.items : (Array.isArray(feed.pehar) ? feed.pehar : []);
   const fam = (typeof config !== "undefined" && config.widgetFamily) || "large";
   const isLock = fam.indexOf("accessory") === 0;
   const lock = isLock;
@@ -92,7 +92,7 @@
   // Normalize item fields matching computeWidgetPayload contract:
   // name (n), time (t), start, end, done, color (c), prayer, now
   const items = rawItems.map((it) => {
-    const name = it.name || it.n || "";
+    const name = String(it.name || it.n || "");
     const timeStr = it.time || it.t || (typeof it.start === "string" ? it.start : "");
     const startMin = typeof it.start === "number" ? it.start : toMin(timeStr);
     const endMin = typeof it.end === "number"
@@ -139,8 +139,8 @@
       const b = w.addText("/" + totalCount); b.font = Font.systemFont(9); b.centerAlignText();
     } else {
       const h = w.addText("PEHAR"); h.font = Font.boldSystemFont(9); h.textOpacity = 0.7; w.addSpacer(2);
-      if (now) { const x = w.addText("Now " + now.name); x.font = Font.mediumSystemFont(13); }
-      if (next) { const y = w.addText("Next " + next.name + " " + formatTime(next.time || next.start)); y.font = Font.systemFont(12); y.textOpacity = 0.75; }
+      if (now) { const x = w.addText("Now " + now.name); x.font = Font.mediumSystemFont(13); x.lineLimit = 1; x.minimumScaleFactor = 0.7; }
+      if (next) { const y = w.addText("Next " + next.name + " " + formatTime(next.time || next.start)); y.font = Font.systemFont(12); y.textOpacity = 0.75; y.lineLimit = 1; y.minimumScaleFactor = 0.7; }
       if (!now && !next) w.addText(feed.error ? "Open Waqt" : "Nothing scheduled");
     }
   } else {

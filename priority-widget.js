@@ -97,6 +97,7 @@
           const rowText = w.addText(`${item.name || "Task"} \u00B7 ${chip}`);
           rowText.font = Font.systemFont(11);
           rowText.lineLimit = 1;
+          rowText.minimumScaleFactor = 0.7;
         }
       }
     }

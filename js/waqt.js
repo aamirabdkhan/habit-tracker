@@ -2912,6 +2912,7 @@ render = function() {
     try { localStorage.setItem("ht_priority_explainer_seen", "1"); } catch (e) {}
   }
   document.getElementById("content").innerHTML = _body;
+  if (shareOpen && shareState.tab === "week" && shareState.wk === "stack") requestAnimationFrame(function() { paginateWeekPdfMount(document.querySelector(".share-weekpdfpreview")); });
 };
 
 // Bottom tab bar — replaces the old top segment nav (renderNav). Maps the 5 spec
@@ -3573,13 +3574,34 @@ async function exportDayImage() {
   } catch (e) { if (!e || (e.name !== "AbortError" && e.name !== "NotAllowedError")) toast("Could not export image."); }
   finally { if (mount) mount.remove(); }
 }
-function renderWeekPdfDay(day) {
-  var items = visibleWeekItems(day[2]);
-  var title = new Date(day[1] + "T00:00:00").toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric" });
+function renderWeekPdfPage(title, items, continuation) {
   var rows = items.length ? items.map(function(item) {
     return '<div class="share-pdfrow" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span>' + esc(prettyTime(item.t)) + '</span><b>' + esc(item.n) + '</b><small>' + esc(fmtDur(item.dur)) + '</small></div>';
   }).join('') : '<p class="share-weekempty">Nothing selected for this day.</p>';
-  return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 92) + '</span></footer></section>';
+  return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR' + (continuation ? ' · CONTINUED' : '') + '</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 92) + '</span></footer></section>';
+}
+function renderWeekPdfDay(day) {
+  var title = new Date(day[1] + "T00:00:00").toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric" });
+  return renderWeekPdfPage(title, visibleWeekItems(day[2]), false);
+}
+function paginateWeekPdfMount(mount) {
+  if (!mount) return;
+  var page = mount.querySelector(".share-pdfday");
+  while (page) {
+    var main = page.querySelector("main"), rows = main ? main.querySelectorAll(".share-pdfrow") : [], overflow = [];
+    while (main && main.scrollHeight > main.clientHeight && rows.length > 1) {
+      overflow.unshift(rows[rows.length - 1]);
+      main.removeChild(rows[rows.length - 1]);
+      rows = main.querySelectorAll(".share-pdfrow");
+    }
+    if (!overflow.length) { page = null; continue; }
+    var holder = document.createElement("div"), title = page.querySelector("h1").textContent;
+    holder.innerHTML = renderWeekPdfPage(title, [], true);
+    var next = holder.firstChild, nextMain = next.querySelector("main");
+    overflow.forEach(function(row) { nextMain.appendChild(row); });
+    page.parentNode.insertBefore(next, page.nextSibling);
+    page = next;
+  }
 }
 function renderWeekPdfSheet() {
   var days = wkDays(cDate);
@@ -3621,11 +3643,15 @@ async function exportWeekPdf() {
       pageWidth = pdf.internal.pageSize.getWidth(); pageHeight = pdf.internal.pageSize.getHeight();
       for (var i = 0; i < days.length; i++) {
         mount = mountShareExport("share-export-week t-" + shareState.theme, 794, renderWeekPdfDay(days[i]));
-        var dayCanvas = await html2canvas(mount, { scale:2, backgroundColor:null, useCORS:true });
-        var dayFit = Math.min((pageWidth - margin * 2) / dayCanvas.width, (pageHeight - margin * 2) / dayCanvas.height);
-        var dayWidth = dayCanvas.width * dayFit, dayHeight = dayCanvas.height * dayFit;
-        if (i) pdf.addPage();
-        pdf.addImage(dayCanvas.toDataURL("image/png"), "PNG", (pageWidth - dayWidth) / 2, (pageHeight - dayHeight) / 2, dayWidth, dayHeight);
+        paginateWeekPdfMount(mount);
+        var dayPages = mount.querySelectorAll(".share-pdfday");
+        for (var j = 0; j < dayPages.length; j++) {
+          var dayCanvas = await html2canvas(dayPages[j], { scale:2, backgroundColor:null, useCORS:true });
+          var dayFit = Math.min((pageWidth - margin * 2) / dayCanvas.width, (pageHeight - margin * 2) / dayCanvas.height);
+          var dayWidth = dayCanvas.width * dayFit, dayHeight = dayCanvas.height * dayFit;
+          if (i || j) pdf.addPage();
+          pdf.addImage(dayCanvas.toDataURL("image/png"), "PNG", (pageWidth - dayWidth) / 2, (pageHeight - dayHeight) / 2, dayWidth, dayHeight);
+        }
         mount.remove(); mount = null;
       }
     } else {

@@ -10,7 +10,7 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
   function tokenWidth(token,bodySize,honorificSize){ return token==="ﷺ" ? Math.ceil(honorificSize*1.33) : Math.ceil(token.length*bodySize*0.53); }
   // Scriptable Text cannot size one inline glyph separately. Draw quote so ﷺ stays inline,
   // but at a legible smaller size, with fixed leading that prevents line collisions.
-  function drawQuote(text,width,height,color,bodySize,honorificSize,lineHeight,maxLines){
+  function drawQuote(text,width,height,color,bodySize,honorificSize,lineHeight,maxLines,leftAlign){
     const dc=new DrawContext(); dc.size=new Size(width,height); dc.opaque=false; dc.respectScreenScale=true;
     const tokens=("“"+text+"”").split(/(ﷺ)/).reduce(function(all,part){
       if(part==="ﷺ") all.push(part); else {
@@ -31,7 +31,7 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
     for(let row=0;row<visibleLines.length;row++){
       const parts=visibleLines[row]; let lineWidth=0;
       for(let j=0;j<parts.length;j++) lineWidth+=tokenWidth(parts[j],bodySize,honorificSize)+(j?5:0);
-      let x=Math.max(0,Math.round((dc.size.width-lineWidth)/2));
+      let x=leftAlign?0:Math.max(0,Math.round((dc.size.width-lineWidth)/2));
       for(let j=0;j<parts.length;j++){
         const token=parts[j], honorific=token==="ﷺ";
         dc.setFont(honorific?Font.systemFont(honorificSize):serif(bodySize,false));
@@ -47,7 +47,7 @@ const HADITHS = [{"t":"the speech of Messenger of Allah (ﷺ) was so clear that 
     const width=158, height=76, maxLines=4;
     for(let bodySize=11;bodySize>=8;bodySize--){
       const honorificSize=Math.max(7,bodySize-3), lineHeight=Math.round(bodySize*1.45);
-      const image=drawQuote(text,width,height,"#FFFFFF",bodySize,honorificSize,lineHeight,maxLines);
+      const image=drawQuote(text,width,height,"#FFFFFF",bodySize,honorificSize,lineHeight,maxLines,true);
       // First size that naturally fits four lines; smallest size still clips gracefully.
       const tokens=("“"+text+"”").split(/(ﷺ)/).reduce(function(all,part){ return all.concat(part==="ﷺ"?[part]:(part.match(/\S+/g)||[])); },[]);
       let lines=1, used=0;

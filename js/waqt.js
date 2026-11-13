@@ -1213,8 +1213,9 @@ function importItem(value, prayer) {
     for (var i = 0; i < value.slots.length; i++) {
       var slot = value.slots[i], slotDays;
       if (!slot || typeof slot !== "object" || Array.isArray(slot) || !validSlotTime(slot.time)) return null;
+      if (slot.duration !== undefined && (typeof slot.duration !== "number" || !isFinite(slot.duration) || slot.duration <= 0)) return null;
       slotDays = importDays(slot.days); if (slotDays === false) return null;
-      slots.push({ time:slot.time, days:slotDays || undefined });
+      slots.push({ time:slot.time, duration:slot.duration === undefined ? (value.duration === undefined ? 30 : Math.round(value.duration)) : Math.round(slot.duration), days:slotDays || undefined });
     }
   }
   var first = slots && slots[0];
@@ -1244,16 +1245,17 @@ function mergeSlotLists() {
     (slots || []).forEach(function(slot) {
       if (!slot || !validSlotTime(slot.time)) return;
       var days = Array.isArray(slot.days) ? slot.days.slice() : undefined;
-      var key = slot.time + "|" + JSON.stringify(days || null);
+      var duration = slot.duration;
+      var key = slot.time + "|" + duration + "|" + JSON.stringify(days || null);
       if (seen[key]) return;
       seen[key] = true;
-      out.push({ time:slot.time, days:days });
+      out.push({ time:slot.time, duration:duration, days:days });
     });
   });
   return out;
 }
 function importItemSlots(item) {
-  return item.slots && item.slots.length ? item.slots : (item.time ? [{ time:item.time, days:item.days || undefined }] : []);
+  return item.slots && item.slots.length ? item.slots : (item.time ? [{ time:item.time, duration:item.duration, days:item.days || undefined }] : []);
 }
 function shortestItemName(names) {
   return names.slice().sort(function(a, b) { return a.length - b.length || a.localeCompare(b); })[0] || "";
@@ -1285,6 +1287,32 @@ function collapseImportItems(items) {
     }
     return kept;
   });
+}
+function splitImportItemDurations(item) {
+  var groups = {}, order = [];
+  importItemSlots(item).forEach(function(slot) {
+    var duration = slot.duration === undefined ? item.duration : slot.duration;
+    var key = String(duration);
+    if (!groups[key]) { groups[key] = { duration:duration, slots:[] }; order.push(key); }
+    groups[key].slots.push({ time:slot.time, days:slot.days });
+  });
+  if (!order.length) return [item];
+  return order.map(function(key) {
+    var group = groups[key], slots = group.slots;
+    var out = { name:item.name, duration:group.duration, days:item.days, optional:item.optional };
+    if (item.note) out.note = item.note;
+    if (slots.length > 1) {
+      out.time = slots[0].time;
+      out.slots = slots.map(function(slot) { return { time:slot.time, days:slot.days }; });
+    } else {
+      out.time = slots[0].time;
+      out.days = slots[0].days || item.days || null;
+    }
+    return out;
+  }).sort(function(a, b) { return a.time.localeCompare(b.time); });
+}
+function splitImportItemsByDuration(items) {
+  return items.reduce(function(out, item) { return out.concat(splitImportItemDurations(item)); }, []);
 }
 // Repeat names can still be suffixed by callers that genuinely need distinct items (for example,
 // prayer splitting). Import parsing itself now calls collapseImportItems instead.
@@ -1335,7 +1363,7 @@ function parseImportSchedule(text) {
     if (!card || typeof card !== "object" || Array.isArray(card) || typeof card.name !== "string" || !card.name.trim() || !Array.isArray(card.items)) return { error:"Each card needs a name and an items array." };
     var clean = { name:card.name.trim(), items:[] };
     for (var j = 0; j < card.items.length; j++) { var item = importItem(card.items[j], false); if (!item) return { error:"Each item needs a name; times use HH:MM, days use Sun through Sat." }; clean.items.push(item); }
-    clean.items = collapseImportItems(clean.items);
+    clean.items = dedupItemNames(splitImportItemsByDuration(collapseImportItems(clean.items)));
     out.cards.push(clean);
   }
   if (raw.reminders !== undefined) {
@@ -5437,6 +5465,11 @@ function _importSelfCheck() {
     assert(newCards.length === 2 && newCards[0].color !== newCards[1].color && newCards[0].icon !== newCards[1].icon && newCards.every(function(c) { return c.color !== "#82a06e"; }), "new cards did not receive unique non-green color/icon assignments");
     var dup = parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Physio","time":"09:00","days":["Sat"]},{"name":"Physio","time":"11:00","days":["Wed"]}]}]}').value.cards[0].items;
     assert(dup.length === 1 && dup[0].slots.length === 2, "duplicate import names must collapse into one multi-slot item");
+    var uniformSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Fitness","items":[{"name":"Dorsiflexion","slots":[{"time":"09:00","duration":5},{"time":"18:00","duration":5}]}]}]}').value.cards[0].items;
+    assert(uniformSlots.length === 1 && uniformSlots[0].duration === 5 && uniformSlots[0].slots.every(function(slot) { return slot.duration === undefined; }), "uniform slot durations must become one item duration");
+    var mixedSlots = parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"CEH","slots":[{"time":"06:30","duration":70},{"time":"10:00","duration":150},{"time":"19:00","duration":115}]}]}]}').value.cards[0].items;
+    assert(mixedSlots.length === 3 && JSON.stringify(mixedSlots.map(function(item) { return [item.name, item.time, item.duration]; })) === JSON.stringify([["CEH", "06:30", 70], ["CEH-2", "10:00", 150], ["CEH-3", "19:00", 115]]), "mixed slot durations must split into ordered, suffixed items");
+    assert(!!parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Bad slot","slots":[{"time":"09:00","duration":0}]}]}]}').error, "non-positive slot duration must be rejected");
 
     // ---- 2026-08-13 import fixes ----
     // Reset to a known profile: Daily Goals + a Fitness card holding "Exercise", Asr at 17:35/35m.

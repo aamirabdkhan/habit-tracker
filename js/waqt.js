@@ -3495,7 +3495,7 @@ function renderDayPoster() {
 }
 function renderWeekSheet() {
   var week = shareWeekData().map(function(day) {
-    return { label:day[0], date:day[1], items:visibleWeekItems(day[2]) };
+    return { label:day[0], date:day[1], items:visibleWeekItems(day[2]), source:day };
   });
   var itemHtml = function(item, duration) {
     return '<div class="share-weekitem" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span class="share-weektime">' + esc(prettyTime(item.t)) + '</span><span class="share-weekname">' + esc(item.n) + '</span>' + (duration ? '<span class="share-weekdur">' + esc(fmtDur(item.dur)) + '</span>' : '') + '</div>';
@@ -3525,9 +3525,7 @@ function renderWeekSheet() {
     return '<div class="share-weekgridscroll">' + grid + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
   }
   if (shareState.wk === "stack") {
-    return '<div class="share-weekstack">' + week.map(function(day) {
-      return '<section class="share-weekstackday">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, true); }).join('') : empty) + '</div></section>';
-    }).join('') + '</div>';
+    return '<div class="share-weekpdfpreview">' + week.map(function(day) { return renderWeekPdfDay(day.source); }).join('') + '</div>';
   }
   return '<div class="share-weekcols">' + week.map(function(day) {
     return '<section class="share-weekcol">' + dayHead(day) + '<div class="share-weekitems">' + (day.items.length ? day.items.map(function(item) { return itemHtml(item, false); }).join('') : empty) + '</div></section>';
@@ -3689,7 +3687,9 @@ function rShareComposer() {
     h += '<div class="share-weekintro"><p><b>Your selected week, ready for a PDF.</b> Pick a layout, then choose what to include from What to share.</p></div>';
     h += '<div class="share-looks share-weeklooks" role="group" aria-label="Week PDF layout">';
     [["cols", "Day columns"], ["rows", "Time rows"], ["stack", "Stacked days"]].forEach(function(layout) { var on = shareState.wk === layout[0]; h += '<button type="button" class="share-look' + (on ? ' on' : '') + '" data-a="sharewk" data-wk="' + esA(layout[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(layout[1]) + '</button>'; });
-    h += '</div><button type="button" class="bt bta share-action" data-a="shareexportpdf"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save PDF') + '</button><div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></div>';
+    h += '</div><button type="button" class="bt bta share-action" data-a="shareexportpdf"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save PDF') + '</button>';
+    if (shareState.wk === "stack") h += renderWeekSheet();
+    else h += '<div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></div>';
   }
   h += '</div></section></div>';
   return h;

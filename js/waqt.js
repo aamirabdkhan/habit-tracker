@@ -3477,7 +3477,7 @@ function renderWeekStrip(selKey) {
 // ---- Sharing (Pehar sharing, Task 1) ---------------------------------------------------------
 var SHARE_PREFS_KEY = "ht_share_prefs";
 var shareOpen = false, shareExporting = false, shareFocusBefore = null;
-var shareState = { tab:"day", style:"rail", mode:"progress", caption:"", theme:"paper", wk:"cols", off:{}, sectionsOff:{}, dateKey:"" };
+var shareState = { tab:"day", style:"rail", mode:"progress", caption:"", theme:"paper", wk:"cols", off:{}, sectionsOff:{}, dateKey:"", hideTimes:false, hideDur:false, hideDate:false, hideQr:false };
 function loadSharePrefs() {
   try {
     var prefs = JSON.parse(localStorage.getItem(SHARE_PREFS_KEY));
@@ -3485,11 +3485,16 @@ function loadSharePrefs() {
     ["style", "mode", "theme", "wk"].forEach(function(key) {
       if (typeof prefs[key] === "string") shareState[key] = prefs[key];
     });
+    ["hideTimes", "hideDur", "hideDate", "hideQr"].forEach(function(key) {
+      if (typeof prefs[key] === "boolean") shareState[key] = prefs[key];
+    });
   } catch (e) {}
 }
 function saveSharePrefs() {
-  try { localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify({ style:shareState.style, mode:shareState.mode, theme:shareState.theme, wk:shareState.wk })); } catch (e) {}
+  try { localStorage.setItem(SHARE_PREFS_KEY, JSON.stringify({ style:shareState.style, mode:shareState.mode, theme:shareState.theme, wk:shareState.wk, hideTimes:shareState.hideTimes, hideDur:shareState.hideDur, hideDate:shareState.hideDate, hideQr:shareState.hideQr })); } catch (e) {}
 }
+// The referral QR is optional now (privacy), so it goes through one helper everywhere it's drawn.
+function shareQrHtml(size) { return shareState.hideQr ? '' : '<span class="share-qr">' + renderQr(referralUrl(), size) + '</span>'; }
 function shareDayData(date) {
   var d = date || cDate, key = dk(d), day = gDay(key), items = buildTimeline(getCards(), day, dowOf(key));
   return items.map(function(item) {
@@ -3509,7 +3514,9 @@ function visibleWeekItems(items) {
     return !shareState.sectionsOff[item.section] && !shareState.off[item.section + "|" + item.n];
   });
 }
-function renderShareControls() {
+// The per-section / per-item include checklist. Shared by the "What to share" tab AND the Day-image
+// tab (right under the live preview), so a user sees the poster change as they untick private items.
+function renderShareChecklist() {
   var bySection = {}, seen = {}, sections = getCards().slice();
   shareWeekData().forEach(function(day) {
     day[2].forEach(function(item) {
@@ -3521,10 +3528,7 @@ function renderShareControls() {
     });
   });
   if (bySection.prayers) sections.unshift({ id:"prayers", name:"Prayers" });
-  var h = '<div class="share-controls">';
-  h += '<p class="share-panelnote">Tick the items you want on the share. Untick anything private.</p>';
-  h += '<label class="share-captionfield" for="share-caption"><span>Caption <small><span id="share-caption-count">' + esc(String(shareState.caption.length)) + '</span>/60</small></span><input id="share-caption" class="inp" type="text" maxlength="60" placeholder="Add a note to your day" value="' + esA(shareState.caption) + '" data-a="sharecaption"></label>';
-  h += '<div class="share-controlgroup"><p class="share-controltitle">Sections &amp; items</p>';
+  var h = '<div class="share-controlgroup"><p class="share-controltitle">Sections &amp; items</p>';
   sections.forEach(function(card) {
     var sectionItems = bySection[card.id];
     if (!sectionItems || !sectionItems.length) return;
@@ -3538,12 +3542,30 @@ function renderShareControls() {
     });
     h += '</div></section>';
   });
-  h += '</div><div class="share-controlgroup"><p class="share-controltitle">Poster theme</p><div class="share-themes" role="group" aria-label="Poster theme">';
+  return h + '</div>';
+}
+// Privacy chips — hide what you don't want public. Defaults OFF (everything shown), so existing shares
+// are unchanged. The Waqt badge stays (it credits the app); the QR is what the "QR" chip removes.
+function renderSharePrivacy() {
+  var chips = [["times", "Times", shareState.hideTimes], ["dur", "Durations", shareState.hideDur], ["date", "Date", shareState.hideDate], ["qr", "Referral QR", shareState.hideQr]];
+  var h = '<div class="share-privacy"><p class="share-controltitle">Keep private</p><div class="share-privchips">';
+  chips.forEach(function(c) {
+    h += '<button type="button" class="share-privchip' + (c[2] ? ' on' : '') + '" data-a="sharepriv" data-k="' + esA(c[0]) + '" aria-pressed="' + (c[2] ? 'true' : 'false') + '"><i class="fas fa-' + (c[2] ? 'eye-slash' : 'eye') + '" aria-hidden="true"></i>' + esc(c[1]) + '</button>';
+  });
+  return h + '</div></div>';
+}
+function renderShareControls() {
+  var h = '<div class="share-controls">';
+  h += '<p class="share-panelnote">Tick the items you want on the share. Untick anything private.</p>';
+  h += '<label class="share-captionfield" for="share-caption"><span>Caption <small><span id="share-caption-count">' + esc(String(shareState.caption.length)) + '</span>/60</small></span><input id="share-caption" class="inp" type="text" maxlength="60" placeholder="Add a note to your day" value="' + esA(shareState.caption) + '" data-a="sharecaption"></label>';
+  h += renderShareChecklist();
+  h += renderSharePrivacy();
+  h += '<div class="share-controlgroup"><p class="share-controltitle">Poster theme</p><div class="share-themes" role="group" aria-label="Poster theme">';
   [["paper", "Paper"], ["midnight", "Midnight"], ["gradient", "Gradient"]].forEach(function(theme) {
     var on = shareState.theme === theme[0];
     h += '<button type="button" class="share-theme theme-' + esA(theme[0]) + (on ? ' on' : '') + '" data-a="sharetheme" data-theme="' + esA(theme[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><i aria-hidden="true"></i>' + esc(theme[1]) + '</button>';
   });
-  h += '</div></div><p class="share-always"><i class="fas fa-circle-info" aria-hidden="true"></i><span><b>Always included</b> Times, durations, date, Waqt badge, and referral QR.</span></p>';
+  h += '</div></div><p class="share-always"><i class="fas fa-circle-info" aria-hidden="true"></i><span>The <b>Waqt</b> badge is always included to credit the app. Everything else is yours to hide above.</span></p>';
   return h + '</div>';
 }
 function referralUrl() {
@@ -3582,7 +3604,9 @@ function renderDayPoster() {
   var itemHtml = function(item) {
     var cls = "share-item" + (progress && item.done ? " done" : "");
     var tick = progress ? '<span class="share-tick" aria-hidden="true">' + (item.done ? '&#10003;' : '') + '</span>' : '';
-    return '<div class="' + cls + '" style="--share-c:' + esA(item.c) + ';--share-bg:' + esA(shareTint(item.c)) + '">' + tick + '<span class="share-time">' + esc(prettyTime(item.t)) + '</span><span class="share-name">' + esc(item.n) + '</span><span class="share-duration">' + esc(fmtDur(item.dur)) + '</span></div>';
+    var time = shareState.hideTimes ? '' : '<span class="share-time">' + esc(prettyTime(item.t)) + '</span>';
+    var dur = shareState.hideDur ? '' : '<span class="share-duration">' + esc(fmtDur(item.dur)) + '</span>';
+    return '<div class="' + cls + '" style="--share-c:' + esA(item.c) + ';--share-bg:' + esA(shareTint(item.c)) + '">' + tick + time + '<span class="share-name">' + esc(item.n) + '</span>' + dur + '</div>';
   };
   var body = '';
   if (!items.length) body = '<p class="share-empty">Nothing selected for this day.</p>';
@@ -3596,11 +3620,11 @@ function renderDayPoster() {
     }).join('') + '</div>';
   } else body = '<div class="share-rail">' + items.map(itemHtml).join('') + '</div>';
   var h = '<article class="share-frame t-' + esA(shareState.theme) + ' share-' + esA(shareState.style) + '"><span class="share-halo" aria-hidden="true"></span>';
-  h += '<header class="share-posterhead"><h3 class="share-pdate">' + esc(date) + '</h3><p class="share-overline">' + esc(month) + ' · my pehar</p>';
+  h += '<header class="share-posterhead">' + (shareState.hideDate ? '' : '<h3 class="share-pdate">' + esc(date) + '</h3>') + '<p class="share-overline">' + (shareState.hideDate ? '' : esc(month) + ' · ') + 'my pehar</p>';
   if (shareState.caption.trim()) h += '<p class="share-caption">“' + esc(shareState.caption.trim()) + '”</p>';
   h += '</header>';
   if (progress && items.length) { var circumference = 2 * Math.PI * 30, arc = circumference * pct / 100; h += '<div class="share-ring" aria-label="' + esA(String(pct)) + '% complete"><svg viewBox="0 0 74 74" aria-hidden="true"><circle class="share-ringtrack" cx="37" cy="37" r="30"></circle><circle class="share-ringfill" cx="37" cy="37" r="30" stroke-dasharray="' + arc.toFixed(3) + ' ' + circumference.toFixed(3) + '"></circle></svg><b>' + pct + '%</b></div><p class="share-ringlabel">day complete</p>'; }
-  h += '<div class="share-posterbody">' + body + '</div><footer class="share-posterfoot"><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl()) + '</span></footer></article>';
+  h += '<div class="share-posterbody">' + body + '</div><footer class="share-posterfoot"><span class="share-badge">tracked with <b>Waqt</b>' + (shareState.hideQr ? '' : '<small>scan to plan your days</small>') + '</span>' + shareQrHtml() + '</footer></article>';
   return h;
 }
 function renderWeekSheet() {
@@ -3608,7 +3632,8 @@ function renderWeekSheet() {
     return { label:day[0], date:day[1], items:visibleWeekItems(day[2]), source:day };
   });
   var itemHtml = function(item, duration) {
-    return '<div class="share-weekitem" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span class="share-weektime">' + esc(prettyTime(item.t)) + '</span><span class="share-weekname">' + esc(item.n) + '</span>' + (duration ? '<span class="share-weekdur">' + esc(fmtDur(item.dur)) + '</span>' : '') + '</div>';
+    var time = shareState.hideTimes ? '' : '<span class="share-weektime">' + esc(prettyTime(item.t)) + '</span>';
+    return '<div class="share-weekitem" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i>' + time + '<span class="share-weekname">' + esc(item.n) + '</span>' + (duration && !shareState.hideDur ? '<span class="share-weekdur">' + esc(fmtDur(item.dur)) + '</span>' : '') + '</div>';
   };
   var dayHead = function(day) {
     return '<header class="share-weekdayhead"><b>' + esc(day.label) + '</b><span>' + esc(shareWeekDate(day.date)) + '</span><small>' + esc(String(day.items.length)) + ' item' + (day.items.length === 1 ? '' : 's') + '</small></header>';
@@ -3689,9 +3714,11 @@ async function exportDayImage() {
 }
 function renderWeekPdfPage(title, items, continuation) {
   var rows = items.length ? items.map(function(item) {
-    return '<div class="share-pdfrow" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i><span>' + esc(prettyTime(item.t)) + '</span><b>' + esc(item.n) + '</b><small>' + esc(fmtDur(item.dur)) + '</small></div>';
+    var time = shareState.hideTimes ? '' : '<span>' + esc(prettyTime(item.t)) + '</span>';
+    var dur = shareState.hideDur ? '' : '<small>' + esc(fmtDur(item.dur)) + '</small>';
+    return '<div class="share-pdfrow" style="--share-c:' + esA(item.c) + '"><i aria-hidden="true"></i>' + time + '<b>' + esc(item.n) + '</b>' + dur + '</div>';
   }).join('') : (continuation ? '' : '<p class="share-weekempty">Nothing selected for this day.</p>');
-  return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR' + (continuation ? ' · CONTINUED' : '') + '</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b><small>scan to plan your days</small></span><span class="share-qr">' + renderQr(referralUrl(), 92) + '</span></footer></section>';
+  return '<section class="share-pdfday t-' + esA(shareState.theme) + '"><header><p>MY PEHAR' + (continuation ? ' · CONTINUED' : '') + '</p><h1>' + esc(title) + '</h1></header><main>' + rows + '</main><footer><span class="share-badge">tracked with <b>Waqt</b>' + (shareState.hideQr ? '' : '<small>scan to plan your days</small>') + '</span>' + shareQrHtml(92) + '</footer></section>';
 }
 function renderWeekPdfDay(day) {
   var title = new Date(day[1] + "T00:00:00").toLocaleDateString(undefined, { weekday:"long", month:"short", day:"numeric" });
@@ -3820,16 +3847,21 @@ function rShareComposer() {
     [["progress", "With progress"], ["plan", "Plan only"]].forEach(function(mode) { h += '<button type="button" class="share-mode' + (shareState.mode === mode[0] ? ' on' : '') + '" data-a="sharemode" data-mode="' + esA(mode[0]) + '" aria-pressed="' + (shareState.mode === mode[0] ? 'true' : 'false') + '">' + esc(mode[1]) + '</button>'; });
     h += '</div><div class="share-looks" role="group" aria-label="Day poster look">';
     [["rail", "Rail"], ["lines", "Clean lines"], ["agenda", "Agenda blocks"], ["dayparts", "Day-parts"]].forEach(function(style) { h += '<button type="button" class="share-look' + (shareState.style === style[0] ? ' on' : '') + '" data-a="sharestyle" data-style="' + esA(style[0]) + '" aria-pressed="' + (shareState.style === style[0] ? 'true' : 'false') + '">' + esc(style[1]) + '</button>'; });
-    h += '</div></div><p class="share-hint">“Plan only” = bare schedule. “With progress” = ticks + ring.</p><button type="button" class="bt bta share-action" data-a="shareexportimg"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save / share image') + '</button><div id="share-day-poster">' + renderDayPoster() + '</div>';
+    h += '</div></div><p class="share-hint">“Plan only” = bare schedule. “With progress” = ticks + ring.</p>';
+    h += renderSharePrivacy();
+    h += '<button type="button" class="bt bta share-action" data-a="shareexportimg"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save / share image') + '</button><div id="share-day-poster">' + renderDayPoster() + '</div>';
+    h += renderShareChecklist();
   }
   else if (shareState.tab === "ctrl") h += renderShareControls();
   else {
     h += '<div class="share-weekintro"><p><b>Your selected week, ready for a PDF.</b> Pick a layout, then choose what to include from What to share.</p></div>';
     h += '<div class="share-looks share-weeklooks" role="group" aria-label="Week PDF layout">';
     [["cols", "Day columns"], ["rows", "Time rows"], ["stack", "Stacked days"]].forEach(function(layout) { var on = shareState.wk === layout[0]; h += '<button type="button" class="share-look' + (on ? ' on' : '') + '" data-a="sharewk" data-wk="' + esA(layout[0]) + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + esc(layout[1]) + '</button>'; });
-    h += '</div><button type="button" class="bt bta share-action" data-a="shareexportpdf"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save PDF') + '</button>';
+    h += '</div>';
+    h += renderSharePrivacy();
+    h += '<button type="button" class="bt bta share-action" data-a="shareexportpdf"' + (shareExporting ? ' disabled' : '') + '>' + (shareExporting ? 'Preparing…' : 'Save PDF') + '</button>';
     if (shareState.wk === "stack") h += renderWeekSheet();
-    else h += '<div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span><span class="share-qr">' + renderQr(referralUrl(), 40) + '</span></footer></div>';
+    else h += '<div class="share-weeksheet"><header class="share-paperbar"><b>My week</b><span>' + esc(wkDays(cDate)[0].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + ' – ' + esc(wkDays(cDate)[6].toLocaleDateString(undefined, { month:"short", day:"numeric" })) + '</span></header>' + renderWeekSheet() + '<footer class="share-weekfoot"><span class="share-badge">tracked with <b>Waqt</b></span>' + shareQrHtml(40) + '</footer></div>';
   }
   h += '</div></section></div>';
   return h;
@@ -4181,6 +4213,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "sharesection") { shareState.sectionsOff[t.dataset.section] = !shareState.sectionsOff[t.dataset.section]; renderSharePreservingScroll(true); return; }
     if (a === "shareitem") { shareState.off[t.dataset.key] = !shareState.off[t.dataset.key]; renderSharePreservingScroll(true); return; }
     if (a === "sharetheme") { shareState.theme = t.dataset.theme; saveSharePrefs(); renderSharePreservingScroll(true); return; }
+    if (a === "sharepriv") { var privFlag = { times:"hideTimes", dur:"hideDur", date:"hideDate", qr:"hideQr" }[t.dataset.k]; if (privFlag) { shareState[privFlag] = !shareState[privFlag]; saveSharePrefs(); renderSharePreservingScroll(true); } return; }
     if (a === "help") { helpTopic = t.dataset.topic; render(); return; }
     if (a === "helpclose") { helpTopic = null; render(); return; }
     if (a === "priorityexplainerclose") { render(); return; }

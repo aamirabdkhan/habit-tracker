@@ -454,6 +454,9 @@ var CARDS_STATS_KEY = "ht_stats_all_v1";
 // later-arriving legacy history trigger a one-time re-migration. Cleared once that happens (or once
 // the user grows the profile past the single seed).
 var CARDS_FRESH_KEY = "ht_cards_freshseed";
+// A fresh profile that imported before any legacy data existed must not mistake the import's
+// backwards-compatible ht_d write for late legacy history on a later getCards() call.
+var CARDS_IMPORT_NO_LEGACY_KEY = "waqt_import_no_legacy_cards_v1";
 // One-shot-per-device recovery for profiles polluted BEFORE CARDS_FRESH_KEY existed. Deliberately
 // NOT ht_-prefixed so cloud sync never carries it: each device runs the recovery at most once,
 // independently. See recoverStalePollutedSeed().
@@ -531,6 +534,18 @@ function hasLegacyCardHistory() {
   }
   return false;
 }
+function hasLegacyExtraOrHealthContent() {
+  var def;
+  try { def = JSON.parse(localStorage.getItem("ht_d")); } catch(e) {}
+  if (def && [def.ex, def.hl].some(function(items) { return Array.isArray(items) && items.length; })) return true;
+  for (var i = 0; i < localStorage.length; i++) {
+    var key = localStorage.key(i), day;
+    if (!/^ht_\d{4}-\d{2}-\d{2}$/.test(key || "")) continue;
+    try { day = JSON.parse(localStorage.getItem(key)); } catch(e) {}
+    if (day && [day.extra, day.health].some(function(items) { return items && Object.keys(items).length; })) return true;
+  }
+  return false;
+}
 // Fresh profiles (no ht_cards, no legacy habits/extra/health history) seed Daily Goals only;
 // anyone with either gets the full 3-card base seed so the legacy migration is unchanged.
 // `isExisting` is an explicit override for self-checks — passing it means the state probe is
@@ -560,6 +575,7 @@ function remigrateIfLegacyArrivedLate() {
   // Importing into Daily Goals writes ht_d for backwards compatibility. That must not look like
   // late cloud legacy data midway through an import and resurrect the old two-card seed.
   if (typeof importApplyInProgress !== "undefined" && importApplyInProgress) return;
+  if (localStorage.getItem(CARDS_IMPORT_NO_LEGACY_KEY)) return;
   if (!localStorage.getItem(CARDS_FRESH_KEY)) return;
   var meta = getCardMeta();
   var pristineSingleSeed = meta.length === 1 && meta[0].id === "habits";
@@ -1123,7 +1139,7 @@ function renderReminders(todayISO) {
   var late = rows.filter(function(r) { return isReminderDue(r, todayISO) && reminderDaysUntil(r, todayISO) < 0; }).length;
   var hdr = late ? '<span class="bdg" style="background:rgba(184,76,76,.16);color:#E08A8A">' + late + ' overdue</span>' : (due ? '<span class="bdg" style="background:var(--acd);color:var(--ac)">' + due + ' due</span>' : '');
   var h = '<section class="sch-reminders" aria-label="Reminders"><div class="flx aic jcsb"><h2 class="sch-anylbl">Reminders ' + hdr + '</h2></div>';
-  if (!rows.length) h += '<div class="rem-empty"><div class="rem-emptyico"><i class="fas fa-bell"></i></div><p class="rem-emptytitle">No reminders yet</p><p class="rem-emptysub">Track things that repeat — bills, filters, servicing. We&rsquo;ll nag you when they&rsquo;re due.</p></div>';
+  if (!rows.length) h += '<div class="rem-empty"><div class="rem-emptyico"><i class="fas fa-bell"></i></div><p class="rem-emptytitle">No reminders yet</p><p class="rem-emptysub">Track things that repeat: bills, filters, servicing. We&rsquo;ll nag you when they&rsquo;re due.</p></div>';
   rows.forEach(function(r) {
     var isDue = isReminderDue(r, todayISO), isLate = isDue && reminderDaysUntil(r, todayISO) < 0, kc = reminderUrgencyVar(r, todayISO);
     // Ring already shows the number for upcoming items; only spell out urgency words when due/late.
@@ -1407,7 +1423,7 @@ function guessCardId(itemNm, pool) {
   var want = nameWords(itemNm), best = null;
   if (!want.length) return null;
   (pool || getCards()).forEach(function(c) {
-    [c.name].concat(c.items.map(function(x) { return x.n; })).forEach(function(hay) {
+    [c.name].concat((c.items || []).map(function(x) { return x.n; })).forEach(function(hay) {
       nameWords(hay).forEach(function(w) {
         if (want.indexOf(w) === -1) return;
         if (!best || w.length > best.score) best = { id:c.id, score:w.length };  // longest shared word wins
@@ -1497,6 +1513,11 @@ function buildImportPreview(data) {
     });
   });
   (data.reminders || []).forEach(function(reminder) { rows.push({ kind:"reminder", cardName:"Reminders", name:reminder.name, incoming:reminder }); });
+  var activeNewTargets = {};
+  rows.forEach(function(row) { if (row.kind === "item" || row.kind === "newitem") activeNewTargets[row.targetId] = true; });
+  addCards = 0;
+  var countedNewTargets = {};
+  groups.forEach(function(group) { if (group.newCard && !activeNewTargets[group.targetId]) group.newCard = false; if (group.newCard && !countedNewTargets[group.targetId]) { countedNewTargets[group.targetId] = true; addCards++; } });
   markImportOverlaps(rows);
   return { data:data, rows:rows, groups:groups, addCards:addCards, addItems:addItems, prayerSets:prayerSets, reminders:(data.reminders || []).length, folded:folded, mergedCards:mergedCards };
 }
@@ -1526,9 +1547,12 @@ function applyImportSchedule(preview, rawTimes) {
     }
   });
   var targetIds = {};
+  // Keep fresh-seed suppression after Apply: adding a Daily Goals item writes ht_d, but that
+  // write is import data, not proof that old Extra Deeds / Healthy Lifestyle cards existed.
+  if (localStorage.getItem(CARDS_FRESH_KEY) && !hasLegacyExtraOrHealthContent()) localStorage.setItem(CARDS_IMPORT_NO_LEGACY_KEY, "true");
   importApplyInProgress = true;
   try {
-    (preview.groups || []).forEach(function(group) { if (targetIds[group.targetId]) return; targetIds[group.targetId] = group.newCard ? addCard(group.name).id : group.targetId; });
+    (preview.groups || []).forEach(function(group) { if (!group.newCard || targetIds[group.targetId]) return; targetIds[group.targetId] = addCard(group.name).id; });
     preview.rows.forEach(function(row) {
       if (row.kind !== "item" && row.kind !== "newitem") return;
       var targetId = targetIds[row.targetId] || row.targetId, item = row.incoming;
@@ -1558,27 +1582,27 @@ function importPrompt() {
   var micro = prayers
     ? "\n   3. Small post-prayer micro-habits (such as Fajr dhikr after Fajr) and any other fixed micro-habits."
     : "\n   3. Small fixed micro-habits.";
-  var instruction = "You help build a weekly schedule. Work in THREE steps. Keep every message short — no long paragraphs."
-    + "\n\nSTEP 1 — ASK (one message). Read CURRENT PROFILE first. Ask ALL your questions at once as one short numbered list, then stop and wait. Cover, in this order:"
+  var instruction = "You help build a weekly schedule. Work in THREE steps. Keep every message short. No long paragraphs."
+    + "\n\nSTEP 1: ASK (one message). Read CURRENT PROFILE first. Ask ALL your questions at once as one short numbered list, then stop and wait. Cover, in this order:"
     + anchors
     + "\n   2. Study/work blocks: ask what they are studying or working on. Name every block by its real name, such as CEH, Research, or CLG work; never use generic \"Study\"."
     + micro
     + "\n   4. Ask exactly: \"Do you want reminders, and for which items? (default: none)\""
     + "\n   Output NO JSON in this step."
-    + "\n\nSTEP 2 — CONFIRM (after they answer). Show the finished week as plain text, day by day. Before showing it, VERIFY: scan for any two items whose times overlap (an item occupies time .. time+duration; include every slot and the prayers). If an overlap is not one the user explicitly accepted, fix it — sequence the items back-to-back — then note it. Also re-check that every item keeps its stated duration and every slot you were given. Below the week, list every change you made, one short line each. Then ask exactly: \"Reply 'yes' for the code, or tell me what to fix.\" Still output NO JSON in this step."
-    + "\n\nSTEP 3 — CODE (only after they reply yes). Output ONLY the JSON object shown under OUTPUT FORMAT — no code fence, no words before or after."
+    + "\n\nSTEP 2: CONFIRM (after they answer). Show the finished week as plain text, day by day. Before showing it, VERIFY: scan for any two items whose times overlap (an item occupies time .. time+duration; include every slot and the prayers). If an overlap is not one the user explicitly accepted, fix it. Sequence the items back-to-back, then note it. Also re-check that every item keeps its stated duration and every slot you were given. Below the week, list every change you made, one short line each. Then ask exactly: \"Reply 'yes' for the code, or tell me what to fix.\" Still output NO JSON in this step."
+    + "\n\nSTEP 3: CODE (only after they reply yes). Output ONLY the JSON object shown under OUTPUT FORMAT. No code fence or words before or after."
     + "\n\nIf the user already pasted their whole day up front, skip Step 1 and go straight to Step 2, then Step 3."
     + "\n\nRULES:"
     + "\n1. Do not overlap blocks. Place commitments where the user describes them. Use day-of-week scoping for weekly items."
-    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. If it happens at MORE THAN ONE clock time, you MUST list EVERY time in slots:[{time,duration,days?}] on that one item — never keep only one time, duration, or slot. Carry forward every item AND every slot the user gave you; dropping any is an error."
-    + "\n2b. DURATIONS ARE EXACT. Use the exact minutes the user stated for each item — a 5-minute habit stays 5, a 120-minute block stays 120. The 30-minute default applies ONLY to an item whose duration was never mentioned. NEVER replace a duration you were told with 30."
+    + "\n2. ONE ACTIVITY = ONE ITEM. If it repeats on several days, emit it once with days:[\"Sat\",\"Sun\",\"Mon\"], never one copy per weekday. If it happens at MORE THAN ONE clock time, you MUST list EVERY time in slots:[{time,duration,days?}] on that one item. Never keep only one time, duration, or slot. Carry forward every item AND every slot the user gave you; dropping any is an error."
+    + "\n2b. DURATIONS ARE EXACT. Use the exact minutes the user stated for each item. A 5-minute habit stays 5, a 120-minute block stays 120. The 30-minute default applies ONLY to an item whose duration was never mentioned. NEVER replace a duration you were told with 30."
     + "\n3. DO NOT RENAME or split user activities. Keep real names exactly; each activity stays one item even when its slots have different durations."
     + (prayers
       ? "\n4. Use after Fajr/before Isha anchoring for rituals. You may split a block across a prayer, but split pieces MUST add up to the requested duration. If 120m loses 35m, the second piece runs 35m longer; never lose time."
       : "\n4. Use plain clock times only. Never shorten a block below its requested duration.")
     + "\n5. REPORT EVERY CHANGE. Any split, move, shortening, or merge needs a short item note saying what changed and why. Put the day-flow summary in top-level notes."
     + "\n6. Reminders are opt-in: only add reminders the user explicitly asks for. Otherwise emit reminders:[]; never invent reminders.";
-  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (omit duration ONLY when the user never gave one, in which case it defaults to 30" + (prayers ? "; anchor duration defaults to 35" : "") + " — never use 30 to override a duration you were told; omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin now — Step 1, unless the user already pasted their whole day, in which case go straight to Step 2.\n\n";
+  return instruction + "\n\nOUTPUT FORMAT (Step 3 only):\n" + schema + "\nOnly item name is required; time/duration/days/note are optional (omit duration ONLY when the user never gave one, in which case it defaults to 30" + (prayers ? "; anchor duration defaults to 35" : "") + ". Never use 30 to override a duration you were told; omitted days means every day). Use weekday names Sun through Sat. No colors or icons.\n\nEXAMPLE (Step 3 output):\n" + schema + "\n\nCURRENT PROFILE (use this as the starting point):\n" + JSON.stringify(cleanScheduleSnapshot(), null, 2) + "\n\nBegin now: Step 1, unless the user already pasted their whole day. In that case, go straight to Step 2.\n\n";
 }
 // Self-check for the interactive AI planner prompt (run at #aipromptcheck).
 function _aiPromptSelfCheck() {
@@ -1854,7 +1878,7 @@ function renderParserPanel() {
 var IMPORT_GUIDE_STEPS = [
   "Tap Copy prompt (copies a prompt with your current schedule).",
   "Open your AI (Claude, ChatGPT, etc.), paste it, and describe your week in plain words.",
-  "It asks a few questions, then shows your week as plain text — check it, reply ‘yes’ and it sends the code.",
+  "It asks a few questions, then shows your week as plain text. Check it, reply ‘yes’ and it sends the code.",
   "Copy that code, tap Import schedule below to open the paste box, and paste it in.",
   "Tap Preview, check the table, then Apply."
 ];
@@ -1903,14 +1927,14 @@ var HELP_TOPICS = {
     "A timed prayer shows green on the Pehar, and reminds you 5 minutes before it starts."
   ]},
   priority: { title: "Priority & carry-over", steps: [
-    "Star a one-time task to mark it a priority — it stands out so it won't slip.",
+    "Star a one-time task to mark it a priority. It stands out so it won't slip.",
     "If you don't finish it today, it carries over to tomorrow with an age tag (e.g. “2d late”) until you do it or remove the star.",
     "Great for deadlines and one-off errands that must not be forgotten."
   ]},
   merge:    { title: "Merge duplicates", steps: [
     "If the same activity got added several times (CEH, CEH-2, CEH 3…), Merge folds them into one item.",
     "Pick the duplicates, choose the name to keep, and confirm. Every distinct time across them becomes a slot on the one item.",
-    "Items with no time add nothing — after merging, set the times you want with the pencil → “＋ Add time”."
+    "Items with no time add nothing. After merging, set the times you want with the pencil → “＋ Add time”."
   ]},
   takbeer:  { title: "First Takbīr", steps: [
     "The first takbīr (takbīrat al-iḥrām) is the opening “Allāhu akbar” said with the imam. Catching it means you joined the congregation right from the start.",
@@ -1947,27 +1971,27 @@ var GUIDE_GROUPS = [
 ];
 var GUIDE_TOPICS = {
   today: { icon: "fa-circle-check", title: "Today & tracking", hook: "tap or swipe-right to complete", jump: "daily", jumpLabel: "Today",
-    what: "Today is your checklist for the day — every habit, prayer and task you’re tracking, in one place.",
+    what: "Today is your checklist for the day: every habit, prayer and task you’re tracking, in one place.",
     how: "Tap a task to mark it done, or swipe it right. Use the arrows to move between days.",
     why: "One clear screen for “what do I need to do today”, without the noise of the whole week." },
   pehar: { icon: "fa-stream", title: "Pehar timeline", hook: "your whole day, on one line", jump: "pehar", jumpLabel: "Pehar",
-    what: "The Pehar lays your day out as a single timeline — prayers and timed tasks in order, with a line marking now and the free gaps between them.",
+    what: "The Pehar lays your day out as a single timeline: prayers and timed tasks in order, with a line marking now and the free gaps between them.",
     how: "Open the Pehar tab. Tap a free gap to drop a task into it, or tap a task to change its time. “Copy yesterday” reuses a day you liked.",
-    why: "It turns a flat list into a day you can see — so you plan around real time, not a pile of to-dos." },
+    why: "It turns a flat list into a day you can see. Plan around real time, not a pile of to-dos." },
   priority: { icon: "fa-star", title: "Priorities", hook: "flag what matters today", jump: "daily", jumpLabel: "Today",
-    what: "A priority is a one-time task you don’t want to slip — a deadline, an errand, a one-off.",
+    what: "A priority is a one-time task you don’t want to slip: a deadline, an errand, a one-off.",
     how: "On Today, add a one-time task, then tap its ★. If you don’t finish it, it carries to tomorrow with an age tag (“2d late”) until it’s done.",
     why: "The few things that truly matter today stay visible instead of drowning in routine habits." },
   cards: { icon: "fa-layer-group", title: "Cards & items", hook: "times, repeat days, optional", jump: "settings", jumpLabel: "Plan",
     what: "Your Plan holds up to five cards (like Daily Goals, Learning, Health), each a group of recurring items.",
     how: "On the Plan tab, add a card, then add items with a time and the weekdays they repeat. Mark some optional, or merge duplicates.",
-    why: "Set a routine once and it repeats every day automatically — no re-adding." },
+    why: "Set a routine once and it repeats every day automatically. No re-adding." },
   ai: { icon: "fa-wand-magic-sparkles", title: "Set up with AI", hook: "let AI build your week", jump: "settings", jumpLabel: "Plan",
     what: "Set up with AI builds your whole schedule from a plain chat with ChatGPT, Claude or Gemini.",
     how: "On the Plan tab, open Set up with AI and copy the prompt. Paste it into your AI; it asks a few questions, shows your week to confirm, then gives a code. Paste that back to import.",
     why: "Describe your week in words instead of adding every item by hand." },
   type: { icon: "fa-keyboard", title: "Type your day", hook: "paste your day in words", jump: "settings", jumpLabel: "Plan",
-    what: "Type your day reads a plain-text schedule you write and turns it into tasks — no AI needed, fully offline.",
+    what: "Type your day reads a plain-text schedule you write and turns it into tasks. No AI needed, fully offline.",
     how: "On the Plan tab, open Type your day, type lines like 6:30 gym 1h, and run it. Fix any lines it didn’t catch; it remembers your phrasing next time.",
     why: "The fastest way to enter a day you already know, with nothing leaving your phone." },
   prayers: { icon: "fa-mosque", title: "Prayers", hook: "times, Duha, First Takbīr", jump: "settings", jumpLabel: "Plan",
@@ -1975,19 +1999,19 @@ var GUIDE_TOPICS = {
     how: "Turn prayers on in Settings. Set times by hand, or let the app calculate them from your location. Tap a prayer done each day; tap its star for First Takbīr.",
     why: "Your prayers anchor the Pehar and feed your consistency stats, kept with the rest of your day." },
   reminders: { icon: "fa-bell", title: "Reminders", hook: "how task alerts work", jump: "daily", jumpLabel: "Today",
-    what: "A task reminds you automatically once it has a time — there’s no separate reminder to set up.",
+    what: "A task reminds you automatically once it has a time. There’s no separate reminder to set up.",
     how: "Give a task a time in your Plan and turn Notifications on in Settings. To stop a reminder, clear or change that task’s time.",
-    why: "One less thing to manage — the time you already set is the reminder." },
+    why: "One less thing to manage: the time you already set is the reminder." },
   overview: { icon: "fa-chart-simple", title: "Overview", hook: "heatmap, streaks, consistency", jump: "overview", jumpLabel: "Overview",
-    what: "Overview is your month at a glance — a completion heatmap, prayer and habit consistency, streaks, priorities and weight trend.",
+    what: "Overview is your month at a glance: a completion heatmap, prayer and habit consistency, streaks, priorities and weight trend.",
     how: "Open the Overview tab. Pick which items get a streak grid with the pencil on each card.",
-    why: "See honest patterns over time — which days you’re strong, where things slip — not just today." },
+    why: "See honest patterns over time: which days you’re strong, where things slip, not just today." },
   sync: { icon: "fa-cloud", title: "Cloud sync", hook: "backup + unlock widgets", jump: "prefs", jumpLabel: "Settings",
     what: "Cloud Sync backs up your data and keeps it in step across your devices.",
     how: "In Settings, connect Cloud Sync and sign in. Then Sync Now any time.",
     why: "Your history is safe, and it unlocks notifications and home-screen widgets." },
   widgets: { icon: "fa-table-cells-large", title: "Home-screen widgets", hook: "Pehar, stats, next prayer", jump: "prefs", jumpLabel: "Settings",
-    what: "Home-screen widgets show your Pehar, stats, next prayer, priorities or a hadith — without opening the app.",
+    what: "Home-screen widgets show your Pehar, stats, next prayer, priorities or a hadith without opening the app.",
     how: "In Settings (after Cloud Sync), copy the widget script into the free Scriptable app and add a widget, setting its Parameter to the one you want.",
     why: "A glance at your home screen tells you what’s next." },
   appearance: { icon: "fa-circle-half-stroke", title: "Appearance", hook: "light or dark", jump: "prefs", jumpLabel: "Settings",
@@ -2005,7 +2029,7 @@ function renderPriorityExplainer() {
     + '<div class="sch-ovsheet" data-a="helpnoop">'
     + '<div class="sch-ovhead"><h2><i class="fas fa-star" style="color:var(--ac);margin-right:8px"></i>Priorities</h2><button type="button" class="sch-ib" data-a="priorityexplainerclose" aria-label="Close"><i class="fas fa-xmark"></i></button></div>'
     + '<ul class="sch-ovsteps">'
-    + '<li>The <b>★</b> marks a one-time task as a <b>priority</b> — the few things that must not slip today.</li>'
+    + '<li>The <b>★</b> marks a one-time task as a <b>priority</b>: the few things that must not slip today.</li>'
     + '<li>Tap it to star. A starred task you don’t finish <b>carries over to tomorrow</b> with an age tag (“2d late”) until it’s done.</li>'
     + '<li>All your priorities also gather on the <b>Overview</b> page.</li>'
     + '</ul>'
@@ -2122,8 +2146,10 @@ function importPreviewRow(row, i, fromParser) {
     timeCell = diff(mine.time || "-", incTime); durCell = diff(fmtDur(mine.duration || (isPrayer ? 35 : 30)), incDur); daysCell = diff(fdays(mine.days), incDays);
     status = '<span style="color:#bfa46a;font-weight:600">CONFLICT</span> <span style="display:inline-flex;gap:4px;margin-left:4px"><button class="bt t-xs' + (keepMine ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="mine">mine</button><button class="bt t-xs' + (row.choice === "import" ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="import">imported</button></span>';
   }
-  if (!isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
+  if (isNew && !isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
     timeCell = slotList(inc.slots); durCell = '·'; daysCell = '·';
+  } else if (!isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
+    timeCell += '<div style="margin-top:4px">' + slotList(inc.slots) + '</div>';
   }
   // Fix 4/5: every reshape the AI or the app made is visible on its own row, and an overlap comes
   // with the one-tap fix rather than being silently moved for the user.
@@ -2422,9 +2448,9 @@ function rOnboarding() {
     h += '<div class="sch-onbfoot"><button class="sch-onbskip" data-a="onbskip1">Skip for now</button><button class="sch-onbgo" data-a="onbcontinue">Continue</button></div>';
   } else {
     h += '<h1 class="sch-onbtitle">You’re set</h1>';
-    h += '<p class="sch-onblede">Here’s where things live — open the full guide any time from Settings.</p>';
+    h += '<p class="sch-onblede">Here’s where things live. Open the full guide any time from Settings.</p>';
     h += '<div class="sch-onbcards">';
-    h += onbWhatCard("fa-circle-check", "Today", "Check off your day — tap or swipe a task done.");
+    h += onbWhatCard("fa-circle-check", "Today", "Check off your day. Tap or swipe a task done.");
     h += onbWhatCard("fa-stream", "Pehar", "Your day as a timeline; tap a free gap to add a task.");
     h += onbWhatCard("fa-chart-simple", "Overview", "Heatmap, streaks and honest patterns over time.");
     h += '</div>';
@@ -2482,7 +2508,7 @@ function rTemplate() {
   // Build-your-tracker: one eye-catching hero (not buried accordions) so a new user spots the fast
   // ways to fill the plan. The two buttons toggle the matching panel inline. buildPanel: null|ai|type.
   h += '<div class="sch-buildhero' + (hasCards ? ' sch-buildhero-compact' : '') + '">';
-  h += '<div class="sch-bhtop"><span class="sch-bhic"><i class="fas fa-bolt"></i></span><div class="sch-bhtx"><b>Build your tracker</b><p>Set your whole week at once — don’t add tasks one by one.</p></div></div>';
+  h += '<div class="sch-bhtop"><span class="sch-bhic"><i class="fas fa-bolt"></i></span><div class="sch-bhtx"><b>Build your tracker</b><p>Set your whole week at once. Don’t add tasks one by one.</p></div></div>';
   h += '<div class="sch-bhbtns">';
   h += '<button type="button" class="sch-bhb ' + (buildPanel === "type" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="type"><i class="fas fa-keyboard"></i> Type it</button>';
   h += '</div><details class="sch-importmore"><summary>More import options</summary><button type="button" class="sch-bhb ' + (buildPanel === "ai" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i>With AI</button></details></div>';
@@ -2517,7 +2543,7 @@ function rPrefs() {
     h += '<div class="cd"><div class="sec-t"><i class="fas fa-location-dot mr-1.5" style="color:var(--wa)"></i>Prayer times</div>';
     h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Automatic from my location<br><small style="color:var(--mt)">calculate prayer times instead of typing them</small></span><button type="button" class="sch-switch' + (pAuto ? ' on' : '') + '" data-a="prayerautotoggle" role="switch" aria-checked="' + (pAuto ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
     if (pAuto) {
-      h += '<p class="t-xs" style="color:var(--mt);margin:0 0 8px">' + (pGeo ? 'Location set' : 'No location yet — tap Update location') + '</p>';
+      h += '<p class="t-xs" style="color:var(--mt);margin:0 0 8px">' + (pGeo ? 'Location set' : 'No location yet. Tap Update location') + '</p>';
       h += '<button class="bt t-sm" data-a="prayerupdateloc" style="margin-bottom:14px"><i class="fas fa-location-crosshairs mr-1.5"></i>Update location</button>';
       h += '<label class="t-xs" style="color:var(--mt);display:block;margin-bottom:5px">Calculation method</label>';
       h += '<select class="sch-methodsel" data-a="prayermethod">';
@@ -2579,7 +2605,7 @@ function rPrefs() {
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn)" data-a="resetschedule"><i class="fas fa-trash-can mr-1.5"></i>Reset schedule</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Clears cards, items and times. Your day-by-day history is kept.</p>';
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn);margin-top:14px" data-a="resetall"><i class="fas fa-fire mr-1.5"></i>Erase everything &amp; start fresh</button>';
-  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Wipes <b>all</b> data — cards, times, prayer settings <b>and every day of completion history</b>, on this device and in the cloud. Can\'t be undone.</p></div>';
+  h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Wipes <b>all</b> data: cards, times, prayer settings <b>and every day of completion history</b>, on this device and in the cloud. Can\'t be undone.</p></div>';
 
   h += settClose() + '<details class="sch-settgroup"><summary class="sch-settsummary"><span>Advanced: Home-screen widgets</span><i class="fas fa-chevron-down sch-settchev"></i></summary><div class="sch-settbody">';
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
@@ -2589,7 +2615,7 @@ function rPrefs() {
 
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-table-cells-large mr-1.5" style="color:var(--ac)"></i>Home screen widget</div>';
   if (typeof currentUser !== "undefined" && currentUser) {
-    h += '<p class="t-xs mb-3" style="color:var(--mt)">Five home-screen widgets — Pehar, Stats, Priority, Next prayer and Hadith — from one script, using the free Scriptable app. You pick which one each widget shows with its <b>Parameter</b>.</p>';
+    h += '<p class="t-xs mb-3" style="color:var(--mt)">Five home-screen widgets: Pehar, Stats, Priority, Next prayer and Hadith, from one script using the free Scriptable app. You pick which one each widget shows with its <b>Parameter</b>.</p>';
     h += '<button type="button" class="bt bta t-sm" data-a="copywidgetscript"><i class="fas fa-copy mr-1.5"></i>Copy widget script</button>';
     h += '<div class="flx gap-1" style="flex-wrap:wrap;margin-top:8px">' + ["pehar", "stats", "priority", "nextprayer", "hadith"].map(function(name) { return '<button type="button" class="bt t-xs" data-a="copyparam" data-k="' + esA(name) + '">' + esc(name) + '</button>'; }).join('') + '</div>';
     h += '<ol class="sch-parsesteps" style="margin-top:11px">'
@@ -2597,7 +2623,7 @@ function rPrefs() {
       + '<li>Tap <b>Copy widget script</b> above.</li>'
       + '<li>Open Scriptable, tap <b>+</b> for a new script, paste, and name it <b>Waqt</b>.</li>'
       + '<li>Long-press your home screen → <b>+</b> → <b>Scriptable</b> → add a widget. Then long-press it → <b>Edit Widget</b> → set <b>Script</b> = <b>Waqt</b> and <b>Parameter</b> to one of: <b>pehar</b> (Large), <b>stats</b> (Medium), <b>priority</b> (Medium/Large), <b>nextprayer</b> (Medium), <b>hadith</b> (any size / lock screen).</li>'
-      + '<li>Repeat for each widget you want — same <b>Waqt</b> script, a different <b>Parameter</b> each time.</li>'
+      + '<li>Repeat for each widget you want: same <b>Waqt</b> script, a different <b>Parameter</b> each time.</li>'
       + '</ol>';
     h += '<p class="sch-parsehint">Lock-screen widgets work too (same script + parameter), but iOS shows them in white only. Anyone with the script can see your schedule, so keep it to your own devices.</p>';
   } else {
@@ -3693,7 +3719,7 @@ function renderWeekSheet() {
     parts.forEach(function(part) {
       grid += '<div class="share-weekgridrow"><div class="share-weekpart">' + esc(part) + '</div>' + week.map(function(day) {
         var items = day.items.filter(function(item) { return inPart(item, part); });
-        return '<div class="share-weekcell">' + (items.length ? items.map(function(item) { return itemHtml(item, true); }).join('') : '<span class="share-weeknone">—</span>') + '</div>';
+        return '<div class="share-weekcell">' + (items.length ? items.map(function(item) { return itemHtml(item, true); }).join('') : '<span class="share-weeknone">·</span>') + '</div>';
       }).join('') + '</div>';
     });
     return '<div class="share-weekgridscroll">' + grid + '</div><p class="share-weekscrollnote">← swipe across to see all 7 days →</p>';
@@ -4443,7 +4469,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       // When signed out there's no account to delete from, so be honest: this only clears the device,
       // and signing back in would pull the cloud copy down again.
       var firstMsg = signedIn
-        ? "Start completely fresh?\n\nThis erases EVERYTHING — every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone."
+        ? "Start completely fresh?\n\nThis erases EVERYTHING: every card, item, time, prayer setting AND all your day-by-day completion history, on this device and in the cloud.\n\nThis cannot be undone."
         : "Start fresh on THIS device?\n\nYou're signed out, so this clears only this device. Any data saved to your cloud account stays and will sync back if you sign in again.\n\nThis cannot be undone.";
       uiConfirm(firstMsg, function() {
       var wipeLocalAndReload = function() {
@@ -4486,14 +4512,14 @@ document.getElementById("app").addEventListener("click", function(e) {
         // closing it fully needs a server-side atomic reset RPC, overkill for a 1-2 device user who
         // isn't editing mid-erase. The .catch releases the guard so a network failure can't wedge sync.
         sbClient.from("user_data").delete().eq("user_id", uid).then(function(res) {
-          if (res && res.error) { window.htResetting = false; toast("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased — try again."); return; }
+          if (res && res.error) { window.htResetting = false; toast("Couldn't clear your cloud data (" + res.error.message + "). Nothing was erased. Try again."); return; }
           return sbClient.from("user_data").select("key").eq("user_id", uid).then(function(chk) {
-            if (chk && chk.error) { window.htResetting = false; toast("Couldn't confirm the cloud was cleared (" + chk.error.message + "). Nothing was erased — try again."); return; }
+            if (chk && chk.error) { window.htResetting = false; toast("Couldn't confirm the cloud was cleared (" + chk.error.message + "). Nothing was erased. Try again."); return; }
             var left = (chk && chk.data) ? chk.data.filter(function(r) { return typeof isSyncableKey === "function" ? isSyncableKey(r.key) : true; }) : [];
-            if (left.length) { window.htResetting = false; toast("Couldn't fully clear your cloud data (" + left.length + " item(s) remain) — likely a missing delete permission on the database. Nothing was erased on this device."); return; }
+            if (left.length) { window.htResetting = false; toast("Couldn't fully clear your cloud data (" + left.length + " item(s) remain). Likely a missing delete permission on the database. Nothing was erased on this device."); return; }
             wipeLocalAndReload();
           });
-        }).catch(function(err) { window.htResetting = false; toast("Couldn't reach the cloud to erase (" + (err && err.message ? err.message : "network error") + "). Nothing was erased — try again."); });
+        }).catch(function(err) { window.htResetting = false; toast("Couldn't reach the cloud to erase (" + (err && err.message ? err.message : "network error") + "). Nothing was erased. Try again."); });
       } else { wipeLocalAndReload(); }
       }, {
         title: "Start fresh?",
@@ -4658,7 +4684,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       else { setItemSlots(t.dataset.f, t.dataset.k, []); setItemDays(t.dataset.f, t.dataset.k, sharedDays); } // untimed item keeps its day scoping
       setItemBell(t.dataset.f, t.dataset.k, !!(savedSlots[0] && savedSlots[0].time));
       syncItemReminder(t.dataset.f, t.dataset.k);
-      if (savedSlots[0] && savedSlots[0].time && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings.");
+      if (savedSlots[0] && savedSlots[0].time && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync. Sign in under Settings.");
       if (t.dataset.close === "schedit") schEdit = null; else tplItemEdit = null;
       delete tplRepeatMode[t.dataset.f + "::" + t.dataset.k]; render(); return;
     }
@@ -4730,7 +4756,7 @@ document.getElementById("app").addEventListener("click", function(e) {
         tplMergeCard = null; tplItemEdit = null; render();
         // Make the result legible: say how many kept times resulted, and nudge to add more via the pencil.
         var n = mergeSlots.length;
-        toast(n ? ("Merged into " + mergeKeep + " · " + n + " time" + (n === 1 ? "" : "s") + " kept") : ("Merged into " + mergeKeep + " · no times — add them with the pencil"));
+        toast(n ? ("Merged into " + mergeKeep + " · " + n + " time" + (n === 1 ? "" : "s") + " kept") : ("Merged into " + mergeKeep + " · no times. Add them with the pencil"));
       }, { title: "Merge items?", confirmText: "Merge" });
       return;
     }
@@ -4797,13 +4823,13 @@ document.getElementById("app").addEventListener("click", function(e) {
         setPrayerAutoAndApply(true);
         if (!(typeof getPrayerGeo === "function" && getPrayerGeo())) {
           toast("Getting your location…");
-          if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } else toast("Couldn't get location — you can still set prayer times manually below."); render(); });
+          if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } else toast("Couldn't get location. You can still set prayer times manually below."); render(); });
         } else { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); }
       } else { setPrayerAutoAndApply(false); }
       render(); return;
     }
     if (a === "prayermadhab") { setPrayerMadhab(t.dataset.m); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); render(); return; }
-    if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location — you can still set prayer times manually below."); render(); }); return; }
+    if (a === "prayerupdateloc") { toast("Updating location…"); if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(function(g) { if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); toast("Location updated"); } else toast("Couldn't get location. You can still set prayer times manually below."); render(); }); return; }
     if (a === "voltoggle") { var volOn = !voluntaryTracked(t.dataset.p); setVoluntaryTracked(t.dataset.p, volOn); if (!volOn && typeof pushSaveReminderTime === "function") pushSaveReminderTime("prayers", t.dataset.p, ""); else if (volOn) syncPrayerReminder(t.dataset.p); if ((typeof prayerAutoOn === "function") && prayerAutoOn()) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); } if (typeof scheduleWidgetPublish === "function") scheduleWidgetPublish(); render(); return; }
     if (a === "pehartoggle") {
       if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
@@ -4840,7 +4866,7 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "prayerbell") {
       var pbk = t.dataset.k;
       if (getPrayerBells()[pbk]) { var offBells = getPrayerBells(); offBells[pbk] = false; savePrayerBells(offBells); syncPrayerReminder(pbk); render(); return; }
-      ensureBellPermission(function(ok) { var bells = getPrayerBells(); bells[pbk] = ok; savePrayerBells(bells); syncPrayerReminder(pbk); if (ok && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings."); render(); });
+      ensureBellPermission(function(ok) { var bells = getPrayerBells(); bells[pbk] = ok; savePrayerBells(bells); syncPrayerReminder(pbk); if (ok && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync. Sign in under Settings."); render(); });
       return;
     }
     // ---- Onboarding (Task 9A) ----
@@ -4860,7 +4886,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       setPrayerAutoAndApply(true);
       var _done = function(g) {
         if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); onbStep = 4; }
-        else { setPrayerAutoAndApply(false); toast("Couldn't get your location — enter times by hand below."); }
+        else { setPrayerAutoAndApply(false); toast("Couldn't get your location. Enter times by hand below."); }
         render();
       };
       if (typeof getPrayerGeo === "function" && getPrayerGeo()) { _done(true); return; }
@@ -4926,7 +4952,7 @@ document.getElementById("app").addEventListener("change", function(e) {
   var msel = e.target.closest('[data-a="prayermethod"]');
   if (msel) { if (typeof setPrayerMethod === "function") setPrayerMethod(msel.value); _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); setTimeout(render, 0); return; }
   var reminderTime = e.target.closest('[data-a="remindertime"]');
-  if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast(reminderTime.value && (typeof currentUser === "undefined" || !currentUser) ? "Notifications need Cloud Sync — sign in under Settings." : "Reminder time updated"); return; }
+  if (reminderTime) { setNotifTime(reminderTime.dataset.f, reminderTime.dataset.k, reminderTime.value); syncItemReminder(reminderTime.dataset.f, reminderTime.dataset.k); render(); toast(reminderTime.value && (typeof currentUser === "undefined" || !currentUser) ? "Notifications need Cloud Sync. Sign in under Settings." : "Reminder time updated"); return; }
   var dinp = e.target.closest(".sch-durinp");
   if (dinp && dinp.dataset.field) {
     var mins = parseInt(dinp.value, 10);
@@ -4942,7 +4968,7 @@ document.getElementById("app").addEventListener("change", function(e) {
     // so their flag is left alone here.
     if (inp.dataset.field !== "prayers") setItemBell(inp.dataset.field, inp.dataset.name, !!inp.value);
     syncItemReminder(inp.dataset.field, inp.dataset.name);
-    if (inp.value && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync — sign in under Settings.");
+    if (inp.value && (typeof currentUser === "undefined" || !currentUser)) toast("Notifications need Cloud Sync. Sign in under Settings.");
     // No render() here: on mobile the native time picker fires `change` live as the wheel turns, so a
     // re-render would destroy the open <input> and snap the picker shut (reported bug). We render on
     // blur instead — once the user dismisses the picker — via the capture-phase listener below.
@@ -5685,7 +5711,7 @@ _importTabSelfCheck();
 // ---- self-check (run with the page open at #importcheck) ----
 function _importSelfCheck() {
   if (location.hash !== "#importcheck") return;
-  var keys = [CARDS_KEY, CARDS_V1_KEY, CARD_ITEMS_KEY, "ht_d", NOTIF_TIMES_KEY, HTN_DUR_KEY, NOTIF_DAYS_KEY, NOTIF_SLOTS_KEY, PRAYERS_ON_KEY, "ht_migrated_v3"];
+  var keys = [CARDS_KEY, CARDS_V1_KEY, CARD_ITEMS_KEY, "ht_d", NOTIF_TIMES_KEY, HTN_DUR_KEY, NOTIF_DAYS_KEY, NOTIF_SLOTS_KEY, PRAYERS_ON_KEY, "ht_migrated_v3", CARDS_IMPORT_NO_LEGACY_KEY];
   var saved = {}; keys.forEach(function(k) { saved[k] = localStorage.getItem(k); });
   var savedDate = cDate, savedData = cData;
   function assert(ok, reason) { if (!ok) throw new Error(reason); }

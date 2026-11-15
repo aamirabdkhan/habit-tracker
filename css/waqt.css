@@ -131,16 +131,6 @@ body::before{display:none!important}
 .sch-statnum{font-family:var(--smono);font-size:12px;font-weight:700;line-height:1;color:var(--stext);font-variant-numeric:tabular-nums;white-space:nowrap}
 .sch-statlbl{font-family:var(--smono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--mt);white-space:nowrap}
 
-/* Today focus: compact jump links; timeline remains full source of truth. */
-.sch-nownext{margin-top:10px;padding:11px 13px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
-.sch-nownext .sch-anylbl{margin:0 0 5px}
-.sch-nownextrow{appearance:none;width:100%;display:grid;grid-template-columns:37px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;background:none;border:0;color:var(--stext);font:inherit;text-align:left;cursor:pointer}
-.sch-nownextrow+.sch-nownextrow{border-top:1px solid var(--line)}
-.sch-nownextrow b{font-family:var(--smono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--smut)}
-.sch-nownextrow.now b{color:var(--kc,var(--study))}
-.sch-nownextrow span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
-.sch-nownextrow time{font-family:var(--smono);font-size:11px;color:var(--smut)}
-
 /* weight tile */
 .sch-wtile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
 .sch-wlbl{font-family:var(--smono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--smut)}
@@ -170,11 +160,6 @@ body::before{display:none!important}
 .sch-block.checked .sch-box svg{opacity:1;transform:scale(1)}
 .sch-block.checked .sch-title{text-decoration:line-through;text-decoration-thickness:1px;opacity:.5}
 .sch-block.now .sch-card{border-color:var(--kc);box-shadow:0 0 0 1px var(--kc),0 8px 30px -12px var(--kc)}
-.sch-bundle .sch-card{width:100%;font:inherit;text-align:left}
-.sch-bundlecomplete{appearance:none;background:transparent;border:0;padding:0;cursor:pointer;display:grid;place-items:center}.sch-bundlecomplete.checked .sch-box{background:var(--kc);border-color:var(--kc)}.sch-bundlecomplete.checked .sch-box svg{opacity:1;transform:scale(1)}.sch-bundletext{appearance:none;background:transparent;border:0;color:inherit;cursor:pointer;display:flex;align-items:center;gap:8px;min-width:0;flex:1;padding:0;text-align:left;font:inherit}.sch-bundletext .sch-title{min-width:0}.sch-toastundo{appearance:none;border:0;border-left:1px solid var(--bd);background:transparent;color:var(--ac);font:700 11px var(--smono);margin-left:8px;padding:2px 0 2px 8px;cursor:pointer}
-.sch-bundletag,.sch-bundlecount{font-family:var(--smono);font-size:10px;font-weight:500;color:var(--smut);white-space:nowrap}
-.sch-bundlecount{color:var(--stext);margin-left:auto}
-.sch-daypart{margin:0 0 10px}.sch-dayparthead{appearance:none;width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--smut);padding:12px 2px 7px;cursor:pointer;font:10px var(--smono);letter-spacing:.12em;text-transform:uppercase;text-align:left}.sch-dayparthead small{margin-left:auto;font:inherit;letter-spacing:0}.sch-dayparthead i{font-size:10px;transition:transform .15s}.sch-daypart.open .sch-dayparthead i{transform:rotate(180deg)}.sch-daypartblocks{display:none}.sch-daypart.open .sch-daypartblocks{display:block}
 .sch-prayeranchor{padding-top:5px}.sch-prayeranchor .sch-time{padding-top:9px;color:var(--kc)}.sch-prayeranchor .sch-node{padding-top:12px}.sch-prayeranchor .sch-card{min-height:36px;padding:7px 10px;background:color-mix(in srgb,var(--kc) 8%,var(--cd));border-left-width:2px}.sch-prayeranchor .sch-title{font-size:13px;font-weight:600}.sch-prayeranchor .sch-box{width:17px;height:17px;flex-basis:17px}.sch-prayeranchor .sch-node i{width:9px;height:9px;box-shadow:0 0 0 3px var(--ink),0 0 10px var(--kc)}
 .sch-nowtag{font-family:var(--smono);font-size:9.5px;letter-spacing:.16em;color:var(--ink);background:var(--kc);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:2px}
 .sch-time small{display:block;font-size:10.5px;color:var(--smut);margin-top:1px;font-weight:400}
@@ -193,6 +178,8 @@ body::before{display:none!important}
 .sch-phtitle{margin:0;text-align:center}
 .sch-phright{justify-self:end}
 .sch-copyy{appearance:none;border:1px solid var(--line);background:transparent;color:var(--smut);border-radius:7px;padding:5px 8px;cursor:pointer;font-family:var(--smono);font-size:10px}
+.sch-peharfull{display:block;margin:12px auto 0;appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--stext);border-radius:999px;padding:8px 13px;cursor:pointer;font:600 10px var(--smono);letter-spacing:.08em;text-transform:uppercase}
+.sch-peharfullsheet{max-height:min(82vh,720px);display:flex;flex-direction:column}.sch-peharfullrail{overflow-y:auto;padding-right:4px;min-height:0}
 
 /* inline editor */
 .sch-editor{margin:6px 0 4px 70px;padding:12px 14px;background:var(--ink2);border:1px solid var(--line);border-radius:12px}

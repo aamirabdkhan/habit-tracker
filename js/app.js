@@ -31,13 +31,13 @@ function fLong(d) {
 function fMon(d) {
     return d.toLocaleDateString("en-US", {month:"long",year:"numeric"});
 }
-var NICKNAMES = ["Champion", "Legend", "Striver", "Habit Hero", "Achiever", "Pioneer", "Trailblazer", "Superstar", "Warrior", "Believer", "Overcomer", "Conqueror", "Pathfinder"];
-var anonNickname = "";
+var NICKNAMES = ["Champion", "Achiever", "Striver", "Believer", "Warrior", "Overcomer", "Conqueror", "Pathfinder", "Trailblazer", "Pioneer"];
+// One motivational word per day (stable through the day, rotates daily) so the greeting feels
+// earned, not a random flicker on every reopen.
 function getAnonNickname() {
-    if (!anonNickname) {
-        anonNickname = NICKNAMES[Math.floor(Math.random() * NICKNAMES.length)];
-    }
-    return anonNickname;
+    var d = new Date();
+    var idx = (d.getFullYear() * 372 + d.getMonth() * 31 + d.getDate()) % NICKNAMES.length;
+    return NICKNAMES[idx];
 }
 function greet() {
     var h = new Date().getHours();
@@ -50,7 +50,7 @@ function greet() {
     if (typeof currentUser !== "undefined" && currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) {
         name = currentUser.user_metadata.full_name;
     }
-    return name ? greetingWord + ", " + name : greetingWord;
+    return greetingWord + ", " + (name || getAnonNickname());
 }
 function isT(d) {
     var n = new Date();

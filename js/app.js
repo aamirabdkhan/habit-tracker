@@ -47,14 +47,10 @@ function greet() {
     else if (h < 21) greetingWord = "Good Evening";
     
     var name = "";
-    if (typeof currentUser !== "undefined" && currentUser) {
-        if (currentUser.user_metadata && currentUser.user_metadata.full_name) {
-            name = currentUser.user_metadata.full_name;
-        } else name = "Waqt";
-    } else {
-        name = "Waqt";
+    if (typeof currentUser !== "undefined" && currentUser && currentUser.user_metadata && currentUser.user_metadata.full_name) {
+        name = currentUser.user_metadata.full_name;
     }
-    return greetingWord + ", " + name;
+    return name ? greetingWord + ", " + name : greetingWord;
 }
 function isT(d) {
     var n = new Date();

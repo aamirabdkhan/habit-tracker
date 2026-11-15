@@ -2279,7 +2279,7 @@ function renderPrayersCard() {
     h += '</div>';
   });
   if (anyTimed) h += '<button type="button" class="bt t-sm" style="margin-top:8px" data-a="clearallprayertimes"><i class="fas fa-xmark mr-1.5"></i>Clear all times</button>';
-  h += '<p class="sch-autolbl">set your prayer times · updates your Pehar</p>';
+  h += '<p class="sch-autolbl">set your prayer times · updates your timeline</p>';
   return h + '</div>';
 }
 
@@ -2383,7 +2383,7 @@ function rOnboarding() {
     h += '<div class="sch-onbfoot"><button class="sch-onbgo" data-a="onbstep2">Continue</button></div>';
   } else if (onbStep === 3) {
     h += '<h1 class="sch-onbtitle">Set your prayer times</h1>';
-    h += '<p class="sch-onblede">Enter your prayer times so they show up on your Pehar. You can skip this and set it up later in Template.</p>';
+    h += '<p class="sch-onblede">Enter your prayer times so they show up on your timeline. You can skip this and set it up later in Plan.</p>';
     PRAYERS.forEach(function(name) {
       h += '<div class="sch-prayrow"><span class="sch-praynode" style="--kc:' + PRAYER_GREEN + '"></span><span class="sch-name">' + esc(name) + '</span>';
       h += '<input type="time" class="sch-timeinp" id="onb-' + esA(name) + '" value="' + esA(ONB_DEFAULTS[name] || "") + '"></div>';
@@ -3414,7 +3414,7 @@ function renderPrayersDayCard() {
     h += '<span class="sch-name">' + esc(it.n) + '</span></div></div>';
   });
   h += renderTimedDisclosure({ id:"prayers", color:kc, items:timed }, dowOf(dk(cDate)));
-  if (!timed.length) h += '<p style="font-size:11px;color:var(--mt);margin:8px 0 0">Set prayer times in Template to place them on your Pehar.</p>';
+  if (!timed.length) h += '<p style="font-size:11px;color:var(--mt);margin:8px 0 0">Set prayer times in Plan to place them on your timeline.</p>';
   h += renderTakbeerTracker();
   return h + '</div>';
 }
@@ -3447,7 +3447,7 @@ function renderPrayerStrip() {
     h += '<span class="sch-name">' + esc(p) + '</span></div>';
     h += '</div>';
   });
-  h += '<p class="sch-prayernudge">Set prayer times in Template to see them on your Pehar.</p></div>';
+  h += '<p class="sch-prayernudge">Set prayer times in Plan to see them on your timeline.</p></div>';
   return h;
 }
 
@@ -4002,9 +4002,8 @@ function rPehar() {
   h += '<header class="sch-mast t-ctr"><p class="sch-eyebrow">PEHAR</p>';
   h += '<h1 class="sch-dayname sch-datefull">' + esc(typeof fLong === "function" ? fLong(cDate) : cDate.toDateString()) + '</h1>';
   h += '<div class="flx aic jcc gap-3" style="margin-top:14px">';
-  h += '<button type="button" class="dnb" data-a="prevday" aria-label="Previous day"><i class="fas fa-chevron-left t-xs"></i></button>';
+  // Header day-chevrons removed: the week strip + swipe already navigate days. Keep the Today jump-back + share.
   if (!td) h += '<button type="button" class="bt t-xs" data-a="today">Today</button>';
-  h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
   h += '<button type="button" class="dnb share-open" data-a="shareopen" aria-label="Share this day"><i class="fas fa-share-nodes t-xs"></i></button>';
   h += '</div></header>';
   h += '<div class="al"></div>';

@@ -4040,20 +4040,18 @@ function renderPeharRail(cards, timeline, td, nowMin) {
   var h = '<div class="sch-peharhead"><p class="sch-anylbl sch-phtitle">PEHAR</p>' + (td ? '<button type="button" class="sch-copyy sch-phright" data-a="copyyesterday"><i class="fas fa-copy"></i> Copy yesterday\'s tasks</button>' : '') + '</div>';
   if (!timeline.length) return h + '<div class="sch-empty" style="margin:24px 0"><p>Nothing scheduled yet. Set times in Plan to see your day here.</p></div>';
   h += '<div class="sch-rail">';
-  var bundles = {};
-  timeline.forEach(function(item) {
-    if (item.openBlock || item.isPrayer) return;
-    var key = item.id + '::' + item.name;
-    if (!bundles[key]) bundles[key] = [];
-    bundles[key].push(item);
-  });
   var dayparts = { Night:[], Morning:[], Afternoon:[], Evening:[], Late:[] };
   timeline.forEach(function(item) { dayparts[peharDaypart(item.start)].push(item); });
   ["Night", "Morning", "Afternoon", "Evening", "Late"].forEach(function(part) {
     var partItems = dayparts[part]; if (!partItems.length) return;
     var realItems = partItems.filter(function(item) { return !item.openBlock; }), partDone = realItems.filter(function(item) { return item.done; }).length;
-    var partOpen = Object.prototype.hasOwnProperty.call(expandedPeharDayparts, part) ? expandedPeharDayparts[part] : (!td || peharDaypart(nowMin) === part);
-    h += '<section class="sch-daypart' + (partOpen ? ' open' : '') + '"><button type="button" class="sch-dayparthead" data-a="pehardaypart" data-part="' + part + '" aria-expanded="' + (partOpen ? 'true' : 'false') + '"><span>' + part + '</span><small>' + partDone + '/' + realItems.length + '</small><i class="fas fa-chevron-down"></i></button><div class="sch-daypartblocks">';
+    // Bundle repeats WITHIN this day-part only, so every occurrence stays visible in its own section
+    // (a day-spanning activity no longer vanishes from a later section whose summary lives elsewhere).
+    var bundles = {};
+    partItems.forEach(function(bi) { if (bi.openBlock || bi.isPrayer) return; var bk = bi.id + '::' + bi.name; (bundles[bk] = bundles[bk] || []).push(bi); });
+    var dpKey = dk(cDate) + '::' + part;
+    var partOpen = Object.prototype.hasOwnProperty.call(expandedPeharDayparts, dpKey) ? expandedPeharDayparts[dpKey] : (!td || peharDaypart(nowMin) === part);
+    h += '<section class="sch-daypart' + (partOpen ? ' open' : '') + '"><button type="button" class="sch-dayparthead" data-a="pehardaypart" data-part="' + part + '" data-dpkey="' + esA(dpKey) + '" aria-expanded="' + (partOpen ? 'true' : 'false') + '"><span>' + part + '</span><small>' + partDone + '/' + realItems.length + '</small><i class="fas fa-chevron-down"></i></button><div class="sch-daypartblocks">';
     partItems.forEach(function(item) {
     var bundleKey = item.id + '::' + item.name, bundle = bundles[bundleKey];
     // Bundle a repeated activity. The summary row (a toggle) always renders once, on the first
@@ -4065,7 +4063,8 @@ function renderPeharRail(cards, timeline, td, nowMin) {
         var bundleDone = bundle.filter(function(occurrence) { return occurrence.done; }).length;
         // "next" = the next not-yet-past occurrence today (else the first), never a hardcoded slot.
         var nextOcc = (td && bundle.filter(function(o) { return o.start >= nowMin; })[0]) || bundle[0];
-        h += '<div class="sch-block sch-bundle' + (bundleExpanded ? ' open' : '') + '" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(nextOcc.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><div class="sch-card"><button type="button" class="sch-bundlecomplete' + (bundleDone === bundle.length ? ' checked' : '') + '" data-a="peharbundledone" data-bundle="' + esA(bundleKey) + '" aria-label="' + (bundleDone === bundle.length ? 'Mark all undone' : 'Mark all done') + '"><span class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></span></button><button type="button" class="sch-bundletext" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="' + (bundleExpanded ? 'true' : 'false') + '"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · ' + (bundleExpanded ? 'tap to collapse' : 'next ' + prettyTime(nextOcc.t)) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div></div>';
+        var bundleNow = td && bundle.some(function(o) { return nowMin >= o.start && nowMin < o.end; });
+        h += '<div class="sch-block sch-bundle' + (bundleExpanded ? ' open' : '') + (bundleNow ? ' now' : '') + '" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(nextOcc.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><div class="sch-card"><button type="button" class="sch-bundlecomplete' + (bundleDone === bundle.length ? ' checked' : '') + '" data-a="peharbundledone" data-bundle="' + esA(bundleKey) + '" aria-label="' + (bundleDone === bundle.length ? 'Mark all undone' : 'Mark all done') + '"><span class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></span></button><button type="button" class="sch-bundletext" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="' + (bundleExpanded ? 'true' : 'false') + '"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× · ' + (bundleExpanded ? 'tap to collapse' : 'next ' + prettyTime(nextOcc.t)) + '</span>' + (bundleNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div></div>';
         if (!bundleExpanded) return;
         // expanded: fall through to also render bundle[0] as its own normal occurrence row
       } else if (!bundleExpanded) {
@@ -4241,20 +4240,24 @@ function _dailySelfCheck() {
   // (f) repeated non-prayer occurrences fold into one row, then expose their own schtog rows.
   var bundled = [
     { id:"habits", name:"__sc_repeat__", t:"06:13", start:373, end:403, dur:30, done:false, okey:"habits::__sc_repeat__::06:13", kc:"#000" },
-    { id:"habits", name:"__sc_repeat__", t:"13:35", start:815, end:845, dur:30, done:true, okey:"habits::__sc_repeat__::13:35", kc:"#000" }
+    { id:"habits", name:"__sc_repeat__", t:"06:30", start:390, end:420, dur:30, done:true, okey:"habits::__sc_repeat__::06:30", kc:"#000" }
   ];
   var bundleKey = "habits::__sc_repeat__";
   delete expandedPeharBundles[bundleKey];
   var foldedRail = renderPeharRail([], bundled, true, 400);
-  console.assert(foldedRail.indexOf('data-a="peharbundle"') !== -1 && foldedRail.indexOf('2× today') !== -1 && foldedRail.indexOf('data-o="habits::__sc_repeat__::06:13"') === -1, "(f) repeated activity must fold by default");
+  console.assert(foldedRail.indexOf('data-a="peharbundle"') !== -1 && foldedRail.indexOf('2×') !== -1 && foldedRail.indexOf('data-o="habits::__sc_repeat__::06:13"') === -1, "(f) repeated activity must fold by default");
   console.assert(foldedRail.indexOf('data-a="peharbundledone"') !== -1 && foldedRail.indexOf('class="sch-daypart open"') !== -1 && foldedRail.indexOf('>Morning<') !== -1, "(f) bundle completion and active day-part markup must render");
   expandedPeharBundles[bundleKey] = true;
   var openRail = renderPeharRail([], bundled, true, 400);
-  console.assert(openRail.indexOf('data-o="habits::__sc_repeat__::06:13"') !== -1 && openRail.indexOf('data-o="habits::__sc_repeat__::13:35"') !== -1, "(f) expanded bundle must expose individual occurrences");
+  console.assert(openRail.indexOf('data-o="habits::__sc_repeat__::06:13"') !== -1 && openRail.indexOf('data-o="habits::__sc_repeat__::06:30"') !== -1, "(f) expanded bundle must expose individual occurrences");
   delete expandedPeharBundles[bundleKey];
 
   // (g) focus block names current work and up to two upcoming items.
-  var focus = renderNowNext(bundled, 400);
+  var focusData = [
+    { id:"habits", name:"__sc_now__", t:"06:30", start:390, end:420, dur:30, done:false, okey:"habits::__sc_now__::06:30", kc:"#000" },
+    { id:"habits", name:"__sc_next__", t:"13:35", start:815, end:845, dur:30, done:false, okey:"habits::__sc_next__::13:35", kc:"#000" }
+  ];
+  var focus = renderNowNext(focusData, 400);
   console.assert(focus.indexOf("NOW") !== -1 && focus.indexOf("13:35") !== -1, "(g) Now & Next must show current and upcoming work");
 
   console.log("daily self-check complete");
@@ -4860,7 +4863,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       expandedPeharBundles[t.dataset.bundle] = !expandedPeharBundles[t.dataset.bundle];
       render(); return;
     }
-    if (a === "pehardaypart") { expandedPeharDayparts[t.dataset.part] = !t.closest(".sch-daypart").classList.contains("open"); render(); return; }
+    if (a === "pehardaypart") { expandedPeharDayparts[t.dataset.dpkey || t.dataset.part] = !t.closest(".sch-daypart").classList.contains("open"); render(); return; }
     if (a === "peharbundledone") {
       var bundleId = t.dataset.bundle, bundleBits = bundleId.split("::"), bundleRows = insertOpenBlocks(buildTimeline(getCards(), cData, dowOf(dk(cDate)))).filter(function(item) { return !item.openBlock && !item.isPrayer && item.id === bundleBits[0] && item.name === bundleBits.slice(1).join("::"); });
       var allDone = bundleRows.every(function(item) { return item.done; }), before = {}; if (!cData.slotDone) cData.slotDone = {};

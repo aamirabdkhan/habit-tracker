@@ -2106,70 +2106,63 @@ function importPreviewAllChoice() {
   if (conflicts.every(function(r){ return r.choice === "import"; })) return "import";
   return null;
 }
+var importPreviewDetails = {};
+var importPreviewNotesOpen = false;
 function importPreviewRow(row, i, fromParser) {
   var isPrayer = row.kind === "newprayer" || row.kind === "prayer";
   var isNew = row.kind === "newitem" || row.kind === "newprayer";
   var isReminder = row.kind === "reminder";
   var inc = row.incoming || {}, mine = row.mine || {};
   var item = isPrayer ? row.name : (row.name || inc.name || "");
-  var td = 'padding:6px 8px;border-bottom:1px solid var(--bd)';
-  // Fix 1: the Card cell is a dropdown, the single override for a bad auto-guess OR the AI's bad
-  // grouping (Physiotherapy landing in Islamic Deeds). A row bound for a card that doesn't exist
-  // yet keeps its own "(new)" option so choosing it again is possible after switching away.
-  var card;
-  if (isPrayer) card = 'Prayers';
-  else if (isReminder) card = 'Reminders';
-  else {
+  // Keep Card override in Details: group heading stays clean, correction stays available.
+  var cardControl = '';
+  if (!isPrayer && !isReminder) {
     var opts = getCards().map(function(c) { return '<option value="' + esA(c.id) + '"' + (c.id === row.targetId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; });
     if (String(row.targetId).indexOf("__new_") === 0) opts.push('<option value="' + esA(row.targetId) + '" selected>' + esc(row.cardName) + ' (new)</option>');
-    card = '<select class="inp t-xs" data-a="importrowcard" data-i="' + i + '" aria-label="Card for ' + esA(item) + '">' + opts.join('') + '</select>';
+    cardControl = '<div class="sch-importdetail"><span>Add to</span><select class="inp t-xs" data-a="importrowcard" data-i="' + i + '" aria-label="Card for ' + esA(item) + '">' + opts.join('') + '</select></div>';
   }
   function fdays(dd, order){ return (order && order.length ? order : dd && dd.length ? dd.map(function(d){ return typeof d === "number" ? IMPORT_DAY_NAMES[d] : d; }) : []).join('/') || "every day"; }
-  function slotList(slots) { return '<details style="white-space:normal"><summary>' + slots.length + ' slots</summary><div style="margin-top:4px">' + slots.map(function(slot) { return esc(slot.time + ' · ' + fmtDur(slot.duration) + ' · ' + fdays(slot.days, slot._daysOrder)); }).join('<br>') + '</div></details>'; }
+  function slotList(slots) { return '<div class="sch-importslots">' + slots.map(function(slot) { return '<div>' + esc((slot.time || 'no time') + ' · ' + fmtDur(slot.duration) + ' · ' + fdays(slot.days, slot._daysOrder)) + '</div>'; }).join('') + '</div>'; }
   function reminderSchedule(r) { var s = r.schedule || {}; return s.kind === "interval" ? 'every ' + s.every + ' ' + s.unit : (s.date || '-'); }
-  var incTime = inc.time || "-", incDur = fmtDur(inc.duration || (isPrayer ? 35 : 30)), incDays = fdays(inc.days, inc._daysOrder);
-  var timeCell, durCell, daysCell, status;
+  var incTime = inc.time || "no time", incDur = fmtDur(inc.duration || (isPrayer ? 35 : 30)), incDays = fdays(inc.days, inc._daysOrder);
+  var timeLabel = inc.slots && inc.slots.length > 1 ? inc.slots.length + '× a day' : incTime;
+  var conflict = '', detail = cardControl;
   if (isReminder) {
-    timeCell = '-'; durCell = esc(reminderSchedule(inc)); daysCell = '-';
-    status = '<span style="color:#79a06b;font-weight:600">NEW</span>';
+    return '<div class="sch-importitem sch-importreminder"><div class="sch-importmain"><b class="sch-importitemname">' + esc(item) + '</b><span class="sch-importtime">' + esc(reminderSchedule(inc)) + '</span></div></div>';
   } else if (isNew) {
     // Feature 4's second learning trigger — correcting a parser-sourced row's time before apply.
     // Gated on fromParser + newitem only, so the plain AI-JSON import path renders exactly as before.
-    timeCell = (fromParser && row.kind === "newitem")
-      ? '<input type="time" class="inp t-xs" id="prow-time-' + i + '" value="' + esA(inc.time || "") + '" style="width:92px"> <button class="bt t-xs" data-a="parserowtimesave" data-i="' + i + '">Save</button>'
-      : esc(incTime);
-    durCell = esc(incDur); daysCell = esc(incDays);
-    status = '<span style="color:#79a06b;font-weight:600">NEW</span>';
+    if (fromParser && row.kind === "newitem") detail += '<div class="sch-importdetail"><span>Change time</span><span><input type="time" class="inp t-xs" id="prow-time-' + i + '" value="' + esA(inc.time || "") + '"> <button class="bt t-xs" data-a="parserowtimesave" data-i="' + i + '">Save</button></span></div>';
   } else {
     var keepMine = row.choice === "mine";
-    function diff(a, b){ if (a === b) return esc(a); var ms = keepMine ? 'font-weight:700' : 'opacity:.5;text-decoration:line-through', is = keepMine ? 'opacity:.5;text-decoration:line-through' : 'font-weight:700'; return '<span style="' + ms + '">' + esc(a) + '</span> → <span style="' + is + '">' + esc(b) + '</span>'; }
-    timeCell = diff(mine.time || "-", incTime); durCell = diff(fmtDur(mine.duration || (isPrayer ? 35 : 30)), incDur); daysCell = diff(fdays(mine.days), incDays);
-    status = '<span style="color:#bfa46a;font-weight:600">CONFLICT</span> <span style="display:inline-flex;gap:4px;margin-left:4px"><button class="bt t-xs' + (keepMine ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="mine">mine</button><button class="bt t-xs' + (row.choice === "import" ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="import">imported</button></span>';
+    conflict = '<div class="sch-importconflict"><span>was ' + esc(mine.time || 'no time') + ' → ' + esc(incTime) + '</span><span class="sch-importresolve"><button class="bt t-xs' + (keepMine ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="mine">mine</button><button class="bt t-xs' + (row.choice === "import" ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="import">imported</button></span></div>';
   }
-  if (isNew && !isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
-    timeCell = slotList(inc.slots); durCell = '·'; daysCell = '·';
-  } else if (!isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
-    timeCell += '<div style="margin-top:4px">' + slotList(inc.slots) + '</div>';
-  }
-  // Fix 4/5: every reshape the AI or the app made is visible on its own row, and an overlap comes
-  // with the one-tap fix rather than being silently moved for the user.
-  if (row.overlap) status += '<div style="margin-top:4px;color:#e0a35c;font-size:11px;white-space:normal"><i class="fas fa-triangle-exclamation" style="margin-right:4px"></i>overlaps another block <button class="bt t-xs" data-a="importrowshift" data-i="' + i + '">Shift to next free slot</button></div>';
-  if (inc.note) status += '<div style="margin-top:4px;color:#bfa46a;font-size:11px;white-space:normal"><i class="fas fa-triangle-exclamation" style="margin-right:4px"></i>' + esc(inc.note) + '</div>';
-  return '<tr><td style="' + td + '">' + (isPrayer ? esc(card) : card) + '</td><td style="' + td + '">' + esc(item) + '</td><td style="' + td + '">' + timeCell + '</td><td style="' + td + '">' + durCell + '</td><td style="' + td + '">' + daysCell + '</td><td style="' + td + '">' + status + '</td></tr>';
+  var detailSlots = inc.slots && inc.slots.length ? inc.slots : [{ time:inc.time, duration:inc.duration || (isPrayer ? 35 : 30), days:inc.days, _daysOrder:inc._daysOrder }];
+  // A multi-slot item's per-slot "Times" list already carries each duration/day set, so the single
+  // Duration/Days rows above would just repeat a misleading item-level default — show them only when
+  // there is exactly one slot.
+  if (detailSlots.length <= 1) detail += '<div class="sch-importdetail"><span>Duration</span><b>' + esc(incDur) + '</b></div><div class="sch-importdetail"><span>Days</span><b>' + esc(incDays) + '</b></div>';
+  detail += '<div class="sch-importdetail sch-importslotdetail"><span>' + (detailSlots.length > 1 ? 'Times' : 'Time') + '</span>' + slotList(detailSlots) + '</div>';
+  if (row.overlap) detail += '<div class="sch-importwarning"><i class="fas fa-triangle-exclamation"></i> overlaps another block <button class="bt t-xs" data-a="importrowshift" data-i="' + i + '">Shift to next free slot</button></div>';
+  if (inc.note) detail += '<div class="sch-importwarning"><i class="fas fa-triangle-exclamation"></i> ' + esc(inc.note) + '</div>';
+  var open = !!importPreviewDetails[i];
+  return '<div class="sch-importitem' + (conflict ? ' is-conflict' : '') + '"><div class="sch-importmain"><b class="sch-importitemname">' + esc(item) + '</b><span class="sch-importtime">' + esc(timeLabel) + '</span></div>' + conflict + '<button type="button" class="sch-importdetails" data-a="importdetails" data-i="' + i + '" aria-expanded="' + (open ? 'true' : 'false') + '">Details <i class="fas fa-chevron-down"></i></button>' + (open ? '<div class="sch-importdetailbody">' + detail + '</div>' : '') + '</div>';
 }
 function importSummaryText() {
-  var c = importPreview.addCards, it = importPreview.addItems, pr = importPreview.prayerSets, re = importPreview.reminders;
+  var it = importPreview.addItems, pr = importPreview.prayerSets, re = importPreview.reminders;
+  var groupCount = (importPreview.groups || []).length;
   var cf = importPreview.rows.filter(function(r){ return r.kind === "item" || r.kind === "prayer"; }).length;
   function pl(n, w){ return n + ' ' + w + (n === 1 ? '' : 's'); }
   var parts = [];
-  if (c) parts.push(pl(c, 'card'));
-  if (it) parts.push(pl(it, 'item'));
-  if (pr) parts.push(pl(pr, 'prayer time'));
+  if (it) parts.push(pl(it, 'thing') + ' across ' + pl(groupCount, 'group'));
+  else if (groupCount) parts.push(pl(groupCount, 'group'));
+  if (pr) parts.push('sets ' + pl(pr, 'prayer time'));
   if (re) parts.push(pl(re, 'reminder'));
-  if (importPreview.folded) parts.push(pl(importPreview.folded, 'payload card') + ' will merge (5-card limit)');
-  var head = parts.length ? 'Adds ' + parts.join(' · ') : 'Nothing new';
-  if (importPreview.mergedCards) head += ' · ' + pl(importPreview.mergedCards, 'payload card') + ' merges into existing card';
-  return head + ' · ' + pl(cf, 'conflict') + ' to resolve.';
+  var head = parts.length ? 'Adds ' + parts.join(', ') : 'Nothing new to add';
+  if (importPreview.folded) head += ' · ' + pl(importPreview.folded, 'group') + ' goes into Daily Goals (5-group limit)';
+  if (importPreview.mergedCards) head += ' · ' + pl(importPreview.mergedCards, 'group') + (importPreview.mergedCards === 1 ? ' joins' : ' join') + ' an existing group';
+  if (cf) head += ' · ' + cf + ' need' + (cf === 1 ? 's' : '') + ' a quick choice';
+  return head + '.';
 }
 // kind: "ai" renders only the AI-setup flow, "type" only the parser flow (each in its own Settings
 // group); no kind keeps the original two-tab panel (used by the self-checks and the no-arg path).
@@ -2187,7 +2180,19 @@ function renderImportPanel(kind) {
     h += '</div>';
   }
   // Preview renders beside the method that produced it (AI vs Type); no-arg shows it for either.
-  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' payload group' + (importPreview.folded === 1 ? '' : 's') + ' will merge into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm" data-a="importall">Select all imported</button><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
+  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) {
+    var groups = {}, groupOrder = [];
+    importPreview.rows.forEach(function(row, i) {
+      var label = (row.kind === "newprayer" || row.kind === "prayer") ? 'Prayers' : row.kind === "reminder" ? 'Reminders' : (getCards().filter(function(c) { return c.id === row.targetId; })[0] || {}).name || row.cardName || 'Daily Goals';
+      if (!groups[label]) { groups[label] = []; groupOrder.push(label); }
+      groups[label].push({ row:row, i:i });
+    });
+    h += '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm" data-a="importall">Select all imported</button><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div><div class="sch-importlist">';
+    groupOrder.forEach(function(label) { h += '<section class="sch-importgroup"><h3>' + esc(label) + '</h3>'; groups[label].forEach(function(entry) { h += importPreviewRow(entry.row, entry.i, importPreview.fromParser); }); h += '</section>'; });
+    h += '</div>';
+    if (importPreview.data.notes) h += '<button type="button" class="sch-importwhy" data-a="importnotes" aria-expanded="' + (importPreviewNotesOpen ? 'true' : 'false') + '">Why these changes? <i class="fas fa-chevron-down"></i></button>' + (importPreviewNotesOpen ? '<p class="sch-importnotes">' + esc(importPreview.data.notes) + '</p>' : '');
+    h += '<button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>';
+  }
   return h + '</div>';
 }
 
@@ -4357,8 +4362,10 @@ document.getElementById("app").addEventListener("click", function(e) {
       var importInput = document.getElementById("import-json"); importDraft = importInput ? importInput.value : importDraft;
       var parsedImport = parseImportSchedule(importDraft);
       if (parsedImport.error) { importError = parsedImport.error; importPreview = null; render(); return; }
-      importError = ""; importPreview = buildImportPreview(parsedImport.value); aiStep = 2; render(); return;
+      importError = ""; importPreviewDetails = {}; importPreviewNotesOpen = false; importPreview = buildImportPreview(parsedImport.value); aiStep = 2; render(); return;
     }
+    if (a === "importdetails") { importPreviewDetails[+t.dataset.i] = !importPreviewDetails[+t.dataset.i]; render(); return; }
+    if (a === "importnotes") { importPreviewNotesOpen = !importPreviewNotesOpen; render(); return; }
     if (a === "importresolve") { if (importPreview && importPreview.rows[+t.dataset.i]) importPreview.rows[+t.dataset.i].choice = t.dataset.choice; render(); return; }
     if (a === "importrowshift") {
       if (!importPreview) return;
@@ -4488,7 +4495,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       var parseResult = parseScheduleText(parseText, parseCardId);
       parseUnread = parseResult.unread;
       var parseValidated = parseImportSchedule(JSON.stringify(parseResult.payload));
-      if (parseValidated.value && parseValidated.value.cards.some(function(c) { return c.items.length; })) { importError = ""; importPreview = buildImportPreview(parseValidated.value); importPreview.fromParser = true; }
+      if (parseValidated.value && parseValidated.value.cards.some(function(c) { return c.items.length; })) { importError = ""; importPreviewDetails = {}; importPreviewNotesOpen = false; importPreview = buildImportPreview(parseValidated.value); importPreview.fromParser = true; }
       else importPreview = null;
       render();
       setTimeout(function() { var panel = document.getElementById("schedule-import"); if (panel) panel.scrollIntoView({ behavior:carReducedMotion() ? "auto" : "smooth", block:"start" }); }, 0);

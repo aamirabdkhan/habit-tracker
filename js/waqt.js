@@ -2671,12 +2671,6 @@ function avgTasksForDay(dayCardsResult) {
   return total ? done / total * 100 : null;
 }
 
-function chunkArr(arr, size) {
-  var out = [];
-  for (var i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
 function renderOverviewStats(s) {
   var wChangeNum = s.wChange !== null ? parseFloat(s.wChange) : null;
   var wChangeColor = wChangeNum !== null && wChangeNum < 0 ? "var(--ok)" : wChangeNum !== null && wChangeNum > 0 ? "var(--dn)" : "var(--smut)";
@@ -2755,53 +2749,31 @@ function renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, pray
   return h;
 }
 
-// Habit / Card Consistency: one slide per card-chunk, capped ~5 items each —
-// extra items spill into the next slide for that card. Returned as an array
-// of slide-HTML strings so the caller can feed them straight into a carousel
-// (Task 7) instead of stacking them in a long scrolling list.
-function renderCardConsistencySlides(md, cardsMeta, cardDayItems) {
-  var days = md.length, slides = [];
-  cardsMeta.forEach(function(card) {
-    var selected = card.items.filter(function(it) { return getItemShow(card.id, it.n) && !isOptional(card.id, it.n); });
-    var items = selected.filter(function(it) { return eligibleHeatmapItem(card.id, it.n); });
-    var countItems = selected.filter(function(it) { return !isDailyRecurring(card.id, it.n); });
-    // A card with nothing tracked still renders. The old early-return made the whole card vanish,
-    // which also took away the only route back in to re-enable anything on it.
-    var chunks = items.length ? chunkArr(items, 5) : [[]];
-    chunks.forEach(function(itemChunk, ci) {
-      var h = '<div class="sch-ovcard" style="--kc:' + esA(cardColor(card.color)) + '"><h3><i class="fas ' + esA(card.icon) + '" style="color:var(--kc);margin-right:6px"></i>' + esc(card.name) + (chunks.length > 1 ? ' (' + (ci + 1) + '/' + chunks.length + ')' : '');
-      // Only the first chunk carries the picker, so a two-slide card does not show it twice.
-      if (ci === 0) h += '<button type="button" class="sch-ib sch-ovedit" data-a="ovstatsedit" data-c="' + esA(card.id) + '" aria-label="Choose which items to track"><i class="fas fa-pen"></i></button>';
-      h += '</h3>';
-      // The picker is a modal now (renderOvStatsModal), opened by the pencil — the inline panel
-      // was cramped and ugly. Nothing else renders here.
-      if (!itemChunk.length) {
-        h += countItems.length ? countItems.map(function(it) { var arr = (cardDayItems[card.id] || {})[it.n] || []; return '<p class="ov-count">' + esc(it.n) + ': ' + arr.filter(Boolean).length + ' times done</p>'; }).join('') : '<p class="sch-cardnothing">Nothing tracked on this card. Tap the pencil to choose items.</p>';
-      } else {
-        h += '<div class="sch-ovrow"><div class="sch-ovrowlbl"></div><div class="phg" style="--cols:' + days + '">';
-        for (var d = 0; d < days; d++) h += '<div class="phn">' + (((d + 1) % 5 === 1) || d === 0 ? (d + 1) : '') + '</div>';
-        h += '</div></div>';
-        var legend = '';
-        itemChunk.forEach(function(it) {
-          var arr = (cardDayItems[card.id] || {})[it.n] || [];
-          var st = streakFromBoolArray(arr);
-          h += '<div class="sch-ovrow"><div class="sch-ovrowlbl">' + esc(it.n) + '</div>';
-          h += '<div class="phg" style="--cols:' + days + '">';
-          for (var d2 = 0; d2 < days; d2++) {
-            var on2 = arr[d2];
-            h += '<div class="phc" data-a="goto" data-k="' + esA(md[d2].key) + '" style="background:' + (on2 ? esA(cardColor(card.color)) : "rgba(150,160,180,.10)") + '" title="' + esc(it.n) + ' Day ' + (d2 + 1) + ': ' + (on2 ? 'Done' : 'Missed') + '"></div>';
-          }
-          h += '</div></div>';
-          legend += '<div class="sch-ovlegenditem"><span>' + esc(it.n) + '</span><strong style="color:' + esA(cardColor(card.color)) + '"><i class="fas fa-fire" style="margin-right:4px"></i>' + st.current + ' · best ' + st.best + '</strong></div>';
-        });
-        h += '<div class="sch-ovlegend">' + legend + '</div>';
-        if (countItems.length) h += countItems.map(function(it) { var arr = (cardDayItems[card.id] || {})[it.n] || []; return '<p class="ov-count">' + esc(it.n) + ': ' + arr.filter(Boolean).length + ' times done</p>'; }).join('');
+// Habit Consistency: every tracked, eligible item shares one prayer-style heatmap card.
+function renderHabitConsistencyCard(md, cardsMeta, cardDayItems) {
+  var days = md.length;
+  var h = '<div class="sch-ovcard"><h3>Habit Consistency</h3>';
+  h += '<div class="sch-ovrow"><div class="sch-ovrowlbl"></div><div class="phg" style="--cols:' + days + '">';
+  for (var d = 0; d < days; d++) h += '<div class="phn">' + (((d + 1) % 5 === 1) || d === 0 ? (d + 1) : '') + '</div>';
+  h += '</div></div>';
+  cardsMeta.forEach(function(card, cardIndex) {
+    var items = card.items.filter(function(it) {
+      return getItemShow(card.id, it.n) && !isOptional(card.id, it.n) && eligibleHeatmapItem(card.id, it.n);
+    });
+    h += '<div class="sch-ovcardsub"><span>' + esc(card.name) + '</span>';
+    if (cardIndex === 0) h += '<button type="button" class="sch-ib sch-ovedit" data-a="ovstatsedit" data-c="' + esA(card.id) + '" aria-label="Choose which items to track"><i class="fas fa-pen"></i></button>';
+    h += '</div>';
+    items.forEach(function(it) {
+      var arr = (cardDayItems[card.id] || {})[it.n] || [];
+      h += '<div class="sch-ovrow"><div class="sch-ovrowlbl">' + esc(it.n) + '</div><div class="phg" style="--cols:' + days + '">';
+      for (var day = 0; day < days; day++) {
+        var done = !!arr[day];
+        h += '<div class="phc" data-a="goto" data-k="' + esA(md[day].key) + '" style="background:' + (done ? '#82a06e' : 'rgba(150,160,180,.10)') + '" title="' + esc(it.n) + ' Day ' + (day + 1) + ': ' + (done ? 'Done' : 'Missed') + '"></div>';
       }
-      h += '</div>';
-      slides.push(h);
+      h += '</div></div>';
     });
   });
-  return slides;
+  return h + '</div>';
 }
 
 // ===== PATTERNS (correlation USP) =====
@@ -2979,16 +2951,17 @@ function rOverview() {
   if (weightOn()) h += renderWeightTrendCard(md);
   if (prayersOn()) h += renderPrayerConsistencyCard(md, prayerGrid, prayerCounts, tracked, prayerStreak);
   h += renderPatternsCard(md);
-  // Habit / Card Consistency — stacked (capped ~5 habits/card via chunking above).
-  h += '<p class="sch-anylbl" style="margin:22px 0 0">HABIT / CARD CONSISTENCY</p>';
-  h += '<p style="margin:4px 0 0;font-size:11px;color:var(--mt)"><i class="fas fa-fire" style="margin-right:4px"></i>days completed in a row, shown as <b>now</b> · <b>best</b> ever</p>';
+  // Habit / Card Consistency — one flat, prayer-style heatmap card (its own <h3> is the heading, so
+  // no separate eyebrow above it).
   // First-visit nudge: tracking starts OFF for everything, so tell the user how to turn it on.
-  if (!localStorage.getItem(OV_INTRO_KEY)) {
-    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan, then check them off on Today for a few days, and your streak grids and patterns appear here.</div>';
+  var hasTrackedHabit = cardsMeta.some(function(card) {
+    return card.items.some(function(it) { return getItemShow(card.id, it.n) && !isOptional(card.id, it.n) && eligibleHeatmapItem(card.id, it.n); });
+  });
+  if (!hasTrackedHabit && !localStorage.getItem(OV_INTRO_KEY)) {
+    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan, then check them off on Today for a few days, and your heatmaps and patterns appear here.</div>';
     h += '<button type="button" class="sch-ib" data-a="ovintroclose" aria-label="Got it"><i class="fas fa-xmark"></i></button></div>';
   }
-  var ccSlides = renderCardConsistencySlides(md, cardsMeta, cardDayItems);
-  h += ccSlides.length ? ccSlides.join('') : '<div class="sch-ovcard"><p class="sch-cardnothing">No cards to track yet. Add one on your Plan.</p></div>';
+  h += cardsMeta.length ? renderHabitConsistencyCard(md, cardsMeta, cardDayItems) : '<div class="sch-ovcard"><p class="sch-cardnothing">No cards to track yet. Add one on your Plan.</p></div>';
 
   h += '</div>';
   return h;
@@ -5298,7 +5271,7 @@ function _editorSelfCheck() {
   if (location.hash !== "#editcheck") return;
 
   // (a) setItemShow(false) then getItemShow===false, and the item is excluded from
-  // renderCardConsistencySlides' output.
+  // renderHabitConsistencyCard's output.
   getCards(); // ensure migrateCardsIfNeeded() has run before addCard()
   var testCard = addCard("__editcheck__");
   addCardItem(testCard.id, "__ec_item__");
@@ -5307,12 +5280,10 @@ function _editorSelfCheck() {
   setItemShow(testCard.id, "__ec_item__", false);
   console.assert(getItemShow(testCard.id, "__ec_item__") === false, "(a) getItemShow should read back false after setItemShow(false)");
   var fixtureCard = { id: testCard.id, name: testCard.name, icon: testCard.icon, color: testCard.color, items: cardItemsFor(testCard.id) };
-  var slides = renderCardConsistencySlides([], [fixtureCard], (function() { var o = {}; o[testCard.id] = {}; return o; })());
-  // The card still renders when nothing on it is tracked (vanishing removed the only way back in),
-  // but the untracked item must be absent from the grid and the picker must be reachable.
-  console.assert(slides.length === 1, "(a) a card with nothing tracked should still render one slide", slides);
-  console.assert(slides[0].indexOf("Nothing tracked on this card") !== -1, "(a) an item with s:false must be excluded from the grid", slides[0]);
-  console.assert(slides[0].indexOf('data-a="ovstatsedit"') !== -1, "(a) the slide must still offer the stats picker", slides[0]);
+  var consistency = renderHabitConsistencyCard([], [fixtureCard], (function() { var o = {}; o[testCard.id] = {}; return o; })());
+  // Empty cards remain reachable through the first-card picker, but untracked items stay absent.
+  console.assert(consistency.indexOf("__ec_item__") === -1, "(a) an item with s:false must be excluded from the grid", consistency);
+  console.assert(consistency.indexOf('data-a="ovstatsedit"') !== -1, "(a) the card must still offer the stats picker", consistency);
   deleteCard(testCard.id);
 
   // (b) duration round-trips through setItemDur/getItemDur and formats human-readable via fmtDur.
@@ -5550,13 +5521,12 @@ function _statsSelfCheck() {
     addCardItem("__sc__", "__probe__");
     assert(getItemShow("__sc__", "__probe__") === false, "(a) a new item must default to NOT tracked");
 
-    // (b) a card with nothing tracked still renders a slide carrying the pencil affordance (the
-    // early-return trap made the card vanish, which took away the only way back in).
+    // (b) a card with nothing tracked still renders its picker affordance (the early-return trap
+    // made the card vanish, which took away the only way back in).
     var fakeCard = { id:"__sc__", name:"Probe", icon:"fa-star", color:"#C9943E", items:[{ n:"__off__" }] };
-    var slides = renderCardConsistencySlides([{ key:"2000-01-01" }], [fakeCard], { __sc__:{} });
-    assert(slides.length === 1, "(b) a card with nothing tracked must still render one slide");
-    assert(slides[0].indexOf('data-a="ovstatsedit"') !== -1, "(b) the slide must carry the pencil affordance");
-    assert(slides[0].indexOf('data-a="ovstatstoggle"') === -1, "(b) the picker is a modal now, not inline in the slide");
+    var consistency = renderHabitConsistencyCard([{ key:"2000-01-01" }], [fakeCard], { __sc__:{} });
+    assert(consistency.indexOf('data-a="ovstatsedit"') !== -1, "(b) the card must carry the pencil affordance");
+    assert(consistency.indexOf('data-a="ovstatstoggle"') === -1, "(b) the picker is a modal now, not inline in the card");
 
     // (c) the picker MODAL (opened on a REAL card — the only way in practice — so it reads from
     // getCards()) lists the card's items and setItemShow round-trips. Uses the guaranteed base

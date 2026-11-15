@@ -50,12 +50,9 @@ function greet() {
     if (typeof currentUser !== "undefined" && currentUser) {
         if (currentUser.user_metadata && currentUser.user_metadata.full_name) {
             name = currentUser.user_metadata.full_name;
-        } else if (currentUser.email) {
-            name = currentUser.email.split("@")[0];
-            name = name.charAt(0).toUpperCase() + name.slice(1);
-        }
+        } else name = "Waqt";
     } else {
-        name = getAnonNickname();
+        name = "Waqt";
     }
     return greetingWord + ", " + name;
 }

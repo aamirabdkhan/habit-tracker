@@ -503,7 +503,7 @@ function prayersOn() { var v = localStorage.getItem(PRAYERS_ON_KEY); return v ==
 function setPrayersOn(on) { localStorage.setItem(PRAYERS_ON_KEY, on ? "true" : "false"); }
 // First-takbir tracker is congregation-specific (not applicable to everyone), so it is toggleable.
 var TAKBEER_ON_KEY = "ht_takbeer_on";
-function takbeerOn() { var v = localStorage.getItem(TAKBEER_ON_KEY); return v === null ? true : v === "true"; }
+function takbeerOn() { var v = localStorage.getItem(TAKBEER_ON_KEY); return v === null ? false : v === "true"; }
 function setTakbeerOn(on) { localStorage.setItem(TAKBEER_ON_KEY, on ? "true" : "false"); }
 var PEHAR_ON_KEY = "ht_pehar_on";
 function peharOn() { var v = localStorage.getItem(PEHAR_ON_KEY); return v === null ? true : v === "true"; }
@@ -1864,7 +1864,7 @@ function renderImportGuide() {
   return '<div class="sch-guide" style="margin-bottom:12px">'
     + '<div class="sch-seg" role="tablist">'
     + '<button type="button" class="sch-segtab' + (importTab === "type" ? ' act' : '') + '" role="tab" aria-selected="' + (importTab === "type" ? 'true' : 'false') + '" data-a="importtab" data-tab="type">Type your day</button>'
-    + '<button type="button" class="sch-segtab' + (importTab === "ai" ? ' act' : '') + '" role="tab" aria-selected="' + (importTab === "ai" ? 'true' : 'false') + '" data-a="importtab" data-tab="ai">Set up with AI</button>'
+    + '<details class="sch-importmore"><summary>More import options</summary><button type="button" class="sch-segtab' + (importTab === "ai" ? ' act' : '') + '" role="tab" aria-selected="' + (importTab === "ai" ? 'true' : 'false') + '" data-a="importtab" data-tab="ai">Set up with AI</button></details>'
     + '</div></div>';
 }
 // One instruction at a time, tied to where the user is in the flow. NOT a walkthrough: no overlay,
@@ -2375,7 +2375,7 @@ function rOnboarding() {
     h += '<div class="sch-onbfoot"><button class="sch-onbgo" data-a="onbstep1">Continue</button></div>';
   } else if (onbStep === 2) {
     h += '<h1 class="sch-onbtitle">Meet the Pehar</h1>';
-    h += '<p class="sch-onblede">The Pehar is your day as a timeline, from dawn to night. Prayers and tasks sit in order with the free stretches in between, so a glance tells you what is on now and what comes next.</p>';
+    h += '<p class="sch-onblede">The Pehar (your day as a timeline) runs from dawn to night. Prayers and tasks sit in order with free stretches in between, so a glance tells you what is on now and what comes next.</p>';
     h += '<div class="sch-pehardemo">' + peharDemoHTML(prayersOn()) + '</div>';
     h += '<div class="sch-onbtrack">';
     h += onbTrackRow("pehar", peharOn(), "Show the Pehar in my feed", "Turn off for a plain checklist instead.");
@@ -2397,7 +2397,7 @@ function rOnboarding() {
     h += onbWhatCard("fa-stream", "Pehar", "Your day as a timeline; tap a free gap to add a task.");
     h += onbWhatCard("fa-chart-simple", "Overview", "Heatmap, streaks and honest patterns over time.");
     h += '</div>';
-    h += '<p class="sch-onbguidehint"><i class="fas fa-book-open mr-1.5"></i>More — <b>Set up with AI</b>, priorities, reminders — lives in the <b>Guide</b> under Settings.</p>';
+    h += '<p class="sch-onbguidehint"><i class="fas fa-book mr-1.5"></i>More: <b>Set up with AI</b>, priorities, reminders live in the <b>Guide</b> under Settings.</p>';
     h += '<div class="sch-onbfoot"><button class="sch-onbgo" data-a="onbfinish">Get started</button></div>';
   }
   return h + '</div>';
@@ -2444,17 +2444,17 @@ function peharDemoHTML(withPrayers) {
 }
 
 function rTemplate() {
+  var hasCards = getCards().length > 0;
   var h = '<div class="sch-view">';
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vprefs" aria-label="Settings"><i class="fas fa-gear"></i></button><p class="sch-eyebrow">PLAN</p><h1 class="sch-dayname sch-datefull">Your plan</h1><p class="sch-sub">set a time and repeat days once, it repeats every day</p></header>';
   h += '<div class="al"></div>';
   // Build-your-tracker: one eye-catching hero (not buried accordions) so a new user spots the fast
   // ways to fill the plan. The two buttons toggle the matching panel inline. buildPanel: null|ai|type.
-  h += '<div class="sch-buildhero">';
+  h += '<div class="sch-buildhero' + (hasCards ? ' sch-buildhero-compact' : '') + '">';
   h += '<div class="sch-bhtop"><span class="sch-bhic"><i class="fas fa-bolt"></i></span><div class="sch-bhtx"><b>Build your tracker</b><p>Set your whole week at once — don’t add tasks one by one.</p></div></div>';
   h += '<div class="sch-bhbtns">';
-  h += '<button type="button" class="sch-bhb ' + (buildPanel === "ai" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i> With AI</button>';
   h += '<button type="button" class="sch-bhb ' + (buildPanel === "type" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="type"><i class="fas fa-keyboard"></i> Type it</button>';
-  h += '</div></div>';
+  h += '</div><details class="sch-importmore"><summary>More import options</summary><button type="button" class="sch-bhb ' + (buildPanel === "ai" ? "sch-bhb-fill" : "sch-bhb-ghost") + '" data-a="buildpick" data-k="ai"><i class="fas fa-wand-magic-sparkles"></i>With AI</button></details></div>';
   if (buildPanel === "ai") h += '<div class="sch-buildpanel">' + renderImportPanel("ai") + '</div>';
   else if (buildPanel === "type") h += '<div class="sch-buildpanel">' + renderImportPanel("type") + '</div>';
   if (prayersOn()) h += renderPrayersCard();
@@ -2472,12 +2472,11 @@ function rPrefs() {
   h += '<header class="sch-mast t-ctr"><button type="button" class="sch-ib sch-mastbtn" data-a="vset" aria-label="Back to your plan"><i class="fas fa-xmark"></i></button><p class="sch-eyebrow">SETTINGS</p><h1 class="sch-dayname sch-datefull">Settings</h1></header>';
   h += '<div class="al"></div>';
 
-  h += '<button type="button" class="sch-guideopen" data-a="openguide"><span class="sch-guideopenic"><i class="fas fa-book-open"></i></span><span class="sch-guideopentx"><b>Guide</b><small>learn every feature of Waqt</small></span><i class="fas fa-chevron-right sch-gdch"></i></button>';
+  h += '<details class="sch-importmore"><summary>About &amp; advanced</summary><button type="button" class="sch-guideopen" data-a="openguide"><span class="sch-guideopenic"><i class="fas fa-book-open"></i></span><span class="sch-guideopentx"><b>Guide</b><small>learn every feature of Waqt</small></span><i class="fas fa-chevron-right sch-gdch"></i></button></details>';
 
   h += settOpen('Tracking', true);
   h += '<div class="cd" style="margin-top:14px"><div class="sec-t">What you track</div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">The 5 daily prayers</span><button type="button" class="sch-switch' + (prayersOn() ? ' on' : '') + '" data-a="prayerstoggle" role="switch" aria-checked="' + (prayersOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
-  if (prayersOn()) h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">First Takbīr tracker<br><small style="color:var(--mt)">catching the first takbir in congregation</small></span><button type="button" class="sch-switch' + (takbeerOn() ? ' on' : '') + '" data-a="takbeertoggle" role="switch" aria-checked="' + (takbeerOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center;margin-bottom:10px"><span style="flex:1">Weight</span><button type="button" class="sch-switch' + (weightOn() ? ' on' : '') + '" data-a="weighttoggle" role="switch" aria-checked="' + (weightOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
   h += '<div class="flx gap-2" style="align-items:center"><span style="flex:1">Pehar timeline</span><button type="button" class="sch-switch' + (peharOn() ? ' on' : '') + '" data-a="pehartoggle" role="switch" aria-checked="' + (peharOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div></div>';
 
@@ -2496,8 +2495,10 @@ function rPrefs() {
       var mad = getPrayerMadhab();
       h += '<div class="flx gap-2" style="align-items:center;margin-top:12px"><span style="flex:1">Asr calculation</span><span class="flx gap-1"><button type="button" class="sch-durchip' + (mad === "Shafi" ? ' on' : '') + '" data-a="prayermadhab" data-m="Shafi">Shafi</button><button type="button" class="sch-durchip' + (mad === "Hanafi" ? ' on' : '') + '" data-a="prayermadhab" data-m="Hanafi">Hanafi</button></span></div>';
     }
+    h += '<details class="sch-importmore"><summary>Prayer extras</summary>';
+    h += '<div class="flx gap-2" style="align-items:center;margin-top:14px"><span style="flex:1">First Takbīr tracker<br><small style="color:var(--mt)">catching the first takbir in congregation</small></span><button type="button" class="sch-switch' + (takbeerOn() ? ' on' : '') + '" data-a="takbeertoggle" role="switch" aria-checked="' + (takbeerOn() ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
     h += '<div class="flx gap-2" style="align-items:center;margin-top:14px"><span style="flex:1">Track Duha<br><small style="color:var(--mt)">voluntary · after sunrise</small></span><button type="button" class="sch-switch' + (voluntaryTracked("Duha") ? ' on' : '') + '" data-a="voltoggle" data-p="Duha" role="switch" aria-checked="' + (voluntaryTracked("Duha") ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
-    h += '<div class="flx gap-2" style="align-items:center;margin-top:10px"><span style="flex:1">Track Tahajjud<br><small style="color:var(--mt)">voluntary · last third of the night</small></span><button type="button" class="sch-switch' + (voluntaryTracked("Tahajjud") ? ' on' : '') + '" data-a="voltoggle" data-p="Tahajjud" role="switch" aria-checked="' + (voluntaryTracked("Tahajjud") ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div>';
+    h += '<div class="flx gap-2" style="align-items:center;margin-top:10px"><span style="flex:1">Track Tahajjud<br><small style="color:var(--mt)">voluntary · last third of the night</small></span><button type="button" class="sch-switch' + (voluntaryTracked("Tahajjud") ? ' on' : '') + '" data-a="voltoggle" data-p="Tahajjud" role="switch" aria-checked="' + (voluntaryTracked("Tahajjud") ? 'true' : 'false') + '"><span class="sch-switchknob"></span></button></div></details>';
     h += '</div>';
   }
 
@@ -2532,13 +2533,15 @@ function rPrefs() {
 
   h += settClose() + settOpen('Appearance', false);
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-circle-half-stroke mr-1.5" style="color:var(--ac)"></i>Theme</div>';
-  h += '<p class="t-xs mb-3" style="color:var(--mt)">Match your device, or pick light or dark.</p>';
+  h += '<p class="t-xs mb-3" style="color:var(--mt)">Matches your device.</p>';
   h += '<div class="flx gap-1">';
   var curTheme = getTheme();
-  [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']].forEach(function(o) {
+  [['system', 'System']].forEach(function(o) {
     h += '<button type="button" class="sch-durchip' + (curTheme === o[0] ? ' on' : '') + '" data-a="settheme" data-t="' + o[0] + '">' + o[1] + '</button>';
   });
-  h += '</div></div>';
+  h += '</div><details class="sch-importmore"><summary>Advanced</summary><div class="flx gap-1">';
+  [['light', 'Light'], ['dark', 'Dark']].forEach(function(o) { h += '<button type="button" class="sch-durchip' + (curTheme === o[0] ? ' on' : '') + '" data-a="settheme" data-t="' + o[0] + '">' + o[1] + '</button>'; });
+  h += '</div></details></div>';
 
   h += settClose() + settOpen('Reset', false);
   h += '<div class="cd"><div class="sec-t">Reset</div>';
@@ -2547,7 +2550,7 @@ function rPrefs() {
   h += '<button type="button" class="bt t-sm" style="color:var(--dn);border-color:var(--dn);margin-top:14px" data-a="resetall"><i class="fas fa-fire mr-1.5"></i>Erase everything &amp; start fresh</button>';
   h += '<p class="t-xs" style="color:var(--mt);margin-top:8px">Wipes <b>all</b> data — cards, times, prayer settings <b>and every day of completion history</b>, on this device and in the cloud. Can\'t be undone.</p></div>';
 
-  h += settClose() + settOpen('App &amp; widgets', false);
+  h += settClose() + '<details class="sch-settgroup"><summary class="sch-settsummary"><span>Advanced: Home-screen widgets</span><i class="fas fa-chevron-down sch-settchev"></i></summary><div class="sch-settbody">';
   h += '<div class="cd"><div class="sec-t"><i class="fas fa-cloud-arrow-down mr-1.5" style="color:var(--ac)"></i>App</div>';
   h += '<p class="t-xs mb-3" style="color:var(--mt)">Version ' + esc(APP_VERSION) + '</p>';
   h += '<button type="button" class="bt t-sm" data-a="doupdate"><i class="fas fa-rotate mr-1.5"></i>Check for updates</button>';
@@ -2571,7 +2574,7 @@ function rPrefs() {
   }
   h += '</div>';
 
-  h += settClose();
+  h += '</div></details>';
   h += rFoot();
   return h + '</div>';
 }
@@ -2805,12 +2808,8 @@ function overviewPatterns(md) {
 
 function renderPatternsCard(md) {
   var P = overviewPatterns(md);
+  if (!P.findings.length) return "";
   var h = '<div class="sch-ovcard"><h3>Patterns</h3>';
-  if (P.trackedDays < PAT_MIN_OVERLAP || !P.findings.length) {
-    h += '<p class="sch-ovsub" style="margin:4px 0 0">Honest links between your habits appear here once there’s enough history'
-      + (P.trackedDays < PAT_MIN_OVERLAP ? ' — about ' + PAT_MIN_OVERLAP + ' tracked days (you have ' + P.trackedDays + ').' : ' this month.') + '</p>';
-    return h + '</div>';
-  }
   h += '<p class="sch-ovsub" style="margin:4px 0 0">Based on ' + P.trackedDays + ' tracked days this month — not advice, just what co-occurs.</p>';
   P.findings.forEach(function(f) {
     var up = f.effect > 0;
@@ -3012,8 +3011,7 @@ function renderTabBar(active) {
   var tabs = [
     ["overview", "Overview", "M4 6h6v6H4zM14 6h6v6h-6zM4 16h6v4H4zM14 16h6v4h-6z"],
     ["daily",    "Today",    "M5 5h14v14H5z M9 12l2 2 4-4"],
-    ["pehar",    "Pehar",    "M12 4v8l5 3 M12 21a9 9 0 1 1 0-18"],
-    ["settings", "Template", "M4 5h16M4 10h16M4 15h10"],
+    ["settings", "Plan",     "M4 5h16M4 10h16M4 15h10"],
     ["prefs",    "Settings", "M12 9a3 3 0 1 0 0 6 M12 3v2M12 19v2M5 12H3M21 12h-2"]
   ];
   return '<nav class="waqt-tabs" aria-label="Main navigation">' + tabs.map(function(x) {
@@ -3161,6 +3159,7 @@ function itemEditorHTML(field, name, closeAction) {
     // Slot 0's days are the item's days — edited by the shared Repeat row below. Each LATER time gets
     // its own day row here, so an item like "CEH at 06:25 on Mon, 18:25 every day" can be authored.
     slots.forEach(function(slot, si) {
+      if (si === 1) h += '<details class="sch-importmore"><summary>More times</summary>';
       h += '<div class="sch-slotblock"><label class="sch-timepill"><i class="fas fa-clock"></i><input type="time" class="sch-slotinp" value="' + esA(slot.time) + '"><input type="number" class="sch-slotdur" min="1" step="1" inputmode="numeric" aria-label="Duration in minutes" value="' + effectiveSlotDur(field, name, false, null, slot.duration) + '"><span>m</span><button type="button" class="sch-ib" style="opacity:.55" data-a="slotdel" aria-label="Remove time">×</button></label>';
       if (si > 0) {
         h += '<div class="sch-days sch-slotdays"><span class="sch-slotdayslbl">on</span>';
@@ -3169,7 +3168,8 @@ function itemEditorHTML(field, name, closeAction) {
       }
       h += '</div>';
     });
-    h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button>';
+    if (slots.length < 2) h += '<details class="sch-importmore"><summary>More times</summary>';
+    h += '<button type="button" class="sch-ib" data-a="slotadd" aria-label="Add time"><i class="fas fa-plus"></i> Add time</button></details>';
   }
   h += '</span></div>';
   if (!isPrayer) {
@@ -3181,7 +3181,7 @@ function itemEditorHTML(field, name, closeAction) {
     h += '<div class="sch-days sch-daysrow" data-field="' + esA(field) + '" data-name="' + esA(name) + '">';
     DOW_LBL.forEach(function(lbl, d) { var on = !days || days.indexOf(d) !== -1; h += '<button type="button" class="sch-day' + (on ? ' on' : '') + '" data-dow="' + d + '" aria-label="' + esA(DOW_FULL[d]) + '">' + lbl + '</button>'; });
     h += '</div></div>';
-    h += '<div class="sch-editrow"><span class="sch-editlbl">Optional</span><button type="button" class="sch-opttoggle' + (isOptional(field, name) ? ' on' : '') + '" data-a="optionaltoggle" data-f="' + esA(field) + '" data-k="' + esA(name) + '" aria-pressed="' + (isOptional(field, name) ? 'true' : 'false') + '">' + (isOptional(field, name) ? 'Optional' : 'Required') + '</button></div>';
+    h += '<details class="sch-importmore"><summary>Advanced</summary><div class="sch-editrow"><span class="sch-editlbl">Optional</span><button type="button" class="sch-opttoggle' + (isOptional(field, name) ? ' on' : '') + '" data-a="optionaltoggle" data-f="' + esA(field) + '" data-k="' + esA(name) + '" aria-pressed="' + (isOptional(field, name) ? 'true' : 'false') + '">' + (isOptional(field, name) ? 'Optional' : 'Required') + '</button></div></details>';
     // Which items count toward the Overview grids is now chosen ON the Overview heatmap
     // (data-a="ovstatsedit"), next to the consequence, instead of as noise during task creation.
   }
@@ -3252,6 +3252,8 @@ function buildTimeline(cards, day, dow) {
 // Cards keep timed work in this compact disclosure; timeline remains its only completion surface.
 var expandedPeharCards = {};
 function renderTimedDisclosure(card, dow) {
+  // Timed work now appears directly in Today's Pehar rail.
+  return "";
   var groups = {}, order = [], count = 0;
   (card.items || []).forEach(function(it) {
     var slots = it.time ? [{ time:it.time, okey:it.okey }] : (Array.isArray(it.slots) ? it.slots.filter(function(slot) { return !slot.days || slot.days.indexOf(dow) !== -1; }) : slotsForDay(card.id, it.n, dow));
@@ -3911,9 +3913,7 @@ function rSchedule() {
   else if (fu) h += '<span class="bdg" style="background:var(--acd);color:var(--ac)">Upcoming</span>';
   h += '</div>';
   h += '<div class="flx aic jcc gap-3" style="margin-top:14px">';
-  h += '<button type="button" class="dnb" data-a="prevday" aria-label="Previous day"><i class="fas fa-chevron-left t-xs"></i></button>';
   if (!td) h += '<button type="button" class="bt t-xs" data-a="today">Today</button>';
-  h += '<button type="button" class="dnb" data-a="nextday" aria-label="Next day"><i class="fas fa-chevron-right t-xs"></i></button>';
   h += '<button type="button" class="dnb share-open" data-a="shareopen" aria-label="Share this day"><i class="fas fa-share-nodes t-xs"></i></button>';
   h += '</div>';
   h += '<button type="button" class="bt t-xs" style="margin-top:10px" data-a="openrefl"><i class="fas fa-pen-fancy mr-1.5"></i>Daily Reflection</button>';
@@ -3956,10 +3956,31 @@ function rSchedule() {
   // Checklist cards — stacked, above the timeline.
   h += renderPrayersDayCard();
   h += cardItems.map(function(ci) { return renderCard(ci.card, ci.items); }).join('');
+  if (peharOn()) h += renderPeharRail(cards, timeline, td, nowMin);
   h += renderReminders(key);
 
   h += '</div>';
   return h;
+}
+
+function renderPeharRail(cards, timeline, td, nowMin) {
+  var h = '<div class="sch-peharhead"><p class="sch-anylbl sch-phtitle">PEHAR</p>' + (td ? '<button type="button" class="sch-copyy sch-phright" data-a="copyyesterday"><i class="fas fa-copy"></i> Copy yesterday\'s tasks</button>' : '') + '</div>';
+  if (!timeline.length) return h + '<div class="sch-empty" style="margin:24px 0"><p>Nothing scheduled yet. Set times in Plan to see your day here.</p></div>';
+  h += '<div class="sch-rail">';
+  timeline.forEach(function(item) {
+    var isNow = td && nowMin >= item.start && nowMin < item.end;
+    if (item.openBlock) {
+      h += '<div class="sch-block sch-openblock' + (isNow ? ' now' : '') + '" style="--kc:var(--smut)"><div class="sch-time">' + prettyTime(minToHHMM(item.start)) + '<small>' + fmtDur(item.end - item.start) + '</small></div><div class="sch-node"><i></i></div><div class="sch-card" data-a="gapquick" data-start="' + item.start + '"><p class="sch-title">Free time' + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p></div></div>';
+      if (schQuickGap && schQuickGap.start === item.start) h += renderGapQuickAdd(cards);
+      return;
+    }
+    var ekey = item.okey || (item.id + "::" + item.name);
+    h += '<div class="sch-block' + (item.done ? ' checked' : '') + (isNow ? ' now' : '') + (item.isPrayer ? ' prayer' : '') + '" data-block="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(item.t) + '<small>' + fmtDur(item.dur) + '</small></div><div class="sch-node"><i></i></div><div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div><div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '"><p class="sch-title">' + esc(item.name) + (item.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
+    h += !item.oneday ? '<button class="sch-edit" data-a="schedit" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '"><i class="fas fa-pen"></i></button>' : '<button class="sch-edit" data-a="oddel" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" aria-label="Remove ' + esA(item.name) + '"><i class="fas fa-xmark"></i></button>';
+    h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div></div></div></div>';
+    if (!item.oneday && schEdit === ekey) h += editorHTML(item.id, item.name);
+  });
+  return h + '</div>';
 }
 
 // Pehar is its own tab (split out of rSchedule). Renders the timeline rail only,
@@ -4514,7 +4535,7 @@ document.getElementById("app").addEventListener("click", function(e) {
         tgt.classList.add("sch-flash");
         setTimeout(function() { tgt.classList.remove("sch-flash"); }, 2000);
       };
-      if (view !== "pehar") { view = "pehar"; render(); setTimeout(jumpToBlock, 60); }
+      if (view !== "daily") { view = "daily"; render(); setTimeout(jumpToBlock, 60); }
       else jumpToBlock();
       return;
     }

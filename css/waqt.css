@@ -774,6 +774,8 @@ body::before{display:none!important}
 /* "Build your tracker" hero on the Template tab — the eye-catching entry to AI setup / Type-your-day.
    Warm single-hue gold→copper (on-brand, not generic-SaaS), white text, works in light + dark. */
 .sch-buildhero{background:linear-gradient(135deg,var(--ac),var(--hl));border-radius:16px;padding:17px 17px 16px;margin-bottom:12px;box-shadow:0 8px 22px -12px rgba(176,123,44,.7)}
+.sch-buildhero-compact{padding:11px 13px}.sch-buildhero-compact .sch-bhic{width:32px;height:32px;font-size:14px}.sch-buildhero-compact .sch-bhtx b{font-size:14px}.sch-buildhero-compact .sch-bhtx p{display:none}.sch-buildhero-compact .sch-bhbtns{margin-top:9px}.sch-buildhero-compact .sch-bhb{padding:9px;font-size:12px}
+.sch-importmore{margin-top:10px;color:var(--mt);font-size:12px}.sch-importmore summary{cursor:pointer;color:var(--mt);font-weight:600}.sch-importmore[open] summary{margin-bottom:8px}.sch-importmore .sch-bhb{margin-top:2px;width:100%}
 .sch-bhtop{display:flex;gap:13px;align-items:flex-start}
 .sch-bhic{width:42px;height:42px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.18);color:#fff;font-size:17px}
 .sch-bhtx b{display:block;color:#fff;font-size:17px;font-weight:700;letter-spacing:-.01em;line-height:1.2}

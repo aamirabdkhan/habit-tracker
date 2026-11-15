@@ -557,6 +557,9 @@ function migrateCardsIfNeeded() {
 // and every legacy item backfills. Only fires while the profile is still the untouched single seed,
 // so a user who deliberately deleted their other cards is never overridden.
 function remigrateIfLegacyArrivedLate() {
+  // Importing into Daily Goals writes ht_d for backwards compatibility. That must not look like
+  // late cloud legacy data midway through an import and resurrect the old two-card seed.
+  if (typeof importApplyInProgress !== "undefined" && importApplyInProgress) return;
   if (!localStorage.getItem(CARDS_FRESH_KEY)) return;
   var meta = getCardMeta();
   var pristineSingleSeed = meta.length === 1 && meta[0].id === "habits";
@@ -1211,12 +1214,15 @@ _remindersSelfCheck();
 // app's storage keys; the translator below is the single bridge back to them.
 // ============================================================
 var IMPORT_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-var importDraft = "", importError = "", importPreview = null;
+var importDraft = "", importError = "", importPreview = null, importApplyInProgress = false;
 var importTab = "ai"; // "type" | "ai" — which of the two static tabs is showing (session-only, no storage key)
 function importDays(value) {
   if (value === undefined) return null;
   if (!Array.isArray(value) || value.some(function(d) { return IMPORT_DAY_NAMES.indexOf(d) === -1; })) return false;
   return value.filter(function(d, i, a) { return a.indexOf(d) === i; }).map(function(d) { return IMPORT_DAY_NAMES.indexOf(d); }).sort(function(a,b) { return a-b; });
+}
+function importDaysOrder(value) {
+  return value === undefined ? null : value.filter(function(d, i, a) { return a.indexOf(d) === i; });
 }
 function importItem(value, prayer) {
   if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.name !== "string" || !value.name.trim()) return null;
@@ -1224,6 +1230,7 @@ function importItem(value, prayer) {
   if (value.duration !== undefined && (typeof value.duration !== "number" || !isFinite(value.duration) || value.duration <= 0 || Math.round(value.duration) <= 0)) return null;
   if (value.optional !== undefined && typeof value.optional !== "boolean") return null;
   var days = importDays(value.days); if (days === false) return null;
+  var daysOrder = importDaysOrder(value.days);
   var slots = null, defaultDuration = value.duration === undefined ? (prayer ? 35 : 30) : Math.round(value.duration);
   if (value.slots !== undefined) {
     if (!Array.isArray(value.slots)) return null;
@@ -1233,12 +1240,12 @@ function importItem(value, prayer) {
       if (!slot || typeof slot !== "object" || Array.isArray(slot) || !validSlotTime(slot.time)) return null;
       if (slot.duration !== undefined && (typeof slot.duration !== "number" || !isFinite(slot.duration) || slot.duration <= 0 || Math.round(slot.duration) <= 0)) return null;
       slotDays = importDays(slot.days); if (slotDays === false) return null;
-      slots.push({ time:slot.time, duration:slot.duration === undefined ? defaultDuration : Math.round(slot.duration), days:slotDays || undefined });
+      slots.push({ time:slot.time, duration:slot.duration === undefined ? defaultDuration : Math.round(slot.duration), days:slotDays || undefined, _daysOrder:importDaysOrder(slot.days) || undefined });
     }
   }
   var first = slots && slots[0];
   if (slots && slots.length && value.duration === undefined && slots.every(function(slot) { return slot.duration === slots[0].duration; })) defaultDuration = slots[0].duration;
-  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:defaultDuration, days:days === null && first ? (first.days || null) : days, optional:!!value.optional };
+  var out = { name:value.name.trim(), time:value.time || (first ? first.time : ""), duration:defaultDuration, days:days === null && first ? (first.days || null) : days, _daysOrder:daysOrder || (first ? first._daysOrder : null), optional:!!value.optional };
   if (slots) out.slots = slots;
   // Fix 4: optional per-item change note ("split around Asr", "moved 21:30->22:00"). Optional by
   // design — absence must never fail validation, so older payloads keep importing unchanged.
@@ -1264,11 +1271,12 @@ function mergeSlotLists() {
     (slots || []).forEach(function(slot) {
       if (!slot || !validSlotTime(slot.time)) return;
       var days = Array.isArray(slot.days) ? slot.days.slice() : undefined;
+      var daysOrder = Array.isArray(slot._daysOrder) ? slot._daysOrder.slice() : undefined;
       var duration = slot.duration;
       var key = slot.time + "|" + duration + "|" + JSON.stringify(days || null);
       if (seen[key]) return;
       seen[key] = true;
-      out.push({ time:slot.time, duration:duration, days:days });
+      out.push({ time:slot.time, duration:duration, days:days, _daysOrder:daysOrder });
     });
   });
   return out;
@@ -1395,10 +1403,10 @@ function importSame(a, b) { return a.time === b.time && a.duration === b.duratio
 // "Surah Rahman" finds an Islamic card only because a Surah item is already there. No confident
 // match returns null and the caller falls back to Daily Goals / the payload's own group name.
 function nameWords(s) { return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter(function(w) { return w.length >= 3; }); }
-function guessCardId(itemNm) {
+function guessCardId(itemNm, pool) {
   var want = nameWords(itemNm), best = null;
   if (!want.length) return null;
-  getCards().forEach(function(c) {
+  (pool || getCards()).forEach(function(c) {
     [c.name].concat(c.items.map(function(x) { return x.n; })).forEach(function(hay) {
       nameWords(hay).forEach(function(w) {
         if (want.indexOf(w) === -1) return;
@@ -1414,8 +1422,8 @@ function guessCardId(itemNm) {
 function resolveImportTarget(item, groupName, pool) {
   var by = function(fn) { return pool.filter(fn)[0] || null; };
   if (item._card) { var forced = by(function(c) { return c.id === item._card; }); if (forced) return forced; }
-  var named = by(function(c) { return c.name === groupName; }); if (named) return named;
-  var guess = guessCardId(item.name); if (guess) { var g = by(function(c) { return c.id === guess; }); if (g) return g; }
+  if (groupName) { var named = by(function(c) { return c.name === groupName; }); if (named) return named; return null; }
+  var guess = guessCardId(item.name, pool); if (guess) { var g = by(function(c) { return c.id === guess; }); if (g) return g; }
   return null;
 }
 
@@ -1459,30 +1467,38 @@ function shiftRowToFreeSlot(preview, idx) {
 }
 
 function buildImportPreview(data) {
-  var cards = getCards(), planned = cards.slice(), rows = [], addCards = 0, addItems = 0, folded = 0, prayerSets = prayersOn() && data.prayers ? Object.keys(data.prayers).length : 0;
+  var cards = getCards(), planned = cards.slice(), rows = [], groups = [], targetsByName = {}, addCards = 0, addItems = 0, folded = 0, mergedCards = 0, prayerSets = prayersOn() && data.prayers ? Object.keys(data.prayers).length : 0;
   if (prayersOn() && data.prayers) Object.keys(data.prayers).forEach(function(name) {
     var incoming = data.prayers[name], mine = { time:getNotifTime("prayers", name) || "", duration:effectiveDur("prayers", name, false), days:null };
     if (mine.time || getItemDur("prayers", name) !== null) { if (!importSame(mine, incoming)) rows.push({ kind:"prayer", name:name, incoming:incoming, mine:mine, choice:"mine" }); }
     else rows.push({ kind:"newprayer", name:name, incoming:incoming });
   });
+  // Reserve each payload card before resolving items. This keeps a named payload group together
+  // and makes the preview's card count exactly match what Apply will create.
   data.cards.forEach(function(group) {
-    var groupTarget = null;   // created lazily: only if an item actually still needs this group's card
+    var groupTarget = targetsByName[group.name];
+    if (!groupTarget) {
+      groupTarget = planned.filter(function(c) { return c.name === group.name; })[0] || null;
+      if (groupTarget) mergedCards++;
+      else if (planned.length < 5) { groupTarget = { id:"__new_" + planned.length, name:group.name, newCard:true }; planned.push(groupTarget); addCards++; }
+      else { groupTarget = planned.filter(function(c) { return c.id === "habits"; })[0] || planned[0]; folded++; }
+      targetsByName[group.name] = groupTarget;
+    }
+    groups.push({ name:group.name, targetId:groupTarget.id, newCard:!!groupTarget.newCard, folded:!groupTarget.newCard && groupTarget.name !== group.name });
+  });
+  data.cards.forEach(function(group, groupIndex) {
+    var groupTarget = groups[groupIndex];
     group.items.forEach(function(incoming) {
       var target = resolveImportTarget(incoming, group.name, planned);
-      // Feature 2 (fold notice): a group with no name match that arrives once the 5-card cap is
-      // already hit gets folded into an existing card (Daily Goals, or whatever's first) instead of
-      // becoming its own card — count it so the preview can tell the user, instead of doing this silently.
-      if (!target) {
-        if (!groupTarget) { if (planned.length < 5) { groupTarget = { id:"__new_" + planned.length, name:group.name, newCard:true }; planned.push(groupTarget); addCards++; } else { groupTarget = planned.filter(function(c) { return c.id === "habits"; })[0] || planned[0]; folded++; } }
-        target = groupTarget;
-      }
+      if (!target) target = planned.filter(function(c) { return c.id === groupTarget.targetId; })[0];
       var existing = target.newCard ? null : cardTemplateArr(target.id).filter(function(x) { return itemName(x) === incoming.name; })[0];
       if (!existing) { rows.push({ kind:"newitem", cardName:target.name, targetId:target.id, incoming:incoming, sourceName:group.name }); addItems++; }
       else { var mine = { time:getNotifTime(target.id, incoming.name) || "", duration:effectiveDur(target.id, incoming.name, false), days:getItemDays(target.id, incoming.name), slots:getItemSlots(target.id, incoming.name), optional:isOptional(target.id, incoming.name) }; if (!importSame(mine, incoming)) rows.push({ kind:"item", cardName:target.name, targetId:target.id, name:incoming.name, incoming:incoming, mine:mine, choice:"mine" }); }
     });
   });
+  (data.reminders || []).forEach(function(reminder) { rows.push({ kind:"reminder", cardName:"Reminders", name:reminder.name, incoming:reminder }); });
   markImportOverlaps(rows);
-  return { data:data, rows:rows, addCards:addCards, addItems:addItems, prayerSets:prayerSets, folded:folded };
+  return { data:data, rows:rows, groups:groups, addCards:addCards, addItems:addItems, prayerSets:prayerSets, reminders:(data.reminders || []).length, folded:folded, mergedCards:mergedCards };
 }
 function writeImportTime(field, name, time, raw) { if (raw) { var map = getNotifTimesMap(); if (time) map[notifKey(field,name)] = time; else delete map[notifKey(field,name)]; saveNotifTimesMap(map); } else setNotifTime(field, name, time); }
 function applyImportSchedule(preview, rawTimes) {
@@ -1492,8 +1508,9 @@ function applyImportSchedule(preview, rawTimes) {
   // click handler calls this with rawTimes=false) do want reminder_times kept in step.
   function applyValues(id, item) {
     if (item.slots && item.slots.length) {
-      if (rawTimes) { var slotMap = getSlotsMap(), rawSlots = item.slots; if (rawSlots.length > 1) slotMap[notifKey(id, item.name)] = rawSlots; else delete slotMap[notifKey(id, item.name)]; saveSlotsMap(slotMap); writeImportTime(id, item.name, rawSlots[0].time, true); setItemDays(id, item.name, rawSlots[0].days || null); }
-      else setItemSlots(id, item.name, item.slots);
+      var storedSlots = item.slots.map(function(slot) { return { time:slot.time, duration:slot.duration, days:slot.days }; });
+      if (rawTimes) { var slotMap = getSlotsMap(), rawSlots = storedSlots; if (rawSlots.length > 1) slotMap[notifKey(id, item.name)] = rawSlots; else delete slotMap[notifKey(id, item.name)]; saveSlotsMap(slotMap); writeImportTime(id, item.name, rawSlots[0].time, true); setItemDays(id, item.name, rawSlots[0].days || null); }
+      else setItemSlots(id, item.name, storedSlots);
     } else {
       if (rawTimes) { var clearSlots = getSlotsMap(); delete clearSlots[notifKey(id, item.name)]; saveSlotsMap(clearSlots); }
       else setItemSlots(id, item.name, []);
@@ -1508,22 +1525,18 @@ function applyImportSchedule(preview, rawTimes) {
       if (!rawTimes) syncItemReminder("prayers", row.name);
     }
   });
-  preview.data.cards.forEach(function(group) {
-    var groupTarget = null;
-    group.items.forEach(function(item) {
-      // Same resolver the preview used, against the real cards — the Card dropdown's override
-      // (item._card) rides on the item itself, so what the table showed is what gets written.
-      var target = resolveImportTarget(item, group.name, getCards());
-      if (!target) {
-        if (!groupTarget) groupTarget = getCards().length < 5 ? addCard(group.name) : (getCards().filter(function(c) { return c.id === "habits"; })[0] || getCards()[0]);
-        target = groupTarget;
-      }
-      var exists = templateNamesFor(target.id).indexOf(item.name) !== -1;
-      var row = preview.rows.filter(function(r) { return (r.kind === "item" || r.kind === "newitem") && r.incoming === item; })[0];
-      if (!exists) { addCardItem(target.id, item.name); applyValues(target.id, item); }
-      else if (row && row.kind === "item" && row.choice === "import") applyValues(target.id, item);
+  var targetIds = {};
+  importApplyInProgress = true;
+  try {
+    (preview.groups || []).forEach(function(group) { if (targetIds[group.targetId]) return; targetIds[group.targetId] = group.newCard ? addCard(group.name).id : group.targetId; });
+    preview.rows.forEach(function(row) {
+      if (row.kind !== "item" && row.kind !== "newitem") return;
+      var targetId = targetIds[row.targetId] || row.targetId, item = row.incoming;
+      var exists = templateNamesFor(targetId).indexOf(item.name) !== -1;
+      if (!exists) { addCardItem(targetId, item.name); applyValues(targetId, item); }
+      else if (row.kind === "item" && row.choice === "import") applyValues(targetId, item);
     });
-  });
+  } finally { importApplyInProgress = false; }
   if (preview.data.reminders && !rawTimes) {
     var today = dk(new Date()), existing = getReminders(), byName = {};
     existing.forEach(function(r, i) { byName[r.name.toLowerCase()] = i; });
@@ -2072,6 +2085,7 @@ function importPreviewAllChoice() {
 function importPreviewRow(row, i, fromParser) {
   var isPrayer = row.kind === "newprayer" || row.kind === "prayer";
   var isNew = row.kind === "newitem" || row.kind === "newprayer";
+  var isReminder = row.kind === "reminder";
   var inc = row.incoming || {}, mine = row.mine || {};
   var item = isPrayer ? row.name : (row.name || inc.name || "");
   var td = 'padding:6px 8px;border-bottom:1px solid var(--bd)';
@@ -2080,15 +2094,21 @@ function importPreviewRow(row, i, fromParser) {
   // yet keeps its own "(new)" option so choosing it again is possible after switching away.
   var card;
   if (isPrayer) card = 'Prayers';
+  else if (isReminder) card = 'Reminders';
   else {
     var opts = getCards().map(function(c) { return '<option value="' + esA(c.id) + '"' + (c.id === row.targetId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; });
     if (String(row.targetId).indexOf("__new_") === 0) opts.push('<option value="' + esA(row.targetId) + '" selected>' + esc(row.cardName) + ' (new)</option>');
     card = '<select class="inp t-xs" data-a="importrowcard" data-i="' + i + '" aria-label="Card for ' + esA(item) + '">' + opts.join('') + '</select>';
   }
-  function fdays(dd){ return (dd && dd.length) ? dd.map(function(d){ return typeof d === "number" ? IMPORT_DAY_NAMES[d] : d; }).join('/') : "every day"; }
-  var incTime = inc.time || "-", incDur = fmtDur(inc.duration || (isPrayer ? 35 : 30)), incDays = fdays(inc.days);
+  function fdays(dd, order){ return (order && order.length ? order : dd && dd.length ? dd.map(function(d){ return typeof d === "number" ? IMPORT_DAY_NAMES[d] : d; }) : []).join('/') || "every day"; }
+  function slotList(slots) { return '<details style="white-space:normal"><summary>' + slots.length + ' slots</summary><div style="margin-top:4px">' + slots.map(function(slot) { return esc(slot.time + ' · ' + fmtDur(slot.duration) + ' · ' + fdays(slot.days, slot._daysOrder)); }).join('<br>') + '</div></details>'; }
+  function reminderSchedule(r) { var s = r.schedule || {}; return s.kind === "interval" ? 'every ' + s.every + ' ' + s.unit : (s.date || '-'); }
+  var incTime = inc.time || "-", incDur = fmtDur(inc.duration || (isPrayer ? 35 : 30)), incDays = fdays(inc.days, inc._daysOrder);
   var timeCell, durCell, daysCell, status;
-  if (isNew) {
+  if (isReminder) {
+    timeCell = '-'; durCell = esc(reminderSchedule(inc)); daysCell = '-';
+    status = '<span style="color:#79a06b;font-weight:600">NEW</span>';
+  } else if (isNew) {
     // Feature 4's second learning trigger — correcting a parser-sourced row's time before apply.
     // Gated on fromParser + newitem only, so the plain AI-JSON import path renders exactly as before.
     timeCell = (fromParser && row.kind === "newitem")
@@ -2102,6 +2122,9 @@ function importPreviewRow(row, i, fromParser) {
     timeCell = diff(mine.time || "-", incTime); durCell = diff(fmtDur(mine.duration || (isPrayer ? 35 : 30)), incDur); daysCell = diff(fdays(mine.days), incDays);
     status = '<span style="color:#bfa46a;font-weight:600">CONFLICT</span> <span style="display:inline-flex;gap:4px;margin-left:4px"><button class="bt t-xs' + (keepMine ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="mine">mine</button><button class="bt t-xs' + (row.choice === "import" ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="import">imported</button></span>';
   }
+  if (!isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
+    timeCell = slotList(inc.slots); durCell = '—'; daysCell = '—';
+  }
   // Fix 4/5: every reshape the AI or the app made is visible on its own row, and an overlap comes
   // with the one-tap fix rather than being silently moved for the user.
   if (row.overlap) status += '<div style="margin-top:4px;color:#e0a35c;font-size:11px;white-space:normal"><i class="fas fa-triangle-exclamation" style="margin-right:4px"></i>overlaps another block <button class="bt t-xs" data-a="importrowshift" data-i="' + i + '">Shift to next free slot</button></div>';
@@ -2109,14 +2132,17 @@ function importPreviewRow(row, i, fromParser) {
   return '<tr><td style="' + td + '">' + (isPrayer ? esc(card) : card) + '</td><td style="' + td + '">' + esc(item) + '</td><td style="' + td + '">' + timeCell + '</td><td style="' + td + '">' + durCell + '</td><td style="' + td + '">' + daysCell + '</td><td style="' + td + '">' + status + '</td></tr>';
 }
 function importSummaryText() {
-  var c = importPreview.addCards, it = importPreview.addItems, pr = importPreview.prayerSets;
+  var c = importPreview.addCards, it = importPreview.addItems, pr = importPreview.prayerSets, re = importPreview.reminders;
   var cf = importPreview.rows.filter(function(r){ return r.kind === "item" || r.kind === "prayer"; }).length;
   function pl(n, w){ return n + ' ' + w + (n === 1 ? '' : 's'); }
   var parts = [];
   if (c) parts.push(pl(c, 'card'));
   if (it) parts.push(pl(it, 'item'));
   if (pr) parts.push(pl(pr, 'prayer time'));
+  if (re) parts.push(pl(re, 'reminder'));
+  if (importPreview.folded) parts.push(pl(importPreview.folded, 'payload card') + ' will merge (5-card limit)');
   var head = parts.length ? 'Adds ' + parts.join(' · ') : 'Nothing new';
+  if (importPreview.mergedCards) head += ' · ' + pl(importPreview.mergedCards, 'payload card') + ' merges into existing card';
   return head + ' · ' + pl(cf, 'conflict') + ' to resolve.';
 }
 // kind: "ai" renders only the AI-setup flow, "type" only the parser flow (each in its own Settings
@@ -2135,7 +2161,7 @@ function renderImportPanel(kind) {
     h += '</div>';
   }
   // Preview renders beside the method that produced it (AI vs Type); no-arg shows it for either.
-  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' group' + (importPreview.folded === 1 ? '' : 's') + ' merged into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm" data-a="importall">Select all imported</button><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
+  if (importPreview && (kind === undefined || (!!importPreview.fromParser === (kind === "type")))) { h += (importPreview.folded > 0 ? '<p style="font-size:11px;color:#e0a35c;margin:10px 0 0">' + importPreview.folded + ' payload group' + (importPreview.folded === 1 ? '' : 's') + ' will merge into Daily Goals (5-card limit).</p>' : '') + (importPreview.data.notes ? '<p class="sch-importnotes" style="font-size:11.5px;line-height:1.6;opacity:.85;margin:10px 0 0;white-space:pre-wrap;border-left:2px solid var(--bd);padding-left:8px">' + esc(importPreview.data.notes) + '</p>' : '') + '<p class="sch-importsummary">' + importSummaryText() + '</p><div class="sch-importchoices"><button class="bt t-sm" data-a="importall">Select all imported</button><button class="bt t-sm' + (importPreviewAllChoice() === "mine" ? " on" : "") + '" data-a="importallmine">Keep all mine</button><button class="bt t-sm' + (importPreviewAllChoice() === "import" ? " on" : "") + '" data-a="importallimport">Keep all imported</button></div>'; h += '<div style="overflow-x:auto"><table class="sch-imptable" style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap"><thead><tr>' + ['Card','Item','Time','Dur','Days','Status'].map(function(c){ return '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);color:var(--mt);font-weight:600">' + c + '</th>'; }).join('') + '</tr></thead><tbody>'; importPreview.rows.forEach(function(row, i) { h += importPreviewRow(row, i, importPreview.fromParser); }); h += '</tbody></table></div><button class="bt bta t-sm" style="margin-top:10px" data-a="importapply">Apply import</button>'; }
   return h + '</div>';
 }
 
@@ -5649,15 +5675,13 @@ function _importSelfCheck() {
     var fit = addCard("Fitness"); addCardItem(fit.id, "Exercise");
     setNotifTime("prayers", "Asr", "17:35"); setItemDur("prayers", "Asr", 35);
 
-    // (1) routing: an item sharing a word with an existing card (or its items) goes there even when
-    // the payload grouped it under an invented card name; a genuinely unmatched item does not get
-    // forced onto a card by the guess.
+    // (1) routing: a named payload group owns every item in it, even when an existing card/item
+    // shares a keyword. Keyword guessing remains available only for unnamed parser input.
     assert(guessCardId("Exercise") === fit.id && guessCardId("Fitness class") === fit.id, "routing: an item matching an existing card/item should target that card");
     assert(guessCardId("Physiotherapy") === null, "routing: an unmatched item must NOT be guessed onto a card");
     var routed = buildImportPreview(parseImportSchedule('{"version":1,"cards":[{"name":"Study","items":[{"name":"Exercise","time":"20:00"},{"name":"Physiotherapy","time":"09:00"}]}]}').value);
     function routedRow(n) { return routed.rows.filter(function(r){ return r.incoming.name === n; })[0]; }
-    assert(routedRow("Exercise").targetId === fit.id, "routing: Exercise should have been re-routed to the existing Fitness card, not swept into the invented Study card");
-    assert(String(routedRow("Physiotherapy").targetId).indexOf("__new_") === 0, "routing: only the item nothing matched should still be creating the payload's own card");
+    assert(String(routedRow("Exercise").targetId).indexOf("__new_") === 0 && routedRow("Exercise").targetId === routedRow("Physiotherapy").targetId, "routing: named payload groups must keep all their items together");
     // the parser side of the same rule: unmatched lines fall back to the chip card (Daily Goals).
     var pRouted = parseScheduleText("Exercise 8-9pm\nPhysiotherapy 1:30-4pm on Sat", "habits");
     assert(pRouted.payload.cards.filter(function(c){ return c.name === "Fitness"; })[0].items[0].name === "Exercise", "routing: the parser must route Exercise to Fitness, not dump the whole day on the chip card");

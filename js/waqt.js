@@ -3311,6 +3311,15 @@ var expandedPeharCards = {};
 // Repeated timeline activities stay folded until explicitly opened. Kept in memory so
 // a render after ticking an occurrence does not collapse the user's open group.
 var expandedPeharBundles = {};
+var expandedPeharDayparts = {};
+var peharBundleUndo = null, peharBundleUndoTimer = null;
+function peharDaypart(minute) { if (minute < 300) return "Night"; if (minute < 720) return "Morning"; if (minute < 1020) return "Afternoon"; if (minute < 1260) return "Evening"; return "Late"; }
+function showPeharBundleUndo(message, undo) {
+  peharBundleUndo = undo; clearTimeout(peharBundleUndoTimer); toast(message);
+  var toastEl = document.getElementById("toast");
+  if (toastEl) { toastEl.textContent = message + " "; var undoButton = document.createElement("button"); undoButton.type = "button"; undoButton.className = "sch-toastundo"; undoButton.dataset.a = "undobundle"; undoButton.textContent = "Undo"; toastEl.appendChild(undoButton); toastEl.style.pointerEvents = "auto"; }
+  peharBundleUndoTimer = setTimeout(function() { peharBundleUndo = null; if (toastEl) toastEl.style.pointerEvents = ""; }, 2200);
+}
 function renderTimedDisclosure(card, dow) {
   // Timed work now appears directly in Today's Pehar rail.
   return "";
@@ -4038,7 +4047,14 @@ function renderPeharRail(cards, timeline, td, nowMin) {
     if (!bundles[key]) bundles[key] = [];
     bundles[key].push(item);
   });
-  timeline.forEach(function(item) {
+  var dayparts = { Night:[], Morning:[], Afternoon:[], Evening:[], Late:[] };
+  timeline.forEach(function(item) { dayparts[peharDaypart(item.start)].push(item); });
+  ["Night", "Morning", "Afternoon", "Evening", "Late"].forEach(function(part) {
+    var partItems = dayparts[part]; if (!partItems.length) return;
+    var realItems = partItems.filter(function(item) { return !item.openBlock; }), partDone = realItems.filter(function(item) { return item.done; }).length;
+    var partOpen = Object.prototype.hasOwnProperty.call(expandedPeharDayparts, part) ? expandedPeharDayparts[part] : (!td || peharDaypart(nowMin) === part);
+    h += '<section class="sch-daypart' + (partOpen ? ' open' : '') + '"><button type="button" class="sch-dayparthead" data-a="pehardaypart" data-part="' + part + '" aria-expanded="' + (partOpen ? 'true' : 'false') + '"><span>' + part + '</span><small>' + partDone + '/' + realItems.length + '</small><i class="fas fa-chevron-down"></i></button><div class="sch-daypartblocks">';
+    partItems.forEach(function(item) {
     var bundleKey = item.id + '::' + item.name, bundle = bundles[bundleKey];
     // Bundle a repeated activity. The summary row (a toggle) always renders once, on the first
     // occurrence, so the bundle can be collapsed AND re-collapsed. Collapsed: only the summary.
@@ -4049,7 +4065,7 @@ function renderPeharRail(cards, timeline, td, nowMin) {
         var bundleDone = bundle.filter(function(occurrence) { return occurrence.done; }).length;
         // "next" = the next not-yet-past occurrence today (else the first), never a hardcoded slot.
         var nextOcc = (td && bundle.filter(function(o) { return o.start >= nowMin; })[0]) || bundle[0];
-        h += '<div class="sch-block sch-bundle' + (bundleExpanded ? ' open' : '') + '" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(nextOcc.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><button type="button" class="sch-card" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="' + (bundleExpanded ? 'true' : 'false') + '"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · ' + (bundleExpanded ? 'tap to collapse' : 'next ' + prettyTime(nextOcc.t)) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div>';
+        h += '<div class="sch-block sch-bundle' + (bundleExpanded ? ' open' : '') + '" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(nextOcc.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><div class="sch-card"><button type="button" class="sch-bundlecomplete' + (bundleDone === bundle.length ? ' checked' : '') + '" data-a="peharbundledone" data-bundle="' + esA(bundleKey) + '" aria-label="' + (bundleDone === bundle.length ? 'Mark all undone' : 'Mark all done') + '"><span class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></span></button><button type="button" class="sch-bundletext" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="' + (bundleExpanded ? 'true' : 'false') + '"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · ' + (bundleExpanded ? 'tap to collapse' : 'next ' + prettyTime(nextOcc.t)) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div></div>';
         if (!bundleExpanded) return;
         // expanded: fall through to also render bundle[0] as its own normal occurrence row
       } else if (!bundleExpanded) {
@@ -4063,10 +4079,12 @@ function renderPeharRail(cards, timeline, td, nowMin) {
       return;
     }
     var ekey = item.okey || (item.id + "::" + item.name);
-    h += '<div class="sch-block' + (item.done ? ' checked' : '') + (isNow ? ' now' : '') + (item.isPrayer ? ' prayer' : '') + '" data-block="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(item.t) + '<small>' + fmtDur(item.dur) + '</small></div><div class="sch-node"><i></i></div><div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div><div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '"><p class="sch-title">' + esc(item.name) + (item.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '') + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
-    h += !item.oneday ? '<button class="sch-edit" data-a="schedit" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '"><i class="fas fa-pen"></i></button>' : '<button class="sch-edit" data-a="oddel" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" aria-label="Remove ' + esA(item.name) + '"><i class="fas fa-xmark"></i></button>';
+    h += '<div class="sch-block' + (item.done ? ' checked' : '') + (isNow ? ' now' : '') + (item.isPrayer ? ' prayer sch-prayeranchor' : '') + '" data-block="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(item.t) + (item.isPrayer ? '' : '<small>' + fmtDur(item.dur) + '</small>') + '</div><div class="sch-node"><i></i></div><div class="sch-gest" data-gest="complete" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '" style="--kc:' + item.kc + '"><div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div><div class="sch-card sch-gest-row" data-a="schtog" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" data-o="' + esA(ekey) + '"><p class="sch-title">' + esc(item.name) + (item.isPrayer ? '' : (item.optional ? ' <span class="sch-optionaltag">optional</span>' : '') + (item.overlap ? ' <span class="sch-overlap">overlap</span>' : '') + (item.oneday ? ' <span class="sch-todaytag">today</span>' : '')) + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p>';
+    h += item.isPrayer ? '' : (!item.oneday ? '<button class="sch-edit" data-a="schedit" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '"><i class="fas fa-pen"></i></button>' : '<button class="sch-edit" data-a="oddel" data-f="' + esA(item.id) + '" data-k="' + esA(item.name) + '" aria-label="Remove ' + esA(item.name) + '"><i class="fas fa-xmark"></i></button>');
     h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div></div></div></div>';
     if (!item.oneday && schEdit === ekey) h += editorHTML(item.id, item.name);
+    });
+    h += '</div></section>';
   });
   return h + '</div>';
 }
@@ -4077,8 +4095,8 @@ function renderNowNext(timeline, nowMin) {
   var upcoming = timed.filter(function(item) { return item.start > nowMin; }).slice(0, now ? 1 : 2);
   if (!now && !upcoming.length) return '';
   var h = '<div class="sch-nownext"><p class="sch-anylbl">NOW &amp; NEXT</p>';
-  if (now) h += '<button type="button" class="sch-nownextrow now" data-a="gototimeline" data-block="' + esA(now.okey || (now.id + '::' + now.name)) + '"' + (!now.isPrayer ? ' data-bundle="' + esA(now.id + '::' + now.name) + '"' : '') + '><b>NOW</b><span>' + esc(now.name) + '</span><time>' + prettyTime(now.t) + '</time></button>';
-  upcoming.forEach(function(item) { h += '<button type="button" class="sch-nownextrow" data-a="gototimeline" data-block="' + esA(item.okey || (item.id + '::' + item.name)) + '"' + (!item.isPrayer ? ' data-bundle="' + esA(item.id + '::' + item.name) + '"' : '') + '><b>Next</b><span>' + esc(item.name) + '</span><time>' + prettyTime(item.t) + '</time></button>'; });
+  if (now) h += '<button type="button" class="sch-nownextrow now" data-a="gototimeline" data-block="' + esA(now.okey || (now.id + '::' + now.name)) + '" data-part="' + peharDaypart(now.start) + '"' + (!now.isPrayer ? ' data-bundle="' + esA(now.id + '::' + now.name) + '"' : '') + '><b>NOW</b><span>' + esc(now.name) + '</span><time>' + prettyTime(now.t) + '</time></button>';
+  upcoming.forEach(function(item) { h += '<button type="button" class="sch-nownextrow" data-a="gototimeline" data-block="' + esA(item.okey || (item.id + '::' + item.name)) + '" data-part="' + peharDaypart(item.start) + '"' + (!item.isPrayer ? ' data-bundle="' + esA(item.id + '::' + item.name) + '"' : '') + '><b>Next</b><span>' + esc(item.name) + '</span><time>' + prettyTime(item.t) + '</time></button>'; });
   return h + '</div>';
 }
 
@@ -4229,6 +4247,7 @@ function _dailySelfCheck() {
   delete expandedPeharBundles[bundleKey];
   var foldedRail = renderPeharRail([], bundled, true, 400);
   console.assert(foldedRail.indexOf('data-a="peharbundle"') !== -1 && foldedRail.indexOf('2× today') !== -1 && foldedRail.indexOf('data-o="habits::__sc_repeat__::06:13"') === -1, "(f) repeated activity must fold by default");
+  console.assert(foldedRail.indexOf('data-a="peharbundledone"') !== -1 && foldedRail.indexOf('class="sch-daypart open"') !== -1 && foldedRail.indexOf('>Morning<') !== -1, "(f) bundle completion and active day-part markup must render");
   expandedPeharBundles[bundleKey] = true;
   var openRail = renderPeharRail([], bundled, true, 400);
   console.assert(openRail.indexOf('data-o="habits::__sc_repeat__::06:13"') !== -1 && openRail.indexOf('data-o="habits::__sc_repeat__::13:35"') !== -1, "(f) expanded bundle must expose individual occurrences");
@@ -4643,6 +4662,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       var blockId = t.dataset.block;
       var jumpToBlock = function() {
         var tgt = document.querySelector('.sch-block[data-block="' + CSS.escape(blockId) + '"]');
+        if (!tgt && t.dataset.part) { expandedPeharDayparts[t.dataset.part] = true; render(); setTimeout(jumpToBlock, 60); return; }
         if (!tgt && t.dataset.bundle) { expandedPeharBundles[t.dataset.bundle] = true; render(); setTimeout(jumpToBlock, 60); return; }
         if (!tgt) return;
         tgt.scrollIntoView({ behavior: carReducedMotion() ? "auto" : "smooth", block: "center" });
@@ -4840,6 +4860,14 @@ document.getElementById("app").addEventListener("click", function(e) {
       expandedPeharBundles[t.dataset.bundle] = !expandedPeharBundles[t.dataset.bundle];
       render(); return;
     }
+    if (a === "pehardaypart") { expandedPeharDayparts[t.dataset.part] = !t.closest(".sch-daypart").classList.contains("open"); render(); return; }
+    if (a === "peharbundledone") {
+      var bundleId = t.dataset.bundle, bundleBits = bundleId.split("::"), bundleRows = insertOpenBlocks(buildTimeline(getCards(), cData, dowOf(dk(cDate)))).filter(function(item) { return !item.openBlock && !item.isPrayer && item.id === bundleBits[0] && item.name === bundleBits.slice(1).join("::"); });
+      var allDone = bundleRows.every(function(item) { return item.done; }), before = {}; if (!cData.slotDone) cData.slotDone = {};
+      bundleRows.forEach(function(item) { before[item.okey] = occurrenceDone(cData, item.id, item.name, item.okey); cData.slotDone[item.okey] = !allDone; });
+      sDay(); render(); showPeharBundleUndo(bundleRows[0].name + " · " + bundleRows.length + "× " + (!allDone ? "done" : "undone"), function() { bundleRows.forEach(function(item) { cData.slotDone[item.okey] = before[item.okey]; }); sDay(); render(); toast("Restored"); }); return;
+    }
+    if (a === "undobundle" && peharBundleUndo) { var undoBundle = peharBundleUndo; peharBundleUndo = null; undoBundle(); return; }
     if (a === "prayerstoggle") {
       var wasPrayersOn = prayersOn();
       setPrayersOn(!wasPrayersOn);

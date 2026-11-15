@@ -227,6 +227,8 @@ body::before{display:none!important}
 .sch-rep .sch-box{width:16px;height:16px;border-radius:5px;flex:0 0 16px}
 .sch-rep.on .sch-name{opacity:.45;text-decoration:line-through}
 .sch-name{font-size:14px;flex:1}
+.sch-prtime{margin-left:auto;color:var(--mt);font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.sch-rep.on .sch-prtime{opacity:.45}
 
 .sch-empty{text-align:center;color:var(--smut);font-size:14px;margin:24px 0;line-height:1.5}
 .sch-emptystate{display:flex;align-items:center;gap:8px;color:var(--smut);font-size:13px;margin:2px 0 10px}

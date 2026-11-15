@@ -2384,6 +2384,8 @@ function rOnboarding() {
   } else if (onbStep === 3) {
     h += '<h1 class="sch-onbtitle">Set your prayer times</h1>';
     h += '<p class="sch-onblede">Enter your prayer times so they show up on your timeline. You can skip this and set it up later in Plan.</p>';
+    h += '<button class="sch-onbgo" style="width:100%" data-a="onbautoloc"><i class="fas fa-location-crosshairs mr-1.5"></i>Auto-detect from my location</button>';
+    h += '<p style="text-align:center;color:var(--mt);font-size:12px">or enter them by hand</p>';
     PRAYERS.forEach(function(name) {
       h += '<div class="sch-prayrow"><span class="sch-praynode" style="--kc:' + PRAYER_GREEN + '"></span><span class="sch-name">' + esc(name) + '</span>';
       h += '<input type="time" class="sch-timeinp" id="onb-' + esA(name) + '" value="' + esA(ONB_DEFAULTS[name] || "") + '"></div>';
@@ -2927,7 +2929,7 @@ function rOverview() {
   h += '<p style="margin:4px 0 0;font-size:11px;color:var(--mt)"><i class="fas fa-fire" style="margin-right:4px"></i>days completed in a row, shown as <b>now</b> · <b>best</b> ever</p>';
   // First-visit nudge: tracking starts OFF for everything, so tell the user how to turn it on.
   if (!localStorage.getItem(OV_INTRO_KEY)) {
-    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Tap the <i class="fas fa-pen"></i> on any card to pick which items get a streak grid.</div>';
+    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan and check them off for a few days — your streak grids and patterns appear here.</div>';
     h += '<button type="button" class="sch-ib" data-a="ovintroclose" aria-label="Got it"><i class="fas fa-xmark"></i></button></div>';
   }
   var ccSlides = renderCardConsistencySlides(md, cardsMeta, cardDayItems);
@@ -3401,19 +3403,22 @@ function renderPrayersDayCard() {
   var fard = items.filter(function(it){ return !it.voluntary; });
   var done = fard.filter(function(it){ return it.done; }).length, total = fard.length;
   var pct = Math.round(done / total * 100), kc = PRAYER_GREEN;
-  var untimed = items.filter(function(it){ return !it.time; });
   var timed = items.filter(function(it){ return !!it.time; });
   var h = '<div class="sch-cardblock" style="--kc:' + kc + '">';
   h += '<div class="sch-cardhead"><i class="fas fa-mosque sch-cardicon"></i><span class="sch-cardname">Prayers</span><button type="button" class="sch-ib" style="margin-left:auto" data-a="prayertimes" aria-label="Prayer time windows"><i class="fas fa-clock"></i></button><span class="sch-cardcount">' + done + '/' + total + '</span></div>';
   h += '<div class="sch-cardbar"><div class="sch-cardbarfill" style="transform:scaleX(' + (pct / 100) + ')"></div></div>';
-  untimed.forEach(function(it){
+  // Every prayer shows as a tappable row here — timed or not — so the day's prayers are always
+  // checkable on Today without hunting the timeline. Timed prayers also appear on the Pehar rail
+  // below as time anchors; this card is the fast check-off surface.
+  items.forEach(function(it){
     h += '<div class="sch-gest" data-gest="complete" data-f="prayers" data-k="' + esA(it.n) + '" style="--kc:' + kc + '">';
     h += '<div class="sch-gest-action sch-gest-complete" aria-hidden="true"><i class="fas fa-check"></i></div>';
     h += '<div class="sch-rep sch-gest-row' + (it.done ? ' on' : '') + '" data-a="schtog" data-f="prayers" data-k="' + esA(it.n) + '" style="--kc:' + kc + '">';
     h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div>';
-    h += '<span class="sch-name">' + esc(it.n) + '</span></div></div>';
+    h += '<span class="sch-name">' + esc(it.n) + (it.voluntary ? ' <span class="sch-optionaltag">optional</span>' : '') + '</span>';
+    if (it.time) h += '<span class="sch-prtime">' + esc(prettyTime(it.time)) + '</span>';
+    h += '</div></div>';
   });
-  h += renderTimedDisclosure({ id:"prayers", color:kc, items:timed }, dowOf(dk(cDate)));
   if (!timed.length) h += '<p style="font-size:11px;color:var(--mt);margin:8px 0 0">Set prayer times in Plan to place them on your timeline.</p>';
   h += renderTakbeerTracker();
   return h + '</div>';
@@ -4762,6 +4767,19 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "onbstep1") { onbStep = 2; render(); return; }
     if (a === "onbstep2") { onbStep = prayersOn() ? 3 : 4; render(); return; }
     if (a === "onbskip1")  { onbStep = 4; render(); return; }
+    if (a === "onbautoloc") {
+      setPrayerAutoAndApply(true);
+      var _done = function(g) {
+        if (g) { _autoPrayerAppliedDate = null; applyAutoPrayerTimes(); onbStep = 4; }
+        else { setPrayerAutoAndApply(false); toast("Couldn't get your location — enter times by hand below."); }
+        render();
+      };
+      if (typeof getPrayerGeo === "function" && getPrayerGeo()) { _done(true); return; }
+      toast("Getting your location…");
+      if (typeof fetchPrayerLocation === "function") fetchPrayerLocation().then(_done);
+      else { setPrayerAutoAndApply(false); render(); }
+      return;
+    }
     if (a === "onbcontinue") {
       PRAYERS.forEach(function(name) {
         var el = document.getElementById("onb-" + name), v = el && el.value;

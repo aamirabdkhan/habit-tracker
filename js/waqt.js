@@ -2123,7 +2123,7 @@ function importPreviewRow(row, i, fromParser) {
     status = '<span style="color:#bfa46a;font-weight:600">CONFLICT</span> <span style="display:inline-flex;gap:4px;margin-left:4px"><button class="bt t-xs' + (keepMine ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="mine">mine</button><button class="bt t-xs' + (row.choice === "import" ? ' on' : '') + '" data-a="importresolve" data-i="' + i + '" data-choice="import">imported</button></span>';
   }
   if (!isReminder && !isPrayer && inc.slots && inc.slots.length > 1) {
-    timeCell = slotList(inc.slots); durCell = '—'; daysCell = '—';
+    timeCell = slotList(inc.slots); durCell = '·'; daysCell = '·';
   }
   // Fix 4/5: every reshape the AI or the app made is visible on its own row, and an overlap comes
   // with the one-tap fix rather than being silently moved for the user.
@@ -2841,11 +2841,11 @@ function renderPatternsCard(md) {
   var P = overviewPatterns(md);
   if (!P.findings.length) return "";
   var h = '<div class="sch-ovcard"><h3>Patterns</h3>';
-  h += '<p class="sch-ovsub" style="margin:4px 0 0">Based on ' + P.trackedDays + ' tracked days this month — not advice, just what co-occurs.</p>';
+  h += '<p class="sch-ovsub" style="margin:4px 0 0">Based on ' + P.trackedDays + ' tracked days this month. Not advice, just what co-occurs.</p>';
   P.findings.forEach(function(f) {
     var up = f.effect > 0;
     h += '<div class="sch-pat"><span class="sch-patbar" style="background:' + esA(f.color) + '"></span>'
-      + '<span class="sch-pattext"><b>' + esc(f.a) + '</b> — ' + Math.round(f.pOn * 100) + '% done on days you do <b>' + esc(f.b) + '</b>, '
+      + '<span class="sch-pattext"><b>' + esc(f.a) + '</b>: ' + Math.round(f.pOn * 100) + '% done on days you do <b>' + esc(f.b) + '</b>, '
       + Math.round(f.pOff * 100) + '% when you don’t <em class="sch-pattag" style="color:' + (up ? '#82a06e' : '#c98f6a') + '">'
       + (up ? 'moves together' : 'tends to clash') + '</em></span></div>';
   });
@@ -2958,7 +2958,7 @@ function rOverview() {
   h += '<p style="margin:4px 0 0;font-size:11px;color:var(--mt)"><i class="fas fa-fire" style="margin-right:4px"></i>days completed in a row, shown as <b>now</b> · <b>best</b> ever</p>';
   // First-visit nudge: tracking starts OFF for everything, so tell the user how to turn it on.
   if (!localStorage.getItem(OV_INTRO_KEY)) {
-    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan, then check them off on Today for a few days — your streak grids and patterns appear here.</div>';
+    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan, then check them off on Today for a few days, and your streak grids and patterns appear here.</div>';
     h += '<button type="button" class="sch-ib" data-a="ovintroclose" aria-label="Got it"><i class="fas fa-xmark"></i></button></div>';
   }
   var ccSlides = renderCardConsistencySlides(md, cardsMeta, cardDayItems);
@@ -3964,20 +3964,21 @@ function rSchedule() {
   h += '<circle class="sch-track" cx="31" cy="31" r="27"></circle>';
   h += '<circle class="sch-fill" cx="31" cy="31" r="27" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '" style="stroke:' + completionRampColor(pct) + '"></circle>';
   h += '</svg><div class="sch-pct">' + pct + '%</div></div><div class="sch-statuscopy">';
-  h += '<p class="sch-statusmain">' + (done ? done + ' of ' + total + ' done today' : 'Start your day — ' + total + ' things planned') + '</p>';
+  h += '<p class="sch-statusmain">' + (done ? done + ' of ' + total + ' done today' : 'Start your day · ' + total + ' things planned') + '</p>';
   h += '<div class="sch-statcols">';
   if (prayersOn()) h += '<div class="sch-statcol" data-cardchip="prayers" data-done="' + pd + '" data-total="5"><span class="sch-statnum">' + pd + '/5</span><span class="sch-statlbl">Prayers</span></div>';
   h += '<div class="sch-statcol" data-cardchip="tasks" data-done="' + doneTasks + '" data-total="' + totalTasks + '"><span class="sch-statnum">' + doneTasks + '/' + totalTasks + '</span><span class="sch-statlbl">Tasks</span></div>';
   h += '</div></div></div>';
-  // next-prayer countdown — today only, hidden until at least one prayer has a time.
-  if (td && prayersOn()) {
+  // next-prayer countdown — today only, hidden until at least one prayer has a time. Shown only when
+  // the Pehar feed (and its richer "Now & Next" block) is OFF, so the two never duplicate.
+  if (td && prayersOn() && !peharOn()) {
     var prayerTimesMap = {}; PRAYERS.forEach(function(p) { prayerTimesMap[p] = getNotifTime("prayers", p); });
     var npc = computeNextPrayer(nowMin, prayerTimesMap);
     if (npc) h += '<div class="sch-nextdiv"><p class="sch-next"><span class="sch-nextdot"></span>Next: <b>' + esc(npc.name) + '</b> &middot; in ' + fmtHM(npc.mins) + '</p></div>';
   }
   h += '</div>';
 
-  if (td) h += renderNowNext(timeline, nowMin);
+  if (td && peharOn()) h += renderNowNext(timeline, nowMin);
 
   // weight tile (reuses production's id="wi" change handler)
   // NOTE: production's #wi handler stores weight as a NUMBER (parseFloat) and sDay persists it as a
@@ -4013,14 +4014,21 @@ function renderPeharRail(cards, timeline, td, nowMin) {
   });
   timeline.forEach(function(item) {
     var bundleKey = item.id + '::' + item.name, bundle = bundles[bundleKey];
-    // Bundle a repeated activity into ONE collapsed summary row (rendered once, on the first
-    // occurrence). When expanded, this whole block is skipped so every occurrence falls through
-    // and renders as its own normal timed row at its real position.
-    if (!item.openBlock && !item.isPrayer && bundle.length > 1 && !expandedPeharBundles[bundleKey]) {
-      if (item !== bundle[0]) return;
-      var bundleDone = bundle.filter(function(occurrence) { return occurrence.done; }).length;
-      h += '<div class="sch-block sch-bundle" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(item.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><button type="button" class="sch-card" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="false"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · next ' + prettyTime(item.t) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div>';
-      return;
+    // Bundle a repeated activity. The summary row (a toggle) always renders once, on the first
+    // occurrence, so the bundle can be collapsed AND re-collapsed. Collapsed: only the summary.
+    // Expanded: the summary toggle plus every occurrence as its own normal row at its real time.
+    if (!item.openBlock && !item.isPrayer && bundle.length > 1) {
+      var bundleExpanded = !!expandedPeharBundles[bundleKey];
+      if (item === bundle[0]) {
+        var bundleDone = bundle.filter(function(occurrence) { return occurrence.done; }).length;
+        // "next" = the next not-yet-past occurrence today (else the first), never a hardcoded slot.
+        var nextOcc = (td && bundle.filter(function(o) { return o.start >= nowMin; })[0]) || bundle[0];
+        h += '<div class="sch-block sch-bundle' + (bundleExpanded ? ' open' : '') + '" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(nextOcc.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><button type="button" class="sch-card" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="' + (bundleExpanded ? 'true' : 'false') + '"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · ' + (bundleExpanded ? 'tap to collapse' : 'next ' + prettyTime(nextOcc.t)) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div>';
+        if (!bundleExpanded) return;
+        // expanded: fall through to also render bundle[0] as its own normal occurrence row
+      } else if (!bundleExpanded) {
+        return; // collapsed: non-first occurrences are represented by the summary row
+      }
     }
     var isNow = td && nowMin >= item.start && nowMin < item.end;
     if (item.openBlock) {

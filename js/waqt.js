@@ -2384,11 +2384,14 @@ function rOnboarding() {
   } else if (onbStep === 3) {
     h += '<h1 class="sch-onbtitle">Set your prayer times</h1>';
     h += '<p class="sch-onblede">Enter your prayer times so they show up on your timeline. You can skip this and set it up later in Plan.</p>';
-    h += '<button class="sch-onbgo" style="width:100%" data-a="onbautoloc"><i class="fas fa-location-crosshairs mr-1.5"></i>Auto-detect from my location</button>';
+    // Auto-detect is the recommended path (outline style so it doesn't read as a second primary
+    // next to Continue). Manual inputs start EMPTY — prefilled defaults would let a user commit
+    // arbitrary times blind, the exact problem this step fixes. Continue only writes times you set.
+    h += '<button class="sch-onbgo" style="width:100%;background:transparent;border:1px solid var(--ac);color:var(--ac)" data-a="onbautoloc"><i class="fas fa-location-crosshairs mr-1.5"></i>Auto-detect from my location</button>';
     h += '<p style="text-align:center;color:var(--mt);font-size:12px">or enter them by hand</p>';
     PRAYERS.forEach(function(name) {
       h += '<div class="sch-prayrow"><span class="sch-praynode" style="--kc:' + PRAYER_GREEN + '"></span><span class="sch-name">' + esc(name) + '</span>';
-      h += '<input type="time" class="sch-timeinp" id="onb-' + esA(name) + '" value="' + esA(ONB_DEFAULTS[name] || "") + '"></div>';
+      h += '<input type="time" class="sch-timeinp" id="onb-' + esA(name) + '"></div>';
     });
     h += '<div class="sch-onbfoot"><button class="sch-onbskip" data-a="onbskip1">Skip for now</button><button class="sch-onbgo" data-a="onbcontinue">Continue</button></div>';
   } else {
@@ -2929,7 +2932,7 @@ function rOverview() {
   h += '<p style="margin:4px 0 0;font-size:11px;color:var(--mt)"><i class="fas fa-fire" style="margin-right:4px"></i>days completed in a row, shown as <b>now</b> · <b>best</b> ever</p>';
   // First-visit nudge: tracking starts OFF for everything, so tell the user how to turn it on.
   if (!localStorage.getItem(OV_INTRO_KEY)) {
-    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan and check them off for a few days — your streak grids and patterns appear here.</div>';
+    h += '<div class="sch-ovintro"><div><b>Nothing is tracked yet.</b><br>Add habits on your Plan, then check them off on Today for a few days — your streak grids and patterns appear here.</div>';
     h += '<button type="button" class="sch-ib" data-a="ovintroclose" aria-label="Got it"><i class="fas fa-xmark"></i></button></div>';
   }
   var ccSlides = renderCardConsistencySlides(md, cardsMeta, cardDayItems);

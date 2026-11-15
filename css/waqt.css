@@ -114,6 +114,8 @@ body::before{display:none!important}
 /* ring + counts */
 .sch-status{display:flex;flex-direction:column;margin-top:18px;padding:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(6px)}
 .sch-statusrow{display:flex;align-items:center;gap:16px}
+.sch-statuscopy{flex:1;min-width:0}
+.sch-statusmain{margin:0 0 8px;color:var(--stext);font-size:14px;font-weight:600;letter-spacing:-.01em}
 .sch-nextdiv{margin-top:12px;padding-top:10px;border-top:1px dashed var(--line)}
 .sch-next{display:flex;align-items:center;gap:7px;font-family:var(--smono);font-size:12px;color:var(--smut);margin:0}
 .sch-next b{color:var(--stext);font-weight:600}
@@ -124,10 +126,20 @@ body::before{display:none!important}
 .sch-ring .sch-track{stroke:rgba(126,146,180,.16)}
 .sch-ring .sch-fill{stroke:var(--study);transition:stroke-dashoffset .5s ease,stroke .3s ease}
 .sch-pct{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--smono);font-size:14px;font-weight:600}
-.sch-statcols{display:flex;flex-wrap:wrap;justify-content:space-around;align-items:flex-start;gap:10px 6px;flex:1;min-width:0}
-.sch-statcol{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:38px}
-.sch-statnum{font-family:var(--smono);font-size:18px;font-weight:700;line-height:1;color:var(--stext);font-variant-numeric:tabular-nums;white-space:nowrap}
-.sch-statlbl{font-family:var(--smono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mt);white-space:nowrap}
+.sch-statcols{display:flex;align-items:flex-start;gap:7px;min-width:0}
+.sch-statcol{display:flex;align-items:baseline;gap:4px;padding:5px 7px;background:var(--ink2);border:1px solid var(--line);border-radius:7px}
+.sch-statnum{font-family:var(--smono);font-size:12px;font-weight:700;line-height:1;color:var(--stext);font-variant-numeric:tabular-nums;white-space:nowrap}
+.sch-statlbl{font-family:var(--smono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--mt);white-space:nowrap}
+
+/* Today focus: compact jump links; timeline remains full source of truth. */
+.sch-nownext{margin-top:10px;padding:11px 13px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.sch-nownext .sch-anylbl{margin:0 0 5px}
+.sch-nownextrow{appearance:none;width:100%;display:grid;grid-template-columns:37px minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;background:none;border:0;color:var(--stext);font:inherit;text-align:left;cursor:pointer}
+.sch-nownextrow+.sch-nownextrow{border-top:1px solid var(--line)}
+.sch-nownextrow b{font-family:var(--smono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--smut)}
+.sch-nownextrow.now b{color:var(--kc,var(--study))}
+.sch-nownextrow span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600}
+.sch-nownextrow time{font-family:var(--smono);font-size:11px;color:var(--smut)}
 
 /* weight tile */
 .sch-wtile{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
@@ -158,6 +170,9 @@ body::before{display:none!important}
 .sch-block.checked .sch-box svg{opacity:1;transform:scale(1)}
 .sch-block.checked .sch-title{text-decoration:line-through;text-decoration-thickness:1px;opacity:.5}
 .sch-block.now .sch-card{border-color:var(--kc);box-shadow:0 0 0 1px var(--kc),0 8px 30px -12px var(--kc)}
+.sch-bundle .sch-card{width:100%;font:inherit;text-align:left}
+.sch-bundletag,.sch-bundlecount{font-family:var(--smono);font-size:10px;font-weight:500;color:var(--smut);white-space:nowrap}
+.sch-bundlecount{color:var(--stext);margin-left:auto}
 .sch-nowtag{font-family:var(--smono);font-size:9.5px;letter-spacing:.16em;color:var(--ink);background:var(--kc);border-radius:4px;padding:2px 5px;margin-left:8px;vertical-align:2px}
 .sch-time small{display:block;font-size:10.5px;color:var(--smut);margin-top:1px;font-weight:400}
 .sch-block.sch-openblock .sch-card{cursor:pointer;background:transparent;border-style:dashed;opacity:.48}

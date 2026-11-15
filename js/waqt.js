@@ -3282,6 +3282,9 @@ function buildTimeline(cards, day, dow) {
 
 // Cards keep timed work in this compact disclosure; timeline remains its only completion surface.
 var expandedPeharCards = {};
+// Repeated timeline activities stay folded until explicitly opened. Kept in memory so
+// a render after ticking an occurrence does not collapse the user's open group.
+var expandedPeharBundles = {};
 function renderTimedDisclosure(card, dow) {
   // Timed work now appears directly in Today's Pehar rail.
   return "";
@@ -3956,18 +3959,16 @@ function rSchedule() {
   h += '<div class="al"></div>';
   h += renderWeekStrip(key);
 
-  // ring + per-card count chips (Prayers first, then one chip per card)
+  // Ring, overall progress, and only the two useful summaries. Per-card counts live on cards.
   h += '<div class="sch-status"><div class="sch-statusrow"><div class="sch-ring"><svg width="62" height="62" viewBox="0 0 62 62">';
   h += '<circle class="sch-track" cx="31" cy="31" r="27"></circle>';
   h += '<circle class="sch-fill" cx="31" cy="31" r="27" stroke-dasharray="' + C + '" stroke-dashoffset="' + off + '" style="stroke:' + completionRampColor(pct) + '"></circle>';
-  h += '</svg><div class="sch-pct">' + pct + '%</div></div><div class="sch-statcols">';
+  h += '</svg><div class="sch-pct">' + pct + '%</div></div><div class="sch-statuscopy">';
+  h += '<p class="sch-statusmain">' + (done ? done + ' of ' + total + ' done today' : 'Start your day — ' + total + ' things planned') + '</p>';
+  h += '<div class="sch-statcols">';
   if (prayersOn()) h += '<div class="sch-statcol" data-cardchip="prayers" data-done="' + pd + '" data-total="5"><span class="sch-statnum">' + pd + '/5</span><span class="sch-statlbl">Prayers</span></div>';
-  cardItems.forEach(function(ci) {
-    var cardScore = scoreItems(ci.items), d = cardScore.done, t = cardScore.total;
-    var label = ci.card.name.split(' ')[0];
-    h += '<div class="sch-statcol" data-cardchip="' + esA(ci.card.id) + '" data-done="' + d + '" data-total="' + t + '"><span class="sch-statnum">' + d + '/' + t + '</span><span class="sch-statlbl">' + esc(label) + '</span></div>';
-  });
-  h += '</div></div>';
+  h += '<div class="sch-statcol" data-cardchip="tasks" data-done="' + doneTasks + '" data-total="' + totalTasks + '"><span class="sch-statnum">' + doneTasks + '/' + totalTasks + '</span><span class="sch-statlbl">Tasks</span></div>';
+  h += '</div></div></div>';
   // next-prayer countdown — today only, hidden until at least one prayer has a time.
   if (td && prayersOn()) {
     var prayerTimesMap = {}; PRAYERS.forEach(function(p) { prayerTimesMap[p] = getNotifTime("prayers", p); });
@@ -3975,6 +3976,8 @@ function rSchedule() {
     if (npc) h += '<div class="sch-nextdiv"><p class="sch-next"><span class="sch-nextdot"></span>Next: <b>' + esc(npc.name) + '</b> &middot; in ' + fmtHM(npc.mins) + '</p></div>';
   }
   h += '</div>';
+
+  if (td) h += renderNowNext(timeline, nowMin);
 
   // weight tile (reuses production's id="wi" change handler)
   // NOTE: production's #wi handler stores weight as a NUMBER (parseFloat) and sDay persists it as a
@@ -4001,7 +4004,24 @@ function renderPeharRail(cards, timeline, td, nowMin) {
   var h = '<div class="sch-peharhead"><p class="sch-anylbl sch-phtitle">PEHAR</p>' + (td ? '<button type="button" class="sch-copyy sch-phright" data-a="copyyesterday"><i class="fas fa-copy"></i> Copy yesterday\'s tasks</button>' : '') + '</div>';
   if (!timeline.length) return h + '<div class="sch-empty" style="margin:24px 0"><p>Nothing scheduled yet. Set times in Plan to see your day here.</p></div>';
   h += '<div class="sch-rail">';
+  var bundles = {};
   timeline.forEach(function(item) {
+    if (item.openBlock || item.isPrayer) return;
+    var key = item.id + '::' + item.name;
+    if (!bundles[key]) bundles[key] = [];
+    bundles[key].push(item);
+  });
+  timeline.forEach(function(item) {
+    var bundleKey = item.id + '::' + item.name, bundle = bundles[bundleKey];
+    // Bundle a repeated activity into ONE collapsed summary row (rendered once, on the first
+    // occurrence). When expanded, this whole block is skipped so every occurrence falls through
+    // and renders as its own normal timed row at its real position.
+    if (!item.openBlock && !item.isPrayer && bundle.length > 1 && !expandedPeharBundles[bundleKey]) {
+      if (item !== bundle[0]) return;
+      var bundleDone = bundle.filter(function(occurrence) { return occurrence.done; }).length;
+      h += '<div class="sch-block sch-bundle" data-block="' + esA(item.okey || bundleKey) + '" style="--kc:' + item.kc + '"><div class="sch-time">' + prettyTime(item.t) + '<small>' + bundleDone + '/' + bundle.length + ' done</small></div><div class="sch-node"><i></i></div><button type="button" class="sch-card" data-a="peharbundle" data-bundle="' + esA(bundleKey) + '" aria-expanded="false"><p class="sch-title">' + esc(item.name) + ' <span class="sch-bundletag">· ' + bundle.length + '× today · next ' + prettyTime(item.t) + '</span></p><span class="sch-bundlecount">' + bundleDone + '/' + bundle.length + '</span></button></div>';
+      return;
+    }
     var isNow = td && nowMin >= item.start && nowMin < item.end;
     if (item.openBlock) {
       h += '<div class="sch-block sch-openblock' + (isNow ? ' now' : '') + '" style="--kc:var(--smut)"><div class="sch-time">' + prettyTime(minToHHMM(item.start)) + '<small>' + fmtDur(item.end - item.start) + '</small></div><div class="sch-node"><i></i></div><div class="sch-card" data-a="gapquick" data-start="' + item.start + '"><p class="sch-title">Free time' + (isNow ? '<span class="sch-nowtag">NOW</span>' : '') + '</p></div></div>';
@@ -4014,6 +4034,17 @@ function renderPeharRail(cards, timeline, td, nowMin) {
     h += '<div class="sch-box"><svg viewBox="0 0 24 24"><polyline points="4 13 9 18 20 6"></polyline></svg></div></div></div></div>';
     if (!item.oneday && schEdit === ekey) h += editorHTML(item.id, item.name);
   });
+  return h + '</div>';
+}
+
+function renderNowNext(timeline, nowMin) {
+  var timed = timeline.filter(function(item) { return !item.openBlock; });
+  var now = timed.filter(function(item) { return nowMin >= item.start && nowMin < item.end; })[0];
+  var upcoming = timed.filter(function(item) { return item.start > nowMin; }).slice(0, now ? 1 : 2);
+  if (!now && !upcoming.length) return '';
+  var h = '<div class="sch-nownext"><p class="sch-anylbl">NOW &amp; NEXT</p>';
+  if (now) h += '<button type="button" class="sch-nownextrow now" data-a="gototimeline" data-block="' + esA(now.okey || (now.id + '::' + now.name)) + '"' + (!now.isPrayer ? ' data-bundle="' + esA(now.id + '::' + now.name) + '"' : '') + '><b>NOW</b><span>' + esc(now.name) + '</span><time>' + prettyTime(now.t) + '</time></button>';
+  upcoming.forEach(function(item) { h += '<button type="button" class="sch-nownextrow" data-a="gototimeline" data-block="' + esA(item.okey || (item.id + '::' + item.name)) + '"' + (!item.isPrayer ? ' data-bundle="' + esA(item.id + '::' + item.name) + '"' : '') + '><b>Next</b><span>' + esc(item.name) + '</span><time>' + prettyTime(item.t) + '</time></button>'; });
   return h + '</div>';
 }
 
@@ -4140,7 +4171,7 @@ function _dailySelfCheck() {
   var stripShownRestored = PRAYERS.every(function(p) { return !getNotifTime("prayers", p); });
   console.assert(stripShownRestored === stripShownBefore, "(d) prayer notif times restored after probe");
 
-  // (e) status card renders one chip per card (+1 for Prayers when enabled), each matching dayItemsForCard's done/total.
+  // (e) status card keeps only Tasks (+ Prayers when enabled); cards retain their own counts.
   var savedCDateE = cDate, savedCDataE = cData;
   cDate = new Date(2000, 0, 1);
   var htmlE = rSchedule();
@@ -4148,14 +4179,30 @@ function _dailySelfCheck() {
   var hostE = document.createElement("div");
   hostE.innerHTML = htmlE;
   var chips = hostE.querySelectorAll("[data-cardchip]");
-  console.assert(chips.length === cards.length + (prayersOn() ? 1 : 0), "(e) status card should match the prayer toggle", chips.length, cards.length + (prayersOn() ? 1 : 0));
+  console.assert(chips.length === 1 + (prayersOn() ? 1 : 0), "(e) status card should contain Tasks and optional Prayers only", chips.length);
   var dayE = gDay(testKey);
-  cards.forEach(function(c) {
-    var chip = hostE.querySelector('[data-cardchip="' + c.id + '"]');
-    var its = dayItemsForCard(c, dayE, dow);
-    var d = 0; its.forEach(function(it) { if (it.done) d++; });
-    console.assert(chip && +chip.dataset.done === d && +chip.dataset.total === its.length, "(e) chip counts must match dayItemsForCard for card " + c.id);
-  });
+  var taskChip = hostE.querySelector('[data-cardchip="tasks"]');
+  var taskItems = cards.reduce(function(all, c) { return all.concat(dayItemsForCard(c, dayE, dow)); }, []);
+  var taskDone = taskItems.filter(function(item) { return item.done; }).length;
+  console.assert(taskChip && +taskChip.dataset.done === taskDone && +taskChip.dataset.total === taskItems.length, "(e) Tasks chip must match all card items");
+
+  // (f) repeated non-prayer occurrences fold into one row, then expose their own schtog rows.
+  var bundled = [
+    { id:"habits", name:"__sc_repeat__", t:"06:13", start:373, end:403, dur:30, done:false, okey:"habits::__sc_repeat__::06:13", kc:"#000" },
+    { id:"habits", name:"__sc_repeat__", t:"13:35", start:815, end:845, dur:30, done:true, okey:"habits::__sc_repeat__::13:35", kc:"#000" }
+  ];
+  var bundleKey = "habits::__sc_repeat__";
+  delete expandedPeharBundles[bundleKey];
+  var foldedRail = renderPeharRail([], bundled, true, 400);
+  console.assert(foldedRail.indexOf('data-a="peharbundle"') !== -1 && foldedRail.indexOf('2× today') !== -1 && foldedRail.indexOf('data-o="habits::__sc_repeat__::06:13"') === -1, "(f) repeated activity must fold by default");
+  expandedPeharBundles[bundleKey] = true;
+  var openRail = renderPeharRail([], bundled, true, 400);
+  console.assert(openRail.indexOf('data-o="habits::__sc_repeat__::06:13"') !== -1 && openRail.indexOf('data-o="habits::__sc_repeat__::13:35"') !== -1, "(f) expanded bundle must expose individual occurrences");
+  delete expandedPeharBundles[bundleKey];
+
+  // (g) focus block names current work and up to two upcoming items.
+  var focus = renderNowNext(bundled, 400);
+  console.assert(focus.indexOf("NOW") !== -1 && focus.indexOf("13:35") !== -1, "(g) Now & Next must show current and upcoming work");
 
   console.log("daily self-check complete");
 }
@@ -4562,6 +4609,7 @@ document.getElementById("app").addEventListener("click", function(e) {
       var blockId = t.dataset.block;
       var jumpToBlock = function() {
         var tgt = document.querySelector('.sch-block[data-block="' + CSS.escape(blockId) + '"]');
+        if (!tgt && t.dataset.bundle) { expandedPeharBundles[t.dataset.bundle] = true; render(); setTimeout(jumpToBlock, 60); return; }
         if (!tgt) return;
         tgt.scrollIntoView({ behavior: carReducedMotion() ? "auto" : "smooth", block: "center" });
         tgt.classList.remove("sch-flash"); void tgt.offsetWidth;
@@ -4752,6 +4800,10 @@ document.getElementById("app").addEventListener("click", function(e) {
     if (a === "pehartoggle") {
       if (t.dataset.c) expandedPeharCards[t.dataset.c] = !expandedPeharCards[t.dataset.c];
       else setPeharOn(!peharOn());
+      render(); return;
+    }
+    if (a === "peharbundle") {
+      expandedPeharBundles[t.dataset.bundle] = !expandedPeharBundles[t.dataset.bundle];
       render(); return;
     }
     if (a === "prayerstoggle") {
@@ -5310,9 +5362,9 @@ function _uiSelfCheck() {
   var host = document.createElement("div");
   host.innerHTML = html;
 
-  // (b) status card renders one count column per card, plus Prayers when enabled.
+  // (b) status card renders Tasks, plus Prayers only when enabled.
   var cols = host.querySelectorAll(".sch-statcol");
-  console.assert(cols.length === getCards().length + (prayersOn() ? 1 : 0), "(b) status card should match the prayer toggle", cols.length, getCards().length + (prayersOn() ? 1 : 0));
+  console.assert(cols.length === 1 + (prayersOn() ? 1 : 0), "(b) status card should contain Tasks and optional Prayers only", cols.length);
 
   // (c) no .sch-gear element after a Daily render — the Template nav tab replaces it.
   console.assert(host.querySelector(".sch-gear") === null, "(c) .sch-gear must not exist after a Daily render");
